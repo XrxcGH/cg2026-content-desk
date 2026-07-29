@@ -21,6 +21,7 @@ import type { CheesyAdapter } from './ingest/cheesy/adapter.ts';
 import { ALLOWED_PATHS, ALLOWED_SOCKETS } from './ingest/cheesy/client.ts';
 import type { CueEngine } from './cue/engine.ts';
 import type { ObsClient } from './cue/obs.ts';
+import type { ArcadeStore } from './arcade/store.ts';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -39,6 +40,8 @@ export const SURFACES = [
   { id: 'draw',    name: 'Telestrator pad', note: 'Tablet + stylus. Draws on the frozen frame the audience is seeing.' },
   { id: 'tele',    name: 'Telestrator render', note: 'OBS Browser Source, layered over the replay. Strokes only, transparent.' },
   { id: 'replay',  name: 'Replay console',  note: 'Match-clock timeline with automatic markers. Cut, preview, send to the analyst.' },
+  { id: 'arcade',  name: 'Arcade overlay',  note: 'OBS Browser Source. Smash sets and Mario Kart standings for the gaps.' },
+  { id: 'arcadedesk', name: 'Arcade console', note: 'Run the side tournament. Operator-authoritative scoring.' },
 ] as const;
 
 export interface ServerOpts {
@@ -56,11 +59,13 @@ export interface ServerOpts {
   cheesy?: CheesyAdapter | null;
   cues?: CueEngine | null;
   obs?: ObsClient | null;
+  arcade?: ArcadeStore | null;
 }
 
 export function startServer(opts: ServerOpts) {
   const { bus, media, root, port, host, recorder = null, clips = null,
-          publish = null, config = null, cheesy = null, cues = null, obs = null } = opts;
+          publish = null, config = null, cheesy = null, cues = null, obs = null,
+          arcade = null } = opts;
 
   /** Never let a path escape its mount point. */
   function safeJoin(base: string, urlPath: string): string | null {
@@ -178,6 +183,43 @@ export function startServer(opts: ServerOpts) {
           });
           bus.emit({ type: 'replay.clip_ready', source: 'replay', payload: { ...clip, kind: 'match' } });
           return json(res, 200, { ...clip, parts: ranges.length });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
+      // ---- arcade ----------------------------------------------------------
+      if (path === '/api/arcade') return json(res, 200, arcade?.snapshot ?? null);
+
+      if (path.startsWith('/api/arcade/') && req.method === 'POST') {
+        if (!arcade) return json(res, 503, { error: 'Arcade is not available.' });
+        const action = path.slice('/api/arcade/'.length);
+        try {
+          const raw = await readBody(req, 32 * 1024);
+          const body = raw.length ? JSON.parse(raw.toString('utf8')) as Record<string, unknown> : {};
+
+          switch (action) {
+            case 'set':
+              arcade.startSet(body as unknown as Parameters<ArcadeStore['startSet']>[0]);
+              break;
+            case 'score':
+              arcade.score(Number(body['player'] ?? 0), Number(body['delta'] ?? 1));
+              break;
+            case 'end': arcade.endSet(); break;
+            case 'gp':
+              arcade.startGrandPrix(
+                String(body['name'] ?? 'Grand Prix'),
+                (body['racers'] ?? []) as Parameters<ArcadeStore['startGrandPrix']>[1],
+                Number(body['raceCount'] ?? 4),
+              );
+              break;
+            case 'race': arcade.recordRace((body['order'] ?? []) as string[]); break;
+            case 'undo': arcade.undoRace(); break;
+            case 'upnext': arcade.setUpNext(String(body['text'] ?? '')); break;
+            case 'clear': arcade.clear(); break;
+            default: return json(res, 404, { error: `Unknown arcade action "${action}"` });
+          }
+          return json(res, 200, arcade.snapshot);
         } catch (err) {
           return json(res, 422, { error: (err as Error).message });
         }

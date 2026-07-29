@@ -66,10 +66,18 @@ which is why hub state now comes from the field rather than any local inference.
 
 ### P2 — Depth *(target: first week of October)*
 
-- Arcade: capture, start.gg adapter, Mario Kart GP model, arcade overlay
-- Statbotics pre-match prediction + alliance selection value board
-- Side screens: queueing, rankings, on-deck
-- Post-match social cards
+- ✅ Arcade: head-to-head sets, Mario Kart GP points model with the MK8D table and
+  best-finish tie-break, `/s/arcade` overlay and `/s/arcadedesk` console. Entrants can
+  register by FRC team, so the card reads `846 The Funky Monkeys` rather than a gamertag
+- ⬜ start.gg adapter — bracket metadata only. The live score stays operator-authoritative
+  because start.gg lags reality by up to a full round
+- ⬜ Statbotics pre-match prediction + alliance selection value board
+- ⬜ Side screens: queueing, rankings, on-deck
+- ⬜ Post-match social cards
+
+Capture is a hardware task, not a software one: HDMI splitter first so players never play
+through a capture card, then Elgato/Cam Link into an OBS scene. See
+[05-arcade.md](05-arcade.md).
 
 ### P3 — Nice to have, cut without regret
 

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en" data-surface="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arcade console — CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+body { font-size: var(--font-ui-body); }
+.wrap { max-width: 1000px; margin: 0 auto; padding: 18px 22px 60px; }
+header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+h1 { font-size: 24px; font-variation-settings: "wdth" 118; margin: 0; }
+.hint { color: var(--text-dim); font-size: 12px; line-height: 1.6; }
+.spacer { margin-left: auto; }
+.dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px;
+  background: var(--st-bad); display: inline-block; }
+.dot[data-up="true"] { background: var(--st-ok); }
+
+section { background: var(--surface-raised); padding: 16px 18px; margin-bottom: 14px;
+  clip-path: var(--chamfer); --ch: 14px; }
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 12px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 12px; }
+
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.btn { font-size: 12px; padding: 9px 14px; }
+label.in { font-family: var(--font-cond); font-weight: 600; font-size: 11px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }
+input, select { padding: 8px 10px; font-family: var(--font-display); font-size: 14px;
+  background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+input.wide { flex: 1; min-width: 180px; }
+
+.score { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: center;
+  background: var(--surface-sunken); padding: 14px 18px; clip-path: var(--chamfer); --ch: 10px; }
+.score .n { font-family: var(--font-num); font-weight: 900; font-size: 34px; line-height: 1; }
+.score .who { font-family: var(--font-cond); font-weight: 600; font-size: 13px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim); }
+.mid { text-align: center; font-family: var(--font-cond); font-size: 12px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+
+#gpRows div { display: grid; grid-template-columns: 32px 1fr auto; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid var(--surface-sunken); font-size: 13px; }
+.mono { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+#status { font-size: 12px; min-height: 18px; }
+#status[data-err] { color: var(--st-bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Arcade console</h1>
+    <span class="hint">Fills the gaps. Scores here are operator-authoritative.</span>
+    <span class="spacer"></span>
+    <span class="hint"><span class="dot" id="dot"></span> <span id="linkText">connecting</span></span>
+  </header>
+
+  <section>
+    <h2>Head-to-head set</h2>
+    <div class="row">
+      <label class="in" for="game">Game</label>
+      <select id="game">
+        <option value="smash">Super Smash Bros.</option>
+        <option value="mariokart">Mario Kart</option>
+        <option value="other">Other</option>
+      </select>
+      <label class="in" for="round">Round</label>
+      <input id="round" class="wide" placeholder="Winners Semifinal" value="Winners Semifinal">
+    </div>
+    <div class="row">
+      <input id="p1" class="wide" placeholder="Player 1 name">
+      <input id="p1t" style="width:110px" placeholder="team #">
+      <input id="p2" class="wide" placeholder="Player 2 name">
+      <input id="p2t" style="width:110px" placeholder="team #">
+      <button class="btn" id="startSet">Start set</button>
+    </div>
+    <p class="hint">Team numbers are the crossover — the card reads
+      <b>846 The Funky Monkeys</b> with the team's name rather than a gamertag.
+      Leave blank for open entrants.</p>
+
+    <div class="score" style="margin-top:12px">
+      <div>
+        <div class="who" id="s1who">Player 1</div>
+        <div class="n num" id="s1">0</div>
+        <div class="row" style="margin:8px 0 0">
+          <button class="btn" data-sc="0:1">+1</button>
+          <button class="btn" data-sc="0:-1">−1</button>
+        </div>
+      </div>
+      <div class="mid" id="setRound">no set</div>
+      <div style="text-align:right">
+        <div class="who" id="s2who">Player 2</div>
+        <div class="n num" id="s2">0</div>
+        <div class="row" style="margin:8px 0 0;justify-content:flex-end">
+          <button class="btn" data-sc="1:1">+1</button>
+          <button class="btn" data-sc="1:-1">−1</button>
+        </div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="endSet">End set</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Mario Kart grand prix</h2>
+    <div class="row">
+      <input id="gpName" class="wide" placeholder="Pit Crew Cup" value="Pit Crew Cup">
+      <label class="in" for="gpRaces">Races</label>
+      <input id="gpRaces" type="number" min="1" max="8" value="4" style="width:70px">
+      <button class="btn" id="startGp">Start GP</button>
+    </div>
+    <div class="row">
+      <input id="gpRacers" class="wide"
+             placeholder="Racers, comma separated — e.g. Ana 846, Ben 1868, Cy, Dee">
+    </div>
+    <p class="hint">A trailing number is read as an FRC team. There is no API for MK8D,
+      so the operator types the finishing order after each race and standings fall out.</p>
+
+    <div class="row" style="margin-top:10px">
+      <label class="in" for="order">Finish order</label>
+      <input id="order" class="wide" placeholder="click racers below, or type: Ana, Cy, Ben, Dee">
+      <button class="btn" id="recordRace">Record race</button>
+      <button class="btn" id="undoRace">Undo</button>
+    </div>
+    <div id="gpRows"></div>
+  </section>
+
+  <section>
+    <h2>Up next</h2>
+    <div class="row">
+      <input id="upNext" class="wide" placeholder="Grand Final · 1678 vs 254">
+      <button class="btn" id="setUpNext">Set</button>
+      <button class="btn" id="clearAll">Clear everything</button>
+    </div>
+    <p id="status"></p>
+  </section>
+</div>
+
+<script type="module">
+import { connect } from '/shared/desk-client.js';
+
+const $ = id => document.getElementById(id);
+const desk = connect('arcadedesk');
+
+desk.on('link', up => {
+  $('dot').dataset.up = String(up);
+  $('linkText').textContent = up ? 'linked' : 'reconnecting…';
+  if (up) load();
+});
+
+const say = (m, err = false) => {
+  $('status').textContent = m;
+  $('status').toggleAttribute('data-err', err);
+};
+
+async function post(action, body) {
+  const res = await fetch(`/api/arcade/${action}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? 'Request failed');
+  paint(json);
+  return json;
+}
+
+const load = async () => { try { paint(await fetch('/api/arcade').then(r => r.json())); } catch {} };
+
+/** "Ana 846" -> { name: "Ana", team: 846 } */
+function parseRacer(text, i) {
+  const m = /^(.*?)\s+(\d{1,5})$/.exec(text.trim());
+  return m
+    ? { id: `r${i}`, name: m[1].trim(), team: Number(m[2]) }
+    : { id: `r${i}`, name: text.trim() };
+}
+
+let snap = null;
+
+function paint(s) {
+  if (!s) return;
+  snap = s;
+
+  const set = s.set;
+  $('s1who').textContent = set?.players?.[0]?.name ?? 'Player 1';
+  $('s2who').textContent = set?.players?.[1]?.name ?? 'Player 2';
+  $('s1').textContent = set?.scores?.[0] ?? 0;
+  $('s2').textContent = set?.scores?.[1] ?? 0;
+  $('setRound').textContent = set
+    ? `${set.round}${set.state === 'complete' ? ' · complete' : ''}`
+    : 'no set';
+
+  const gp = s.gp;
+  $('gpRows').innerHTML = gp
+    ? s.standings.map((row, i) =>
+        `<div><span class="mono">${i + 1}</span>` +
+        `<span>${row.player.name}${row.player.team ? ' · ' + row.player.team : ''}</span>` +
+        `<span class="mono">${row.points} pts · ${row.positions.join(', ') || '—'}</span></div>`).join('')
+    : '<p class="hint">No grand prix running.</p>';
+
+  $('upNext').placeholder = s.upNext || 'Grand Final · 1678 vs 254';
+}
+
+$('startSet').onclick = async () => {
+  const players = [
+    { id: 'p1', name: $('p1').value || 'Player 1', ...($('p1t').value ? { team: Number($('p1t').value) } : {}) },
+    { id: 'p2', name: $('p2').value || 'Player 2', ...($('p2t').value ? { team: Number($('p2t').value) } : {}) },
+  ];
+  try {
+    await post('set', { game: $('game').value, round: $('round').value, players });
+    say('Set live.');
+  } catch (e) { say(e.message, true); }
+};
+
+for (const b of document.querySelectorAll('[data-sc]')) {
+  b.onclick = async () => {
+    const [player, delta] = b.dataset.sc.split(':').map(Number);
+    try { await post('score', { player, delta }); say(''); }
+    catch (e) { say(e.message, true); }
+  };
+}
+
+$('endSet').onclick = () => post('end').then(() => say('Set ended.')).catch(e => say(e.message, true));
+
+$('startGp').onclick = async () => {
+  const racers = $('gpRacers').value.split(',').map(s => s.trim()).filter(Boolean).map(parseRacer);
+  if (racers.length < 2) return say('Need at least two racers.', true);
+  try {
+    await post('gp', { name: $('gpName').value || 'Grand Prix', racers, raceCount: Number($('gpRaces').value) });
+    say(`Grand prix started with ${racers.length} racers.`);
+  } catch (e) { say(e.message, true); }
+};
+
+$('recordRace').onclick = async () => {
+  if (!snap?.gp) return say('Start a grand prix first.', true);
+  const names = $('order').value.split(',').map(s => s.trim()).filter(Boolean);
+  // Match typed names back to racer ids, case-insensitively.
+  const order = names.map(n => snap.gp.racers.find(r =>
+    r.name.toLowerCase() === n.toLowerCase() || String(r.team) === n)?.id).filter(Boolean);
+  if (order.length !== names.length) return say('Some names did not match a racer.', true);
+  try { await post('race', { order }); $('order').value = ''; say('Race recorded.'); }
+  catch (e) { say(e.message, true); }
+};
+
+$('undoRace').onclick = () => post('undo').then(() => say('Last race removed.')).catch(e => say(e.message, true));
+$('setUpNext').onclick = () => post('upnext', { text: $('upNext').value }).then(() => say('Up next set.'));
+$('clearAll').onclick = () => post('clear').then(() => say('Cleared.'));
+
+load();
+</script>
+</body>
+</html>

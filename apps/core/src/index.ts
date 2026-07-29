@@ -16,6 +16,7 @@ import { attachMarkers } from './markers.ts';
 import { CheesyAdapter } from './ingest/cheesy/adapter.ts';
 import { CueEngine } from './cue/engine.ts';
 import { ObsClient } from './cue/obs.ts';
+import { ArcadeStore } from './arcade/store.ts';
 import { loadConfig, publishReadiness } from './config.ts';
 import { PublishQueue } from './publish/queue.ts';
 import { chooseEncoder, findFfmpeg } from './ffmpeg.ts';
@@ -111,6 +112,10 @@ if (has('cheesy')) {
   console.log('[cheesy] bridge off — pass --cheesy to connect to the field');
 }
 
+// Side-tournament state for the gaps between matches. Always on — it costs
+// nothing when unused and there is no sensible reason to make it a flag.
+const arcade = new ArcadeStore(bus);
+
 // ---- show automation --------------------------------------------------------
 // OBS password comes from the environment, never a CLI arg — argv is visible
 // in `ps` and in the shell history of whoever launched it.
@@ -163,7 +168,7 @@ if (config.publish.autoQueueMatches) {
 }
 
 const server = startServer({
-  bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
+  bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs, arcade,
 });
 
 // Phase boundaries are time-driven, not event-driven — endgame lockdown and
