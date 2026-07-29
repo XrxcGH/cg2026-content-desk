@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en" data-surface="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desk console — CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+/* Operator surface: viewed at 2 feet, exempt from the broadcast type floors.
+   Keyboard-first — the producer must be able to run the whole show from here
+   with every integration dead. */
+body { font-size: var(--font-ui-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 24px 64px; }
+
+header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; }
+h1 { font-size: 26px; font-variation-settings: "wdth" 118; margin: 0; }
+.link { margin-left: auto; display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
+.dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px; background: var(--st-bad); }
+.dot[data-up="true"] { background: var(--st-ok); }
+
+.grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+section { background: var(--surface-raised); padding: 18px 20px; margin-bottom: 16px;
+  clip-path: var(--chamfer); --ch: 14px; }
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim);
+  margin: 0 0 12px; }
+
+.now { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;
+  background: var(--surface-sunken); padding: 14px 18px; margin-bottom: 14px;
+  clip-path: var(--chamfer); --ch: 10px; }
+.now .side { font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: 38px; line-height: 1; }
+.now .side.red { color: var(--alliance-red); }
+.now .side.blue { color: var(--alliance-blue); text-align: right; }
+.now .mid { text-align: center; }
+.now .clock { font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: 30px; line-height: 1; }
+.now .phase { font-family: var(--font-cond); font-weight: 600; font-size: 12px;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--text-dim); }
+.teams { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.btn { font-size: 12px; padding: 9px 14px; }
+.btn kbd { font-family: var(--font-mono); font-size: 10px; opacity: .6; margin-left: 7px; }
+
+label { display: block; font-family: var(--font-cond); font-weight: 600; font-size: 12px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); margin: 10px 0 4px; }
+input, select { width: 100%; box-sizing: border-box; padding: 9px 12px;
+  font-family: var(--font-display); font-size: 14px;
+  background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+
+#log { font-family: var(--font-mono); font-size: 11px; line-height: 1.65;
+  max-height: 340px; overflow-y: auto; }
+#log div { display: grid; grid-template-columns: 58px 1fr; gap: 8px;
+  padding: 2px 0; border-bottom: 1px solid var(--surface-sunken); }
+#log .t { color: var(--text-dim); }
+#log .ty { color: var(--accent); }
+.hint { color: var(--text-dim); font-size: 11px; line-height: 1.6; }
+.hint b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Desk console</h1>
+    <span class="hint">Keyboard-first. This runs the show with everything else dead.</span>
+    <span class="link"><span class="dot" id="dot"></span><span id="linkText">connecting</span></span>
+  </header>
+
+  <div class="grid">
+    <div>
+      <section>
+        <h2>Now</h2>
+        <div class="now">
+          <div>
+            <div class="side red num" id="nRed">0</div>
+            <div class="teams" id="nRedTeams">—</div>
+          </div>
+          <div class="mid">
+            <div class="clock num" id="nClock">0:20</div>
+            <div class="phase" id="nPhase">Pre-match</div>
+          </div>
+          <div>
+            <div class="side blue num" id="nBlue">0</div>
+            <div class="teams" id="nBlueTeams">—</div>
+          </div>
+        </div>
+        <div class="hint" id="nMatch">No match loaded</div>
+      </section>
+
+      <section>
+        <h2>Match</h2>
+        <div class="row">
+          <button class="btn" data-emit="match.preview">Preview<kbd>1</kbd></button>
+          <button class="btn" data-emit="match.prestart">Prestart<kbd>2</kbd></button>
+          <button class="btn" data-emit="match.start">Start<kbd>3</kbd></button>
+          <button class="btn" data-emit="match.end">End<kbd>4</kbd></button>
+          <button class="btn" data-emit="match.score_posted">Post score<kbd>5</kbd></button>
+          <button class="btn" data-emit="match.aborted">Abort<kbd>0</kbd></button>
+        </div>
+        <div class="row">
+          <button class="btn" data-screen="overview">Screen: overview</button>
+          <button class="btn" data-screen="match">Screen: match</button>
+          <button class="btn" data-screen="score">Screen: score</button>
+          <button class="btn" data-screen="blank">Screen: blank<kbd>B</kbd></button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Shadow scoring <span style="color:var(--st-warn)">· estimated</span></h2>
+        <p class="hint">Typed scores publish at <b>estimated</b> confidence and render
+          <b>outlined</b> on air, never solid — we don't present a guess as official.</p>
+        <div class="row">
+          <button class="btn" data-score="red:fuel:1">Red +1 fuel<kbd>Q</kbd></button>
+          <button class="btn" data-score="red:fuel:5">Red +5<kbd>W</kbd></button>
+          <button class="btn" data-score="red:tower:10">Red climb L1<kbd>E</kbd></button>
+          <button class="btn" data-score="red:tower:20">L2</button>
+          <button class="btn" data-score="red:tower:30">L3</button>
+        </div>
+        <div class="row">
+          <button class="btn" data-score="blue:fuel:1">Blue +1 fuel<kbd>A</kbd></button>
+          <button class="btn" data-score="blue:fuel:5">Blue +5<kbd>S</kbd></button>
+          <button class="btn" data-score="blue:tower:10">Blue climb L1<kbd>D</kbd></button>
+          <button class="btn" data-score="blue:tower:20">L2</button>
+          <button class="btn" data-score="blue:tower:30">L3</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Lower third</h2>
+        <label for="t1">Line 1</label>
+        <input id="t1" placeholder="Priya Raman">
+        <label for="t2">Line 2</label>
+        <input id="t2" placeholder="Analyst · CalGames Content Desk">
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="thirdShow">Show<kbd>T</kbd></button>
+          <button class="btn" id="thirdPin">Show pinned</button>
+          <button class="btn" id="thirdHide">Hide<kbd>Y</kbd></button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Telestrator</h2>
+        <label for="analyst">Analyst name — shown on the ANALYSIS chip</label>
+        <input id="analyst" placeholder="Priya Raman">
+        <label for="frame">Frozen frame URL</label>
+        <input id="frame" placeholder="/media/… or any image URL">
+        <p class="hint">The analyst draws on the frame the audience is seeing, not a
+          blank sheet. The replay console will push this automatically; until then,
+          paste one. <b>Hide</b> kills the render surface instantly without clearing
+          the analyst's pad.</p>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="teleSend">Send frame</button>
+          <button class="btn" id="teleLive">Go live</button>
+          <button class="btn" id="teleClear">Clear ink</button>
+          <button class="btn" id="teleHide">Hide</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Load match</h2>
+        <label for="mName">Match name</label>
+        <input id="mName" placeholder="Qualification 42" value="Qualification 42">
+        <label for="mRed">Red alliance — team numbers</label>
+        <input id="mRed" placeholder="846 1868 253" value="846 1868 253">
+        <label for="mBlue">Blue alliance — team numbers</label>
+        <input id="mBlue" placeholder="100 115 670" value="100 115 670">
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="loadMatch">Load</button>
+        </div>
+        <p class="hint">Names fill in from the team list when the Cheesy adapter lands.
+          Until then numbers alone are enough for the overview to build itself.</p>
+      </section>
+    </div>
+
+    <div>
+      <section>
+        <h2>Replay markers</h2>
+        <div class="row">
+          <button class="btn" id="mark" style="width:100%">Mark<kbd>SPACE</kbd></button>
+        </div>
+        <p class="hint">Drops a marker at <b>now − 2s</b>, because human reaction time
+          is real. Automation catches the scoring; a human catches the interesting.</p>
+        <div id="markers" class="hint"></div>
+      </section>
+
+      <section>
+        <h2>Event log</h2>
+        <div id="log"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/s/desk/desk.js"></script>
+</body>
+</html>

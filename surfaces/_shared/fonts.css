@@ -1,0 +1,39 @@
+/* ==========================================================================
+   Type. See docs/03-brand.md.
+
+     Archivo         variable width axis, pushed expanded — display/headings
+     Chivo           900 — scores, clocks, team numbers (tabular figures)
+     Saira Condensed 600/700 — labels, team names
+     JetBrains Mono  operator surfaces only
+
+   ⚠ BEFORE THE EVENT: replace this @import with self-hosted WOFF2s in
+   surfaces/_shared/fonts/. An OBS Browser Source that fetches Google Fonts
+   renders fallback type the one time venue internet drops, which will be
+   during finals. The @import is a development convenience, not the plan.
+   ========================================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..900&family=Chivo:wght@700;900&family=Saira+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap");
+
+/* Self-hosted drop-in. Uncomment once the WOFF2s are in place, and delete the
+   @import above.
+
+@font-face {
+  font-family: "Archivo";
+  src: url("/shared/fonts/Archivo-VariableFont_wdth,wght.woff2") format("woff2-variations");
+  font-weight: 500 900;
+  font-stretch: 100% 125%;
+  font-display: block;
+}
+@font-face {
+  font-family: "Chivo";
+  src: url("/shared/fonts/Chivo-VariableFont_wght.woff2") format("woff2-variations");
+  font-weight: 700 900;
+  font-display: block;
+}
+@font-face {
+  font-family: "Saira Condensed";
+  src: url("/shared/fonts/SairaCondensed-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: block;
+}
+*/

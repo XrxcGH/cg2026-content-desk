@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en" data-key="alpha" data-scale="stream">
+<head>
+<meta charset="utf-8">
+<title>Program overlay — CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<link rel="stylesheet" href="/shared/broadcast.css">
+</head>
+<body>
+
+<div id="stageWrap"><div id="stage">
+
+  <!-- Pre-match alliance overview -->
+  <section class="screen ov" id="scr-overview">
+    <div class="ov-head">
+      <div class="ov-label" id="ovLabel">&nbsp;</div>
+      <div class="ov-tick"></div>
+    </div>
+    <div class="ov-body">
+      <div class="ov-side ov-side--red">
+        <div class="ov-robots stagger" id="redRobots"></div>
+        <div class="ov-band">Red Alliance</div>
+      </div>
+      <div class="ov-center">
+        <div class="ov-logo">CALGAMES<br>2026</div>
+        <div class="ov-vs">VS</div>
+      </div>
+      <div class="ov-side ov-side--blue">
+        <div class="ov-robots stagger" id="blueRobots"></div>
+        <div class="ov-band">Blue Alliance</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live match -->
+  <section class="screen" id="scr-match">
+    <div class="hub" id="hub" data-on="none">
+      <span class="hub-dot"></span><span id="hubText"></span>
+    </div>
+
+    <div class="bar">
+      <div class="bar-side bar-side--red">
+        <div class="bar-teams" id="redTeams"></div>
+        <div class="bar-stats">
+          <div>
+            <div class="bar-sub"><span class="num roll" id="redFuel">0</span> fuel · <span class="num roll" id="redTower">0</span> tower</div>
+            <div class="bar-pips" id="redPips"></div>
+          </div>
+          <div class="bar-total num roll" id="redTotal" data-motion="essential">0</div>
+        </div>
+      </div>
+
+      <div class="bar-center">
+        <div class="clock num" id="clock" data-motion="essential">0:20</div>
+        <div class="chip chip--accent phase" id="phase">Pre-match</div>
+      </div>
+
+      <div class="bar-side bar-side--blue">
+        <div class="bar-teams" id="blueTeams"></div>
+        <div class="bar-stats">
+          <div>
+            <div class="bar-sub"><span class="num roll" id="blueFuel">0</span> fuel · <span class="num roll" id="blueTower">0</span> tower</div>
+            <div class="bar-pips" id="bluePips"></div>
+          </div>
+          <div class="bar-total num roll" id="blueTotal" data-motion="essential">0</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final score -->
+  <section class="screen" id="scr-score">
+    <div class="final">
+      <div class="final-side final-side--red">
+        <div class="final-label" id="finalRedLabel">Red Alliance</div>
+        <div class="final-score num" id="finalRed">0</div>
+      </div>
+      <div class="final-side final-side--blue">
+        <div class="final-label" id="finalBlueLabel">Blue Alliance</div>
+        <div class="final-score num" id="finalBlue">0</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="scr-blank"></section>
+
+  <div class="lower-third" id="third">
+    <div class="t1" id="thirdT1"></div>
+    <div class="t2" id="thirdT2"></div>
+  </div>
+
+  <div id="sweep"></div>
+</div></div>
+
+<script type="module" src="/s/program/program.js"></script>
+</body>
+</html>

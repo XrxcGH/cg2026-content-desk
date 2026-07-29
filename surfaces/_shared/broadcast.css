@@ -1,0 +1,248 @@
+/* ==========================================================================
+   Broadcast component library. Shared by every on-air surface.
+   Imports tokens; adds nothing that isn't composed from panel / chip / numeral.
+   See docs/03-brand.md and docs/08-motion.md.
+   ========================================================================== */
+
+/* ---- 1920x1080 stage, scaled to fit whatever window it lands in. OBS
+        renders it 1:1; a laptop preview scales it down. ------------------- */
+#stageWrap { position: fixed; inset: 0; overflow: hidden; }
+#stage {
+  position: absolute; top: 50%; left: 50%;
+  width: 1920px; height: 1080px;
+  transform-origin: center center;
+  background: var(--page-bg);
+  overflow: hidden;
+}
+
+.screen { position: absolute; inset: 0; display: none; }
+.screen[data-active] { display: block; }
+
+/* The Gold Sweep as a full-stage wipe. Leading edge skewed -12deg with a
+   brighter band, tying the signature transition to the chamfer geometry. */
+#sweep {
+  position: absolute; top: -12%; bottom: -12%; left: 0; width: 130%;
+  z-index: 60;
+  background: linear-gradient(90deg,
+    var(--cg-gold) 0 82%, var(--cg-gold-hi) 82% 88%, transparent 88%);
+  transform: translateX(-101%) skewX(-12deg);
+  will-change: transform;
+  pointer-events: none;
+}
+#sweep[data-run] { animation: cg-sweep var(--dur-sweep) var(--ease-sweep) both; }
+
+/* ==========================================================================
+   Alliance overview — RSN-style, three robots a side. docs/07-team-media.md
+   ========================================================================== */
+.ov {
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+}
+:root[data-key="luma"] .ov {
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf);
+}
+
+.ov-head { position: absolute; top: var(--safe-y); left: 0; right: 0; text-align: center; }
+.ov-label {
+  font-family: var(--font-cond); font-weight: 700;
+  font-size: var(--t-title); letter-spacing: .22em; text-transform: uppercase;
+  color: var(--cg-gold);
+}
+.ov-tick { width: 420px; margin: 12px auto 0; height: 4px; background: var(--tick); }
+
+.ov-body {
+  position: absolute; top: 190px; left: var(--safe-x); right: var(--safe-x); bottom: var(--safe-y);
+  display: grid; grid-template-columns: 1fr 240px 1fr; gap: var(--gap);
+}
+.ov-side { display: flex; flex-direction: column; }
+.ov-robots { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); align-items: end; }
+.ov-band {
+  margin-top: var(--gap); padding: 12px 0; text-align: center;
+  font-family: var(--font-cond); font-weight: 700;
+  font-size: var(--t-label); letter-spacing: .2em; text-transform: uppercase;
+  color: var(--cg-white); clip-path: var(--chamfer);
+}
+.ov-side--red  .ov-band { background: var(--alliance-red);  box-shadow: inset 0 6px 0 var(--cg-gold); }
+.ov-side--blue .ov-band { background: var(--alliance-blue); box-shadow: inset 0 6px 0 var(--cg-gold); }
+
+.ov-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+.ov-logo {
+  width: 100%; aspect-ratio: 8/3;
+  display: grid; place-items: center;
+  clip-path: var(--chamfer); background: var(--cg-gold);
+  /* Reserved lockup slot — the contest-winning mark drops in here as SVG. */
+  font-family: var(--font-display); font-weight: 800; font-size: 30px;
+  font-variation-settings: "wdth" 100;
+  color: var(--cg-black); text-align: center; line-height: .98;
+  letter-spacing: -.01em; padding: 0 10px; overflow: hidden;
+}
+.ov-vs {
+  font-family: var(--font-num); font-weight: 900; font-size: var(--t-title);
+  color: var(--cg-gold); letter-spacing: .08em;
+}
+
+.robot { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+.robot-art { position: relative; flex: 1; display: grid; place-items: end center; min-height: 0; }
+/* Normalise by HEIGHT, never width — FRC footprints vary enormously but
+   heights don't, and width-normalising puts a bus next to a shoebox. */
+.robot-art img { max-height: 100%; max-width: 100%; object-fit: contain; object-position: bottom; }
+
+/* Tier-3 fallback: gold number on a chamfered plinth. Must read as a designed
+   state, not a broken image — at an offseason event most teams won't have a
+   photo, and this is what the graphic mostly looks like. */
+.robot-art--fallback {
+  width: 100%; height: 100%;
+  display: grid; place-items: center;
+  background-color: var(--cg-purple-lo);
+  background-image: var(--tex-perf), linear-gradient(180deg, var(--cg-purple-hi), var(--cg-purple-lo));
+  background-size: var(--tex-perf-size), cover;
+  box-shadow: inset 0 -6px 0 var(--cg-gold);
+  clip-path: var(--chamfer);
+}
+.robot-art--fallback span {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: var(--t-hero); line-height: .9; color: var(--cg-gold);
+}
+/* Common floor line + drawn shadow. The whole difference between "cut out"
+   and "floating sticker". */
+.robot-shadow {
+  height: 14px; margin-top: 6px;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,.55), transparent 72%);
+}
+:root[data-key="luma"] .robot-shadow { display: none; }
+
+.robot-num {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: var(--t-score); line-height: 1;
+  color: var(--cg-white); text-align: center; margin-top: 12px; letter-spacing: -.02em;
+}
+.robot-name {
+  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-body);
+  color: var(--cg-white-dim); text-align: center; line-height: 1.05;
+  letter-spacing: .04em; text-transform: uppercase;
+  height: calc(var(--t-body) * 2.15); overflow: hidden;   /* fixed: 2 lines */
+}
+
+/* ==========================================================================
+   Score bar
+   ========================================================================== */
+.bar {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 148px;
+  display: grid; grid-template-columns: 1fr 420px 1fr;
+  background-color: var(--cg-purple-deep);
+  background-image: var(--tex-perf), linear-gradient(180deg, var(--cg-purple-lo), var(--cg-purple-deep));
+  background-size: var(--tex-perf-size), cover;
+  border-top: var(--rule);
+}
+:root[data-scale="venue"] .bar { height: 260px; grid-template-columns: 1fr 520px 1fr; }
+:root[data-key="luma"] .bar { background-color: var(--cg-purple); background-image: var(--tex-perf); }
+
+.bar-side { display: flex; align-items: center; gap: var(--gap); padding: 0 32px; }
+.bar-side--red  { background: var(--alliance-red);  border-right: var(--rule); }
+.bar-side--blue { background: var(--alliance-blue); border-left: var(--rule); flex-direction: row-reverse; }
+
+.bar-teams {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 700; font-size: var(--t-label); line-height: 1.08;
+  color: var(--cg-white); letter-spacing: .02em;
+}
+.bar-side--blue .bar-teams { text-align: right; }
+
+.bar-stats { display: flex; align-items: baseline; gap: 18px; margin-left: auto; }
+.bar-side--blue .bar-stats { margin-left: 0; margin-right: auto; flex-direction: row-reverse; }
+.bar-total {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: var(--t-score); line-height: 1;
+  color: var(--cg-white); letter-spacing: -.03em;
+}
+/* Estimated data renders outlined, never solid. We never present a guess as
+   official — see the `confidence` field in docs/02-architecture.md. */
+.bar-total[data-est="true"] {
+  color: transparent;
+  -webkit-text-stroke: 3px var(--cg-white);
+}
+.bar-sub {
+  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-label);
+  color: var(--cg-white); opacity: .94; line-height: 1.1;
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.bar-pips { display: flex; gap: 8px; margin-top: 6px; }
+.bar-side--blue .bar-pips { justify-content: flex-end; }
+
+.bar-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; }
+.clock {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: var(--t-clock); line-height: 1;
+  color: var(--cg-gold); letter-spacing: -.03em;
+}
+.phase { font-size: calc(var(--t-label) * .86); }
+
+/* The 2026-specific graphic: which hub is live right now. The alternating hub
+   is the most confusing thing on the field for a viewer; this is the fix. */
+.hub {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 170px;
+  display: flex; align-items: center; gap: 16px; padding: 12px 30px;
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf); background-size: var(--tex-perf-size);
+  clip-path: var(--chamfer); --ch: 12px;
+  box-shadow: inset 0 4px 0 var(--cg-gold);
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  letter-spacing: .16em; text-transform: uppercase; color: var(--cg-white);
+}
+:root[data-scale="venue"] .hub { bottom: 300px; --ch: 20px; }
+.hub[data-on="none"] { display: none; }
+.hub-dot { width: 22px; height: 22px; clip-path: var(--chamfer); --ch: 7px; background: var(--cg-white-dim); }
+.hub[data-on="red"]  .hub-dot { background: var(--alliance-red); }
+.hub[data-on="blue"] .hub-dot { background: var(--alliance-blue); }
+.hub[data-on="both"] .hub-dot { background: var(--cg-gold); }
+
+/* ==========================================================================
+   Lower third — slides fully off-screen, never fades. A fade is invisible in
+   the room; a slide from off-screen is unmissable.
+   ========================================================================== */
+.lower-third {
+  position: absolute; left: var(--safe-x); bottom: 210px; z-index: 40;
+  display: none; min-width: 620px;
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf); background-size: var(--tex-perf-size);
+  box-shadow: inset 10px 0 0 var(--cg-gold);
+  clip-path: var(--chamfer);
+  padding: 20px 40px 20px 54px;
+}
+:root[data-scale="venue"] .lower-third { bottom: 340px; }
+.lower-third[data-show] { display: block; }
+.lower-third .t1 {
+  font-family: var(--font-display); font-weight: 800; font-size: var(--t-title);
+  font-variation-settings: "wdth" var(--wdth-display); line-height: 1.02;
+}
+.lower-third .t2 {
+  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-body);
+  color: var(--cg-gold); letter-spacing: .12em; text-transform: uppercase;
+}
+
+/* ==========================================================================
+   Final score reveal
+   ========================================================================== */
+.final {
+  position: absolute; inset: 0;
+  display: grid; grid-template-columns: 1fr 1fr; align-content: center;
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+  padding: 0 var(--safe-x);
+}
+.final-side { text-align: center; padding: var(--pad); }
+.final-side--red  { border-right: var(--rule); }
+.final-score {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: var(--t-hero); line-height: 1; letter-spacing: -.04em;
+}
+.final-side--red  .final-score { color: var(--alliance-red); }
+.final-side--blue .final-score { color: var(--alliance-blue); }
+.final-label {
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  letter-spacing: .2em; text-transform: uppercase; color: var(--cg-white-dim);
+}
+.final-win { color: var(--cg-gold) !important; }

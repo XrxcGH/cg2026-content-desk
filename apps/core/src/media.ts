@@ -1,0 +1,218 @@
+/**
+ * Team media library — robot cutouts for the pre-match alliance overview.
+ * See docs/07-team-media.md.
+ *
+ * The validation here exists because of one specific, predictable failure:
+ * most FRC robots are bare aluminium and white polycarbonate, shot on a white
+ * backdrop, so an automated background remover eats holes in them — and you
+ * don't notice until it's on a screen at 1080p. Catching a bad cutout at
+ * upload time on Friday is worth a lot more than catching it Sunday.
+ */
+
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+export interface RobotMedia {
+  team: number;
+  version: number;
+  src: string;
+  w: number;
+  h: number;
+  uploadedAt: number;
+  warnings: string[];
+}
+
+export type Manifest = Record<number, RobotMedia>;
+
+const WIDTHS = [400, 800, 1600] as const;
+
+// ---------------------------------------------------------------------------
+// PNG header parsing. Pure JS so the single most important check — "does this
+// image even have an alpha channel" — works with no native dependency.
+// ---------------------------------------------------------------------------
+
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+export interface PngHeader { w: number; h: number; colorType: number; hasAlpha: boolean }
+
+export function readPngHeader(buf: Buffer): PngHeader | null {
+  if (buf.length < 26 || !buf.subarray(0, 8).equals(PNG_SIG)) return null;
+  if (buf.subarray(12, 16).toString('latin1') !== 'IHDR') return null;
+  const colorType = buf.readUInt8(25);
+  return {
+    w: buf.readUInt32BE(16),
+    h: buf.readUInt32BE(20),
+    colorType,
+    // 4 = grey+alpha, 6 = truecolour+alpha
+    hasAlpha: colorType === 4 || colorType === 6,
+  };
+}
+
+// ---------------------------------------------------------------------------
+
+type Sharp = typeof import('sharp');
+let sharpMod: Sharp | null | undefined;
+
+async function getSharp(): Promise<Sharp | null> {
+  if (sharpMod !== undefined) return sharpMod;
+  try {
+    sharpMod = (await import('sharp')).default as unknown as Sharp;
+  } catch {
+    sharpMod = null;
+    console.warn('[media] sharp unavailable — uploads are stored as-is, without ' +
+      'trimming, resizing, or the opacity check. Run `npm i sharp` before the event.');
+  }
+  return sharpMod;
+}
+
+export class MediaLibrary {
+  #root: string;
+  #manifest: Manifest = {};
+
+  constructor(root: string) { this.#root = root; }
+
+  get manifest(): Manifest { return this.#manifest; }
+
+  /** Rebuild from disk on boot — the manifest file is a cache, not the truth. */
+  async scan(): Promise<void> {
+    const teamsDir = join(this.#root, 'teams');
+    await mkdir(teamsDir, { recursive: true });
+    const next: Manifest = {};
+
+    for (const entry of await readdir(teamsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const team = Number(entry.name);
+      if (!Number.isInteger(team)) continue;
+      try {
+        const meta = JSON.parse(
+          await readFile(join(teamsDir, entry.name, 'meta.json'), 'utf8'),
+        ) as RobotMedia;
+        next[team] = meta;
+      } catch { /* no meta yet — team dir exists but nothing usable in it */ }
+    }
+
+    this.#manifest = next;
+    console.log(`[media] ${Object.keys(next).length} robot cutouts loaded`);
+  }
+
+  /**
+   * Ingest one upload. Returns warnings rather than throwing on anything but
+   * a hard reject, because a slightly-imperfect cutout on Sunday morning still
+   * beats the fallback plinth.
+   */
+  async ingest(team: number, buf: Buffer): Promise<RobotMedia> {
+    const warnings: string[] = [];
+    const header = readPngHeader(buf);
+
+    if (!header) {
+      throw new Error('Not a PNG. The robot photo needs its background removed ' +
+        'and saved as a PNG with transparency — a JPEG can\'t hold one.');
+    }
+    if (!header.hasAlpha) {
+      throw new Error('This PNG has no alpha channel, so the background hasn\'t ' +
+        'been removed yet. Cut it out first, then re-upload.');
+    }
+    if (Math.max(header.w, header.h) < 900) {
+      warnings.push(`Only ${header.w}x${header.h}. This renders ~700px tall at ` +
+        '1080p, so it will look soft. 3000px on the long edge is the target.');
+    }
+
+    const dir = join(this.#root, 'teams', String(team));
+    await mkdir(dir, { recursive: true });
+    const version = (this.#manifest[team]?.version ?? 0) + 1;
+
+    let w = header.w, h = header.h;
+    const sharp = await getSharp();
+
+    if (sharp) {
+      const img = sharp(buf, { failOn: 'none' });
+
+      // Trim to the alpha bounding box, then record real dimensions so the
+      // overview can normalise by HEIGHT — normalising by width puts a robot
+      // the size of a bus next to one the size of a shoebox.
+      const trimmed = await img.trim({ threshold: 1 }).png().toBuffer({ resolveWithObject: true });
+      w = trimmed.info.width;
+      h = trimmed.info.height;
+
+      const { perimeter, area } = await this.#opacity(sharp, trimmed.data);
+      // Perimeter is the discriminating signal, not area. Plenty of FRC robots
+      // are boxy enough to fill their own bounding box, so an area test flags
+      // perfectly good cutouts. An *uncut* photo is the one whose edges are
+      // solid backdrop all the way round. The bottom edge is excluded because
+      // a correctly cut robot sits flush on its own floor line.
+      if (perimeter > 0.9) {
+        warnings.push('The edges of this image are solid, which usually means ' +
+          'it is still an uncut photo on a white background. Check it against a ' +
+          'dark background before trusting it.');
+      } else if (area > 0.995) {
+        warnings.push('Almost no transparency anywhere in this image. It may not ' +
+          'have been cut out — worth a second look.');
+      }
+
+      await writeFile(join(dir, `robot.v${version}.png`), trimmed.data);
+      for (const width of WIDTHS) {
+        if (width > w) continue;
+        await sharp(trimmed.data).resize({ width }).webp({ quality: 88 })
+          .toFile(join(dir, `robot.v${version}@${width}.webp`));
+      }
+    } else {
+      await writeFile(join(dir, `robot.v${version}.png`), buf);
+      warnings.push('Stored without processing — sharp is not installed.');
+    }
+
+    const media: RobotMedia = {
+      team, version, w, h,
+      src: `/media/teams/${team}/robot.v${version}.png`,
+      uploadedAt: Date.now(),
+      warnings,
+    };
+    await writeFile(join(dir, 'meta.json'), JSON.stringify(media, null, 2));
+    this.#manifest[team] = media;
+    return media;
+  }
+
+  /**
+   * Opacity of the top/left/right border ring, and of the whole image.
+   * A genuine cutout has a mostly-transparent perimeter; an uncut photo's is
+   * solid backdrop.
+   */
+  async #opacity(sharp: Sharp, png: Buffer): Promise<{ perimeter: number; area: number }> {
+    const { data, info } = await sharp(png)
+      .resize({ width: 160, height: 160, fit: 'fill' })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width: w, height: h, channels } = info;
+    const alphaAt = (x: number, y: number): number => data[(y * w + x) * channels + channels - 1] ?? 0;
+    const OPAQUE = 250;
+
+    let ring = 0, ringTotal = 0;
+    const band = Math.max(1, Math.round(w * 0.02));
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const onTop = y < band;
+        const onSide = x < band || x >= w - band;
+        // Bottom edge deliberately excluded — a robot sits on its floor line.
+        if (!onTop && !onSide) continue;
+        ringTotal++;
+        if (alphaAt(x, y) > OPAQUE) ring++;
+      }
+    }
+
+    let opaque = 0, total = 0;
+    for (let i = channels - 1; i < data.length; i += channels) {
+      total++;
+      if (data[i]! > OPAQUE) opaque++;
+    }
+
+    return {
+      perimeter: ringTotal ? ring / ringTotal : 1,
+      area: total ? opaque / total : 1,
+    };
+  }
+
+  async exists(path: string): Promise<boolean> {
+    try { await stat(path); return true; } catch { return false; }
+  }
+}
