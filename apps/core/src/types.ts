@@ -172,7 +172,20 @@ export interface DeskState {
   /** Countdown as the audience sees it: "0:20" in auto, "2:20" in teleop. */
   clockDisplay: string;
   hubActive: Alliance | 'both' | 'none';
+  /**
+   * Hub state straight from the field, when the Cheesy bridge is up. Preferred
+   * over inference — the field knows which hub is live and we would only be
+   * guessing from the auto result. Null when running desk-only.
+   */
+  hubAuthoritative: Alliance | 'both' | 'none' | null;
   autoWinner: Alliance | null;
+  /**
+   * True once the field has told us who won auto. Needed because `null` is a
+   * legitimate answer (a tied auto) and is otherwise indistinguishable from
+   * "nobody has said yet" — without this the time-driven heuristic overwrites
+   * the field's correct answer a moment after it arrives.
+   */
+  autoWinnerKnown: boolean;
   score: Record<Alliance, AllianceScore>;
   confidence: Confidence;
   /** Which surface screen is live: overview, match, score, blank... */
@@ -195,7 +208,9 @@ export const initialState = (): DeskState => ({
   matchClock: null,
   clockDisplay: '0:20',
   hubActive: 'none',
+  hubAuthoritative: null,
   autoWinner: null,
+  autoWinnerKnown: false,
   score: { red: emptyAllianceScore(), blue: emptyAllianceScore() },
   confidence: 'estimated',
   screen: 'blank',

@@ -33,6 +33,9 @@ export class CheesyAdapter {
   #last: Record<Alliance, Totals> = { red: zero(), blue: zero() };
   #matchState: MatchState = MatchState.PreMatch;
   #started = false;
+  /** Auto fuel per alliance — the only thing that decides the auto winner. */
+  #autoFuel: Record<Alliance, number> = { red: 0, blue: 0 };
+  #autoWinnerSent = false;
 
   constructor(opts: CheesyAdapterOpts) {
     this.#bus = opts.bus;
@@ -100,6 +103,8 @@ export class CheesyAdapter {
 
     this.#last = { red: zero(), blue: zero() };
     this.#started = false;
+    this.#autoFuel = { red: 0, blue: 0 };
+    this.#autoWinnerSent = false;
     this.#emit({ type: 'match.loaded', payload: match });
   }
 
@@ -183,10 +188,53 @@ export class CheesyAdapter {
       },
     });
 
-    // The hub shift countdown — the 2026-specific graphic.
-    const remaining = msg.Red?.ActiveRemainingSec ?? msg.Blue?.ActiveRemainingSec;
-    if (typeof remaining === 'number') {
-      this.#emit({ type: 'hub.state', payload: { activeRemainingSec: remaining } });
+    // Hub state, taken from the field rather than inferred. Cheesy reports a
+    // per-alliance ActiveRemainingSec that is only non-zero while that
+    // alliance's hub is live (Hub.GetActiveShiftTiming returns 0 when the
+    // shift is inactive), so this is the authoritative answer and beats
+    // guessing from the auto result.
+    const redSec = msg.Red?.ActiveRemainingSec ?? 0;
+    const blueSec = msg.Blue?.ActiveRemainingSec ?? 0;
+    const state = msg.MatchState;
+    const live = state === MatchState.AutoPeriod || state === MatchState.TeleopPeriod
+      || state === MatchState.PausePeriod;
+
+    // Track auto fuel while auto is running. Cheesy decides the auto winner on
+    // AUTO FUEL ALONE — `redWonAuto = redAutoFuel > blueAutoFuel` — so a climb
+    // worth 15 auto points does not win auto. Reporting the winner from total
+    // score puts the wrong alliance on the hub indicator for the whole match.
+    if (state === MatchState.AutoPeriod) {
+      this.#autoFuel = {
+        red: summaries.red?.AutoFuelPoints ?? 0,
+        blue: summaries.blue?.AutoFuelPoints ?? 0,
+      };
+    } else if (!this.#autoWinnerSent && this.#started
+               && (state === MatchState.PausePeriod || state === MatchState.TeleopPeriod)) {
+      this.#autoWinnerSent = true;
+      const { red, blue } = this.#autoFuel;
+      // On a TIE Cheesy flips a coin (`redWonAuto = rand.Intn(2) == 1`), so
+      // there is no answer to derive — report null and let the authoritative
+      // per-alliance active state carry the hub indicator. This is why the
+      // field's answer is mandatory rather than merely preferable: a local
+      // guess is wrong half the time whenever auto ends level.
+      this.#emit({
+        type: 'hub.state',
+        payload: { autoWinner: red > blue ? 'red' : blue > red ? 'blue' : null },
+      });
+    }
+
+    if (live) {
+      const active = redSec > 0 && blueSec > 0 ? 'both'
+        : redSec > 0 ? 'red'
+        : blueSec > 0 ? 'blue'
+        : 'none';
+      this.#emit({
+        type: 'hub.state',
+        payload: { active, activeRemainingSec: Math.max(redSec, blueSec) },
+      });
+    } else if (state !== undefined) {
+      // Between matches there is no live hub; drop back to inference.
+      this.#emit({ type: 'hub.state', payload: { active: null } });
     }
 
     for (const [side, cards] of [['red', msg.RedCards], ['blue', msg.BlueCards]] as const) {

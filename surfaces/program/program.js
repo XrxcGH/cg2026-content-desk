@@ -138,7 +138,7 @@ startTicker(() => {
   const phase = phaseAt(c);
   $('phase').textContent = PHASE_LABEL[phase] ?? phase;
 
-  const hub = hubActiveAt(c, st.autoWinner);
+  const hub = hubActiveAt(c, st.autoWinner, st.hubAuthoritative);
   $('hub').dataset.on = hub;
   $('hubText').textContent = hub === 'both' ? 'Both hubs live'
     : hub === 'none' ? '' : `${hub} hub live`;

@@ -36,13 +36,21 @@ export function phaseAt(c) {
   return 'post';
 }
 
-export function hubActiveAt(c, autoWinner) {
+/**
+ * Odd shifts belong to the AUTO LOSER, even shifts to the winner — verified
+ * against Cheesy Arena's Hub.isShiftActive. Winning auto buys the LATER
+ * shifts. Mirrors apps/core/src/clock.ts; keep the two in step.
+ */
+export function hubActiveAt(c, autoWinner, authoritative) {
+  // The field knows. Prefer it over anything we can infer.
+  if (authoritative) return authoritative;
   const phase = phaseAt(c);
   if (phase === 'pre' || phase === 'post') return 'none';
   if (phase === 'auto' || phase === 'transition' || phase === 'endgame') return 'both';
   if (!autoWinner) return 'both';
   const shift = Number(phase.slice(-1));
-  return shift % 2 === 1 ? autoWinner : (autoWinner === 'red' ? 'blue' : 'red');
+  const loser = autoWinner === 'red' ? 'blue' : 'red';
+  return shift % 2 === 1 ? loser : autoWinner;
 }
 
 export function clockDisplay(c) {

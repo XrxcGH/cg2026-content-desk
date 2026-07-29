@@ -157,10 +157,41 @@ whatever fits. The only line is the allowlist above.
 
 ---
 
+## Validation against a real Cheesy Arena
+
+Done, on a local `cheesy-arena -dev` build of the 2026 source. `harness.mjs` at the repo root
+stands in for the scorekeeper and referees so a genuine match runs with genuine scoring; the bridge
+itself never touches those control endpoints.
+
+```bash
+node harness.mjs
+```
+
+**Result:** the desk tracked a full match — every phase transition, correct countdown, endgame
+lockdown at exactly `matchClock` 110, real scores (auto climb → 15, teleop L2 → 20, L3 → 30) and
+the correct final. Reconnect backoff was separately verified against a dead host: 24 attempts
+across six sockets in twelve seconds, no spin, desk healthy throughout.
+
+It also found three bugs that synthetic tests could not have:
+
+1. **Hub alternation was inverted.** Cheesy's `Hub.isShiftActive` returns `!WonAuto` for
+   Shift 1/3 and `WonAuto` for Shift 2/4 — winning auto buys the *later* shifts.
+2. **The auto winner is decided on AUTO FUEL COUNT ALONE.** Tower climbs don't count. An alliance
+   can score 15 auto points from a climb and still lose auto, which our total-score heuristic got
+   backwards.
+3. **A tied auto is settled by a coin flip** — `if redAutoFuel == blueAutoFuel { redWonAuto =
+   rand.Intn(2) == 1 }`. There is nothing to derive. This is what makes taking hub state from the
+   field *mandatory* rather than merely tidier: any local inference is wrong half the time whenever
+   auto ends level.
+
+The bridge now reads hub state from Cheesy's per-alliance `ActiveRemainingSec` and only falls back
+to inference when running desk-only.
+
 ## Verify before October
 
-- [ ] Run the whole ingest against a local `cheesy-arena -dev` instance through a simulated match.
-      One evening, de-risks everything.
+- [x] Run the whole ingest against a local `cheesy-arena -dev` instance through a real match
+- [ ] Re-run `harness.mjs` against the actual off-season build being used at the event, in case it
+      differs from `main`
 - [ ] Unit test asserting the endpoint allowlist — it should fail if anyone adds a `/panels/` or
       `/match_play/` path.
 - [ ] Unit test asserting the HTTP client rejects every method except `GET`.

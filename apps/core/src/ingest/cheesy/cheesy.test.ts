@@ -11,8 +11,8 @@ test('refuses sockets that can control the field', () => {
   // match or corrupt scoring. They must be unreachable by construction.
   for (const path of [
     '/match_play/websocket',
-    '/panels/scoring/red_near/websocket',
-    '/panels/scoring/blue_far/websocket',
+    '/panels/scoring/red/websocket',
+    '/panels/scoring/blue/websocket',
     '/panels/referee/websocket',
     '/alliance_selection/websocket',
     '/setup/settings/websocket',
@@ -147,6 +147,79 @@ test('maps a loaded match into teams and a display name', () => {
   assert.equal(bus.state.match?.displayName, 'Qualification 42');
   assert.deepEqual(bus.state.match?.red.map(t => t.number), [846, 1868, 253]);
   assert.equal(bus.state.match?.blue[2]?.name, 'Homestead Robotics');
+});
+
+test('the field decides the auto winner, on fuel alone', () => {
+  const bus = new EventBus();
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  adapter.ingest('matchLoad', { Match: { Id: 1, LongName: 'Qualification 1' } });
+  adapter.ingest('matchTime', { MatchState: MatchState.AutoPeriod });
+  // Red climbs for 15 auto points but scores no fuel. Cheesy decides auto on
+  // AUTO FUEL COUNT, so this is a tied auto despite red leading on points.
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.AutoPeriod,
+    Red: { ScoreSummary: { AutoTowerPoints: 15, AutoFuelPoints: 0 } },
+    Blue: { ScoreSummary: { AutoFuelPoints: 0 } },
+  });
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.TeleopPeriod,
+    Red: { ScoreSummary: { AutoTowerPoints: 15, AutoFuelPoints: 0 } },
+    Blue: { ScoreSummary: { AutoFuelPoints: 0 } },
+  });
+
+  // Null, not "red". On a tie Cheesy flips a coin, so there is nothing to
+  // derive — and `autoWinnerKnown` stops the local heuristic overwriting it.
+  assert.equal(bus.state.autoWinner, null);
+  assert.equal(bus.state.autoWinnerKnown, true);
+});
+
+test('auto fuel, not points, picks the winner', () => {
+  const bus = new EventBus();
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  adapter.ingest('matchLoad', { Match: { Id: 1, LongName: 'Qualification 1' } });
+  adapter.ingest('matchTime', { MatchState: MatchState.AutoPeriod });
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.AutoPeriod,
+    Red: { ScoreSummary: { AutoTowerPoints: 30, AutoFuelPoints: 4 } },
+    Blue: { ScoreSummary: { AutoFuelPoints: 9 } },
+  });
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.TeleopPeriod,
+    Red: { ScoreSummary: { AutoTowerPoints: 30, AutoFuelPoints: 4 } },
+    Blue: { ScoreSummary: { AutoFuelPoints: 9 } },
+  });
+
+  // Red leads on auto points 34-9 and still loses auto.
+  assert.equal(bus.state.autoWinner, 'blue');
+});
+
+test('hub state from the field beats inference', () => {
+  const bus = new EventBus();
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.TeleopPeriod,
+    Red: { ActiveRemainingSec: 12, ScoreSummary: {} },
+    Blue: { ActiveRemainingSec: 0, ScoreSummary: {} },
+  });
+  assert.equal(bus.state.hubAuthoritative, 'red');
+  assert.equal(bus.state.hubActive, 'red');
+
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.TeleopPeriod,
+    Red: { ActiveRemainingSec: 0, ScoreSummary: {} },
+    Blue: { ActiveRemainingSec: 20, ScoreSummary: {} },
+  });
+  assert.equal(bus.state.hubActive, 'blue');
+
+  // Between matches there is no live hub, so we fall back to inference.
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.PostMatch,
+    Red: { ScoreSummary: {} }, Blue: { ScoreSummary: {} },
+  });
+  assert.equal(bus.state.hubAuthoritative, null);
 });
 
 test('reports robots that have lost their driver station link', () => {

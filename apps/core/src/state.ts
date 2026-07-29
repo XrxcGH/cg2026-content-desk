@@ -45,7 +45,8 @@ function retime(state: DeskState, now: number): DeskState {
     matchClock: c,
     phase: phaseAt(c),
     clockDisplay: clockDisplay(c),
-    hubActive: hubActiveAt(c, state.autoWinner),
+    // The field's own answer wins; inference is the desk-only fallback.
+    hubActive: state.hubAuthoritative ?? hubActiveAt(c, state.autoWinner),
     lockdown: isLockdown(c),
   };
 }
@@ -63,6 +64,8 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
           matchEndedAt: null,
           scorePostedAt: null,
           autoWinner: null,
+          autoWinnerKnown: false,
+          hubAuthoritative: null,
           score: { red: emptyAllianceScore(), blue: emptyAllianceScore() },
           confidence: ev.confidence,
           screen: 'overview',
@@ -80,8 +83,15 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
         return { ...state, matchStartedAt: ev.ts, lastMatchStartedAt: ev.ts, screen: 'match' };
 
       case 'match.auto_end': {
-        // Whoever led at the buzzer owns the odd shifts. Ties leave it null,
-        // which renders as "both hubs live" rather than a guess.
+        // HEURISTIC, and only used when running desk-only. Cheesy Arena decides
+        // the auto winner on AUTO FUEL ALONE (`redWonAuto = redAutoFuel >
+        // blueAutoFuel`) — tower climbs do not count, so an alliance can score
+        // 15 auto points from a climb and still lose auto. We don't track auto
+        // fuel separately here, so this compares totals and can disagree.
+        //
+        // When the Cheesy bridge is up the adapter emits the real answer via
+        // `hub.state`, and `hubAuthoritative` overrides all of this anyway.
+        if (state.autoWinnerKnown) return state;        // never override the field
         const { red, blue } = state.score;
         const winner: Alliance | null =
           red.total > blue.total ? 'red' : blue.total > red.total ? 'blue' : null;
@@ -121,8 +131,19 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
           : scored;
       }
 
-      case 'hub.state':
-        return { ...state, autoWinner: (ev.payload as { autoWinner: Alliance | null }).autoWinner };
+      case 'hub.state': {
+        const p = ev.payload as {
+          autoWinner?: Alliance | null;
+          active?: Alliance | 'both' | 'none' | null;
+        };
+        return {
+          ...state,
+          ...(p.autoWinner !== undefined
+            ? { autoWinner: p.autoWinner, autoWinnerKnown: true }
+            : {}),
+          ...(p.active !== undefined ? { hubAuthoritative: p.active } : {}),
+        };
+      }
 
       case 'lower_third.show':
         return { ...state, lowerThird: ev.payload as DeskState['lowerThird'] };

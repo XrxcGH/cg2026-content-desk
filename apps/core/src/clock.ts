@@ -30,18 +30,31 @@ export const PHASE_LABEL: Record<Phase, string> = {
 
 /**
  * Both hubs are active in AUTO, the Transition Shift, and End Game. During
- * Shifts 1-4 they alternate, with the auto winner's hub live on odd shifts.
- * Unknown auto winner means we can't say — 'both' is the safe display.
+ * Shifts 1-4 they alternate.
+ *
+ * The alternation is the AUTO LOSER's hub on odd shifts and the winner's on
+ * even shifts — verified against Cheesy Arena's `Hub.isShiftActive`, which
+ * returns `!WonAuto` for Shift1/Shift3 and `WonAuto` for Shift2/Shift4. It
+ * reads backwards at first glance, which is exactly why it is worth stating:
+ * winning auto buys you the LATER shifts, not the immediate ones.
+ *
+ * This is only a fallback, and a lossy one. Cheesy decides the auto winner on
+ * AUTO FUEL COUNT ALONE — tower climbs don't count — and when auto ends level
+ * it flips a coin (`redWonAuto = rand.Intn(2) == 1`). So no local inference can
+ * be right on a tied auto. When the bridge is up we take hub state straight
+ * from the field (DeskState.hubAuthoritative); this exists only for desk-only
+ * operation, where being approximately right beats showing nothing.
  */
 export function hubActiveAt(c: number | null, autoWinner: Alliance | null): Alliance | 'both' | 'none' {
   const phase = phaseAt(c);
   if (phase === 'pre' || phase === 'post') return 'none';
   if (phase === 'auto' || phase === 'transition' || phase === 'endgame') return 'both';
+  // A tied auto leaves nothing to alternate on; 'both' is the honest display.
   if (!autoWinner) return 'both';
 
   const shift = Number(phase.slice(-1));
-  const other: Alliance = autoWinner === 'red' ? 'blue' : 'red';
-  return shift % 2 === 1 ? autoWinner : other;
+  const loser: Alliance = autoWinner === 'red' ? 'blue' : 'red';
+  return shift % 2 === 1 ? loser : autoWinner;
 }
 
 /**
