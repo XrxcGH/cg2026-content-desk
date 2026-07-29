@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en" data-surface="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Replay console — CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+body { font-size: var(--font-ui-body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 18px 22px 60px; }
+header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+h1 { font-size: 24px; font-variation-settings: "wdth" 118; margin: 0; }
+.hint { color: var(--text-dim); font-size: 12px; line-height: 1.6; }
+.spacer { margin-left: auto; }
+.dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px;
+  background: var(--st-bad); display: inline-block; }
+.dot[data-up="true"] { background: var(--st-ok); }
+
+section { background: var(--surface-raised); padding: 16px 18px; margin-bottom: 14px;
+  clip-path: var(--chamfer); --ch: 14px; }
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 12px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 12px; }
+
+/* ---- timeline: the MATCH CLOCK, phase-segmented. The operator thinks in
+       "endgame", not "18:42:07". ------------------------------------------ */
+#tl { position: relative; height: 92px; user-select: none; }
+#phases { position: absolute; inset: 0 0 auto 0; height: 30px; display: flex;
+  clip-path: var(--chamfer); --ch: 8px; overflow: hidden; }
+#phases div { display: grid; place-items: center; font-family: var(--font-cond);
+  font-weight: 600; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-dim); background: var(--surface-sunken);
+  box-shadow: inset -1px 0 0 rgba(0,0,0,.12); }
+#phases div[data-p="auto"] { background: #E4D9E9; }
+#phases div[data-p="endgame"] { background: #F7E2C0; color: #6B4A00; }
+
+#track { position: absolute; left: 0; right: 0; top: 34px; height: 34px;
+  background: var(--surface-sunken); cursor: crosshair; }
+#playhead { position: absolute; top: 30px; width: 2px; height: 42px;
+  background: var(--cg-purple); pointer-events: none; }
+#sel { position: absolute; top: 34px; height: 34px; background: rgba(240,175,0,.42);
+  box-shadow: inset 0 0 0 2px var(--cg-gold); pointer-events: none; }
+
+.mk { position: absolute; top: 34px; width: 3px; height: 34px; cursor: pointer;
+  background: var(--cg-purple-hi); }
+.mk[data-pri="3"] { background: var(--cg-gold); width: 5px; }
+.mk[data-pri="2"] { background: var(--cg-green); }
+.mk[data-a="red"]  { box-shadow: 0 34px 0 -30px var(--alliance-red); }
+.mk[data-a="blue"] { box-shadow: 0 34px 0 -30px var(--alliance-blue); }
+.mk:hover::after { content: attr(data-label); position: absolute; bottom: -22px; left: 0;
+  white-space: nowrap; background: var(--cg-purple); color: #fff; padding: 3px 7px;
+  font-size: 11px; z-index: 5; }
+#ticks { position: absolute; top: 72px; left: 0; right: 0; height: 16px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
+#ticks span { position: absolute; transform: translateX(-50%); }
+
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { font-size: 12px; padding: 9px 14px; }
+.btn kbd { font-family: var(--font-mono); font-size: 10px; opacity: .6; margin-left: 6px; }
+.btn--go { background: var(--cg-purple); color: #fff; }
+label.inline { font-family: var(--font-cond); font-weight: 600; font-size: 11px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }
+
+.cols { display: grid; grid-template-columns: 1fr 330px; gap: 14px; align-items: start; }
+video { width: 100%; background: #000; clip-path: var(--chamfer); --ch: 10px; }
+#clips div { display: grid; grid-template-columns: 1fr auto; gap: 6px; padding: 7px 0;
+  border-bottom: 1px solid var(--surface-sunken); font-size: 12px; }
+#clips a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.mono { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+#status { font-size: 12px; min-height: 18px; }
+#status[data-err] { color: var(--st-bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Replay console</h1>
+    <span class="hint" id="matchName">No match loaded</span>
+    <span class="spacer"></span>
+    <span class="hint"><span class="dot" id="dot"></span> <span id="linkText">connecting</span>
+      · <span id="encoder">—</span></span>
+  </header>
+
+  <section>
+    <h2>Timeline · match clock</h2>
+    <div id="tl">
+      <div id="phases"></div>
+      <div id="track"></div>
+      <div id="sel"></div>
+      <div id="playhead"></div>
+      <div id="ticks"></div>
+    </div>
+    <p class="hint" style="margin:10px 0 0">
+      Click the track to place the in-point, or click a marker to frame it. Markers land
+      automatically — bursts, lead changes, climbs, phase boundaries — so nobody has to hunt.
+    </p>
+  </section>
+
+  <div class="cols">
+    <div>
+      <section>
+        <h2>Cut</h2>
+        <div class="row" style="margin-bottom:10px">
+          <label class="inline" for="src">Camera</label>
+          <select id="src" style="width:auto;padding:8px 10px"></select>
+          <label class="inline" for="speed">Speed</label>
+          <select id="speed" style="width:auto;padding:8px 10px">
+            <option value="1">1×</option>
+            <option value="0.5">½×</option>
+            <option value="0.25">¼×</option>
+          </select>
+          <span class="mono" id="bounds">in — · out — · —</span>
+        </div>
+        <div class="row">
+          <button class="btn" data-nudge="in:-1">In −1s</button>
+          <button class="btn" data-nudge="in:1">In +1s</button>
+          <button class="btn" data-nudge="out:-1">Out −1s</button>
+          <button class="btn" data-nudge="out:1">Out +1s</button>
+          <button class="btn btn--go" id="cut">Cut clip<kbd>ENTER</kbd></button>
+          <button class="btn" id="cutMatch">Cut full match video</button>
+        </div>
+        <p id="status" style="margin:10px 0 0"></p>
+      </section>
+
+      <section>
+        <h2>Preview</h2>
+        <video id="preview" controls playsinline></video>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="send">Send frame to analyst<kbd>F</kbd></button>
+          <button class="btn" id="take">Take to program<kbd>T</kbd></button>
+        </div>
+        <p class="hint" style="margin:10px 0 0">
+          <b>Send frame</b> grabs the frame you're paused on and pushes it to the telestrator
+          as the drawing backdrop — the analyst marks up exactly what the audience saw.
+        </p>
+      </section>
+    </div>
+
+    <div>
+      <section>
+        <h2>Markers</h2>
+        <div id="markers" class="hint" style="max-height:260px;overflow:auto"></div>
+      </section>
+      <section>
+        <h2>Clips</h2>
+        <div id="clips"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/s/replay/replay.js"></script>
+</body>
+</html>
