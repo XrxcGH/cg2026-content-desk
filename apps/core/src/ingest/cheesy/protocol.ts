@@ -116,6 +116,57 @@ export interface ScorePostedMessage {
   BlueRankingPoints?: number;
 }
 
+// ---------------------------------------------------------------------------
+// REST shapes. Transcribed from web/api.go, model/match.go and
+// game/ranking_fields.go in the 2026 source.
+// ---------------------------------------------------------------------------
+
+/** game.Ranking, flattened, plus the nickname the API joins on. */
+export interface CheesyRanking {
+  TeamId?: number;
+  Rank?: number;
+  PreviousRank?: number;
+  RankingPoints?: number;
+  MatchPoints?: number;
+  AutoFuelPoints?: number;
+  TowerPoints?: number;
+  Wins?: number;
+  Losses?: number;
+  Ties?: number;
+  Disqualifications?: number;
+  Played?: number;
+  Nickname?: string;
+}
+
+/** GET /api/rankings */
+export interface RankingsResponse {
+  Rankings?: CheesyRanking[];
+  /** ShortName of the last committed match, e.g. "Q42". */
+  HighestPlayedMatch?: string;
+}
+
+/** GET /api/matches/{type} — MatchWithResult[] */
+export interface MatchWithResult {
+  Match?: CheesyMatch & {
+    Time?: string;
+    NameDetail?: string;
+    ScoreCommittedAt?: string;
+    Status?: number;
+  };
+  Result?: {
+    RedSummary?: ScoreSummary;
+    BlueSummary?: ScoreSummary;
+  } | null;
+}
+
+/**
+ * game.MatchStatus. 0 scheduled, 1 hidden, 2 red won, 3 blue won, 4 tie.
+ * A match is played once its status leaves "scheduled".
+ */
+export const MatchStatus = {
+  Scheduled: 0, Hidden: 1, RedWon: 2, BlueWon: 3, Tie: 4,
+} as const;
+
 /** Points, not counts — REBUILT fuel is 1 point each into an active hub. */
 export const fuelPoints = (s: ScoreSummary | undefined): number =>
   (s?.AutoFuelPoints ?? 0) + (s?.TeleopFuelPoints ?? 0);

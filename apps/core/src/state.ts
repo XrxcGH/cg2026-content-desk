@@ -166,6 +166,20 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       case 'screen.change':
         return { ...state, screen: (ev.payload as { screen: string }).screen };
 
+      case 'rankings.updated': {
+        const p = ev.payload as { rankings?: DeskState['rankings']; highestPlayedMatch?: string };
+        return {
+          ...state,
+          rankings: p.rankings ?? state.rankings,
+          highestPlayedMatch: p.highestPlayedMatch ?? state.highestPlayedMatch,
+        };
+      }
+
+      case 'queue.updated': {
+        const p = ev.payload as { upcoming?: DeskState['upcoming'] };
+        return { ...state, upcoming: p.upcoming ?? state.upcoming };
+      }
+
       case 'arena.status':
         return { ...state, connected: { ...state.connected, ...(ev.payload as object) } };
 

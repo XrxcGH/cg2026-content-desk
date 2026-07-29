@@ -42,6 +42,7 @@ export const SURFACES = [
   { id: 'replay',  name: 'Replay console',  note: 'Match-clock timeline with automatic markers. Cut, preview, send to the analyst.' },
   { id: 'arcade',  name: 'Arcade overlay',  note: 'OBS Browser Source. Smash sets and Mario Kart standings for the gaps.' },
   { id: 'arcadedesk', name: 'Arcade console', note: 'Run the side tournament. Operator-authoritative scoring.' },
+  { id: 'side',    name: 'Side screen',     note: 'Venue TVs. On deck and rankings, rotating on a timer. Venue scale by default.' },
 ] as const;
 
 export interface ServerOpts {

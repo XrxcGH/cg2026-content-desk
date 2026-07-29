@@ -71,8 +71,12 @@ which is why hub state now comes from the field rather than any local inference.
   register by FRC team, so the card reads `846 The Funky Monkeys` rather than a gamertag
 - ⬜ start.gg adapter — bracket metadata only. The live score stays operator-authoritative
   because start.gg lags reality by up to a full round
-- ⬜ Statbotics pre-match prediction + alliance selection value board
-- ⬜ Side screens: queueing, rankings, on-deck
+- ✅ Cheesy REST polling (60s): rankings and schedule, feeding the side screens
+- ✅ Side screens (`/s/side`): on-deck and rankings, rotating on a timer, venue scale
+  by default — the only surface that is *only* ever seen in the room
+- ⬜ Statbotics pre-match prediction + alliance selection value board.
+  **Blocked:** `api.statbotics.io` serves its root but every `/v3` path returns 500/503,
+  so the schema can't be verified. Re-check before building
 - ⬜ Post-match social cards
 
 Capture is a hardware task, not a software one: HDMI splitter first so players never play

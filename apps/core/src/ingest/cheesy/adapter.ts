@@ -10,15 +10,52 @@
  */
 
 import type { EmitInit, EventBus } from '../../bus.ts';
-import type { Alliance, MatchInfo, Team } from '../../types.ts';
+import type { Alliance, MatchInfo, RankingRow, Team, UpcomingMatch } from '../../types.ts';
 import { CheesyClient, type CheesyClientOpts } from './client.ts';
 import {
-  MatchState, fuelPoints, towerPoints,
+  MatchState, MatchStatus, fuelPoints, towerPoints,
   type ArenaStatusMessage, type MatchLoadMessage, type MatchTimeMessage,
+  type MatchWithResult, type RankingsResponse,
   type RealtimeScoreMessage, type ScorePostedMessage, type ScoreSummary,
 } from './protocol.ts';
 
 const ALLIANCES: Alliance[] = ['red', 'blue'];
+
+/**
+ * REST mappings, pure so they can be tested against realistic fixtures. The
+ * live request path is exercised against a real arena; these cover what the
+ * responses turn into once populated.
+ */
+export function mapRankings(res: RankingsResponse): {
+  highestPlayedMatch: string; rankings: RankingRow[];
+} {
+  return {
+    highestPlayedMatch: res.HighestPlayedMatch ?? '',
+    rankings: (res.Rankings ?? []).map(r => ({
+      rank: r.Rank ?? 0,
+      previousRank: r.PreviousRank ?? 0,
+      team: r.TeamId ?? 0,
+      name: r.Nickname ?? '',
+      rankingPoints: r.RankingPoints ?? 0,
+      record: `${r.Wins ?? 0}-${r.Losses ?? 0}-${r.Ties ?? 0}`,
+      played: r.Played ?? 0,
+    })),
+  };
+}
+
+export function mapUpcoming(matches: MatchWithResult[], limit = 4): UpcomingMatch[] {
+  return matches
+    // Anything past "scheduled" has been played, so it isn't on deck.
+    .filter(m => (m.Match?.Status ?? MatchStatus.Scheduled) === MatchStatus.Scheduled)
+    .slice(0, limit)
+    .map(m => ({
+      name: m.Match?.LongName ?? m.Match?.ShortName ?? '',
+      shortName: m.Match?.ShortName ?? '',
+      time: m.Match?.Time ?? null,
+      red: [m.Match?.Red1, m.Match?.Red2, m.Match?.Red3].filter((n): n is number => !!n),
+      blue: [m.Match?.Blue1, m.Match?.Blue2, m.Match?.Blue3].filter((n): n is number => !!n),
+    }));
+}
 
 interface Totals { fuel: number; tower: number; foulsAgainst: number }
 const zero = (): Totals => ({ fuel: 0, tower: 0, foulsAgainst: 0 });
@@ -36,6 +73,7 @@ export class CheesyAdapter {
   /** Auto fuel per alliance — the only thing that decides the auto winner. */
   #autoFuel: Record<Alliance, number> = { red: 0, blue: 0 };
   #autoWinnerSent = false;
+  #pollTimer: NodeJS.Timeout | null = null;
 
   constructor(opts: CheesyAdapterOpts) {
     this.#bus = opts.bus;
@@ -54,8 +92,40 @@ export class CheesyAdapter {
 
   get client(): CheesyClient { return this.#client; }
 
-  start(): void { this.#client.connect(); }
-  stop(): void { this.#client.close(); }
+  start(): void {
+    this.#client.connect();
+    // Schedule and rankings are REST-only. 60s is deliberate: they change on
+    // the order of once a match, and the field network is not ours to load up.
+    void this.#poll();
+    this.#pollTimer = setInterval(() => void this.#poll(), 60_000);
+  }
+
+  stop(): void {
+    if (this.#pollTimer) clearInterval(this.#pollTimer);
+    this.#pollTimer = null;
+    this.#client.close();
+  }
+
+  /**
+   * Pull the schedule and rankings. Failures are logged once and retried on the
+   * next tick — a missing schedule degrades the side screens, it does not stop
+   * the broadcast, so there is nothing here worth throwing over.
+   */
+  async #poll(): Promise<void> {
+    try {
+      const res = await this.#client.get<RankingsResponse>('/api/rankings');
+      this.#emit({ type: 'rankings.updated', payload: mapRankings(res) });
+    } catch (err) {
+      console.warn('[cheesy] rankings poll failed:', (err as Error).message);
+    }
+
+    try {
+      const matches = await this.#client.get<MatchWithResult[]>('/api/matches/qualification');
+      this.#emit({ type: 'queue.updated', payload: { upcoming: mapUpcoming(matches) } });
+    } catch (err) {
+      console.warn('[cheesy] schedule poll failed:', (err as Error).message);
+    }
+  }
 
   #emit(init: EmitInit): void {
     this.#bus.emit({ confidence: 'authoritative', source: 'cheesy', ...init });

@@ -1,8 +1,8 @@
 ﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertPathAllowed, assertSocketAllowed, ALLOWED_SOCKETS } from './client.ts';
-import { fuelPoints, towerPoints, MatchState } from './protocol.ts';
-import { CheesyAdapter } from './adapter.ts';
+import { fuelPoints, towerPoints, MatchState, MatchStatus } from './protocol.ts';
+import { CheesyAdapter, mapRankings, mapUpcoming } from './adapter.ts';
 import { EventBus } from '../../bus.ts';
 import type { DeskEvent } from '../../types.ts';
 
@@ -220,6 +220,51 @@ test('hub state from the field beats inference', () => {
     Red: { ScoreSummary: {} }, Blue: { ScoreSummary: {} },
   });
   assert.equal(bus.state.hubAuthoritative, null);
+});
+
+test('rankings map from the REST shape', () => {
+  // Field names transcribed from game/ranking_fields.go and web/api.go.
+  const out = mapRankings({
+    HighestPlayedMatch: 'Q42',
+    Rankings: [
+      { Rank: 1, PreviousRank: 3, TeamId: 846, Nickname: 'The Funky Monkeys',
+        RankingPoints: 34, Wins: 8, Losses: 2, Ties: 1, Played: 11 },
+      { Rank: 2, TeamId: 1868, Nickname: 'Space Cookies', RankingPoints: 31 },
+    ],
+  });
+
+  assert.equal(out.highestPlayedMatch, 'Q42');
+  assert.deepEqual(out.rankings[0], {
+    rank: 1, previousRank: 3, team: 846, name: 'The Funky Monkeys',
+    rankingPoints: 34, record: '8-2-1', played: 11,
+  });
+  // Missing fields degrade rather than crash a pit TV.
+  assert.equal(out.rankings[1]?.record, '0-0-0');
+});
+
+test('on deck skips matches that have been played', () => {
+  const m = (n: number, status: number) => ({
+    Match: {
+      ShortName: `Q${n}`, LongName: `Qualification ${n}`, Status: status,
+      Red1: 846, Red2: 1868, Red3: 253, Blue1: 100, Blue2: 115, Blue3: 670,
+    },
+  });
+
+  const out = mapUpcoming([
+    m(1, MatchStatus.RedWon), m(2, MatchStatus.Tie),
+    m(3, MatchStatus.Scheduled), m(4, MatchStatus.Scheduled),
+    m(5, MatchStatus.Scheduled), m(6, MatchStatus.Scheduled),
+    m(7, MatchStatus.Scheduled),
+  ]);
+
+  assert.deepEqual(out.map(u => u.shortName), ['Q3', 'Q4', 'Q5', 'Q6'], 'limit of four');
+  assert.deepEqual(out[0]?.red, [846, 1868, 253]);
+  assert.deepEqual(out[0]?.blue, [100, 115, 670]);
+});
+
+test('an empty schedule maps to an empty deck rather than throwing', () => {
+  assert.deepEqual(mapUpcoming([]), []);
+  assert.deepEqual(mapRankings({}), { highestPlayedMatch: '', rankings: [] });
 });
 
 test('reports robots that have lost their driver station link', () => {

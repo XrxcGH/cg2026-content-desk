@@ -132,6 +132,25 @@ export interface LowerThird {
   pinned: boolean;
 }
 
+export interface RankingRow {
+  rank: number;
+  previousRank: number;
+  team: number;
+  name: string;
+  rankingPoints: number;
+  /** "8-2-1" */
+  record: string;
+  played: number;
+}
+
+export interface UpcomingMatch {
+  name: string;
+  shortName: string;
+  time: string | null;
+  red: number[];
+  blue: number[];
+}
+
 export interface TelestratorState {
   /** Named on the ANALYSIS chip, so the audience knows it's opinion. */
   analyst: string;
@@ -192,6 +211,10 @@ export interface DeskState {
   screen: string;
   lowerThird: LowerThird | null;
   telestrator: TelestratorState;
+  /** Drives the venue side screens. Polled from Cheesy, empty when desk-only. */
+  rankings: RankingRow[];
+  highestPlayedMatch: string;
+  upcoming: UpcomingMatch[];
   /** Endgame: suppress decorative motion, keep score/clock animating. */
   lockdown: boolean;
   connected: { cheesy: boolean };
@@ -216,6 +239,9 @@ export const initialState = (): DeskState => ({
   screen: 'blank',
   lowerThird: null,
   telestrator: { analyst: '', frame: null, hidden: false },
+  rankings: [],
+  highestPlayedMatch: '',
+  upcoming: [],
   lockdown: false,
   connected: { cheesy: false },
   updatedAt: Date.now(),
