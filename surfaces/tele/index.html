@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en" data-key="alpha" data-scale="stream">
+<head>
+<meta charset="utf-8">
+<title>Telestrator render — CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<link rel="stylesheet" href="/shared/broadcast.css">
+<style>
+/* Strokes only, over whatever the switcher has underneath. Never renders the
+   frozen frame itself — that's the replay feed's job, not ours. */
+#ink { position: absolute; inset: 0; z-index: 50; }
+
+#chip {
+  position: absolute; left: var(--safe-x); bottom: var(--safe-y); z-index: 51;
+  display: none;
+}
+#chip[data-on] { display: inline-flex; }
+</style>
+</head>
+<body>
+<div id="stageWrap"><div id="stage">
+  <canvas id="ink" width="1920" height="1080"></canvas>
+  <span class="chip chip--accent" id="chip">Analysis</span>
+</div></div>
+
+<script type="module">
+import { connect, applyDisplayMode, startTicker } from '/shared/desk-client.js';
+import { StrokeBook, render } from '/shared/telestrator.js';
+
+applyDisplayMode();
+const $ = id => document.getElementById(id);
+const desk = connect('tele');
+
+const stage = $('stage');
+const fit = () => {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+};
+addEventListener('resize', fit); fit();
+
+const ctx = $('ink').getContext('2d');
+const book = new StrokeBook();
+window.__tele = { book, desk };
+const fadeMs = () => parseFloat(getComputedStyle(document.documentElement)
+  .getPropertyValue('--ink-fade')) || 6000;
+
+/**
+ * Failure mode that matters: if the tablet drops off Wi-Fi mid-stroke, we hold
+ * the last complete stroke and fade it on schedule. We never freeze a
+ * half-drawn line on air, and we never blank instantly either.
+ */
+desk.on('relay:tele', m => {
+  switch (m.k) {
+    case 'begin': book.begin(m); break;
+    case 'pts':   book.append(m.id, m.pts); break;
+    case 'meta':  book.meta(m.id, m.meta); break;
+    case 'end':   book.end(m.id); break;
+    case 'undo':  book.undo(); break;
+    case 'clear': book.clear(); break;
+  }
+});
+
+// A reconnect means we may have missed an 'end'. Anything still open would
+// hang around forever, so close it out and let it fade normally.
+desk.on('link', up => { if (up) for (const s of book.strokes) if (!s.done) book.end(s.id); });
+desk.on('telestrator.clear', () => book.clear());
+
+startTicker(() => {
+  const hidden = desk.state?.telestrator?.hidden ?? false;
+  book.prune(fadeMs());
+
+  if (hidden) { ctx.clearRect(0, 0, 1920, 1080); $('chip').removeAttribute('data-on'); return; }
+  render(ctx, book, { fadeMs: fadeMs() });
+
+  // The audience should always know they're looking at opinion, not
+  // officiating. Chip comes up with the first stroke, retires with the last.
+  const live = !book.empty;
+  $('chip').toggleAttribute('data-on', live);
+  if (live) {
+    const analyst = desk.state?.telestrator?.analyst;
+    $('chip').textContent = analyst ? `Analysis · ${analyst}` : 'Analysis';
+  }
+});
+</script>
+</body>
+</html>
