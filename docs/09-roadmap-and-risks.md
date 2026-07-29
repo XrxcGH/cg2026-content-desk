@@ -33,11 +33,12 @@ no network approval needed.
 - ✅ Clip extraction: segment index, accurate seek, multi-range cuts, optional slow-motion.
   Timing-aware `matchCut()` frames a match video as pre-roll over the announcer's countdown → the
   match → a jump to the score reveal, skipping referee deliberation
-- ⬜ Replay console surface (`/s/replay`) — markers land on the bus and clips extract via
-  `POST /api/clips`, but there's no operator UI yet
-- ⬜ Durable publish queue → YouTube upload → TBA `match_videos/add` / `media/add`, plus
-  live-stream webcast registration. Design in [11-distribution.md](11-distribution.md); needs
-  YouTube OAuth and TBA Trusted API credentials
+- ✅ Replay console (`/s/replay`): match-clock timeline, automatic markers, cut/preview,
+  and a frame grab that pushes the frozen frame to the telestrator
+- ✅ Durable publish queue → YouTube resumable upload → TBA `match_videos/add` / `media/add`,
+  with official FIRST-channel naming. Credentials live in a gitignored `config.json`
+
+**P0 is complete.** Everything above runs today; only the credentials are outstanding.
 
 **Ship criterion:** a producer, a switcher op, and an analyst can run a full match with replay and
 telestration using nothing but keyboards. *Currently met for everything except replay playback and

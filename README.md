@@ -78,6 +78,29 @@ built without a field. Drop it to run on desk input alone.
 | Team media | `/s/media` | Drag-drop robot cutouts |
 | Telestrator pad | `/s/draw` | iPad + Pencil, on the production Wi-Fi |
 | Telestrator render | `/s/tele` | OBS Browser Source, layered over the replay |
+| Replay console | `/s/replay` | Match-clock timeline, markers, cut and send |
+
+Recording and replay need ffmpeg. Add `--record --test-sources` to exercise the whole pipeline
+without cameras:
+
+```bash
+npm start -- --demo --record --test-sources
+```
+
+```bash
+npm test
+```
+
+## Publishing
+
+Copy [config.example.json](config.example.json) to `config.json` (gitignored — it holds
+credentials) and fill it in. `npm run auth:youtube` walks through getting a YouTube refresh token.
+Nothing uploads until `publish.enabled` is true, and the default `deferred` mode queues during the
+event and uploads afterwards so nothing competes with the live stream for the venue uplink.
+
+Titles follow the official FIRST channel convention — `Qualification 42 - CalGames`,
+`Match 5 (R2) - CalGames`, `Final Tiebreaker - CalGames`. Details in
+[docs/11-distribution.md](docs/11-distribution.md).
 
 Program takes `?key=alpha\|luma` and `?scale=stream\|venue`. It contains the alliance overview,
 live match, and final score in one page — screens switch on state, so the switcher operator never

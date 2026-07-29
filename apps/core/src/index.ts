@@ -13,6 +13,8 @@ import { MediaLibrary } from './media.ts';
 import { startServer } from './server.ts';
 import { startDemo } from './demo.ts';
 import { attachMarkers } from './markers.ts';
+import { loadConfig, publishReadiness } from './config.ts';
+import { PublishQueue } from './publish/queue.ts';
 import { chooseEncoder, findFfmpeg } from './ffmpeg.ts';
 import { Recorder, type SourceConfig } from './recorder.ts';
 import { ClipStore } from './clips.ts';
@@ -84,7 +86,35 @@ if (!tools) {
   }
 }
 
-const server = startServer({ bus, media, root: ROOT, port, host, recorder, clips });
+// ---- publishing -----------------------------------------------------------
+const config = await loadConfig(ROOT);
+const publish = new PublishQueue(ROOT, config, bus, clips);
+await publish.load();
+
+{
+  const missing = publishReadiness(config);
+  if (!config.publish.enabled) {
+    console.log('[publish] disabled — set publish.enabled in config.json to turn it on');
+  } else if (missing.youtube.length || missing.tba.length) {
+    console.warn('[publish] enabled but incomplete: missing ' +
+      [...missing.youtube, ...missing.tba].join(', '));
+  } else {
+    console.log(`[publish] ready · mode=${config.publish.mode} · event=${config.event.key}`);
+  }
+}
+
+// A match video is queued when the score is posted, not at the buzzer — the
+// cut needs the score-reveal timestamp to know where its second part starts.
+if (config.publish.autoQueueMatches) {
+  bus.subscribe(ev => {
+    if (ev.type !== 'match.score_posted') return;
+    void publish.queueMatch().then(item => {
+      if (item) console.log(`[publish] queued ${item.label} (${item.ranges.length} part(s))`);
+    }).catch(err => console.warn('[publish] auto-queue failed:', (err as Error).message));
+  });
+}
+
+const server = startServer({ bus, media, root: ROOT, port, host, recorder, clips, publish, config });
 
 // Phase boundaries are time-driven, not event-driven — endgame lockdown and
 // the auto-end marker have to land even if nothing else is happening.

@@ -1,0 +1,143 @@
+/**
+ * Video and stream naming, matching the conventions the official FIRST channel
+ * uses so CalGames content sits alongside it without looking homemade.
+ *
+ *   Qualification 1 - CalGames
+ *   Match 1 (R1) - CalGames          <- playoff, double elimination
+ *   Final 1 - CalGames
+ *   Final Tiebreaker - CalGames
+ *
+ *   2026 CalGames - Day 1            <- livestream
+ *
+ * Attribution note: FIRST's own descriptions end "(c) 2026 FIRST Robotics
+ * Competition", which is theirs to claim. CalGames is a WRRF off-season event,
+ * so copying that line verbatim would be inaccurate. Both the credit and the
+ * copyright lines are configurable and default to WRRF.
+ */
+
+export interface MatchIdentity {
+  /** Official-style title fragment, without the event suffix. */
+  name: string;
+  /** The Blue Alliance match key, or null if it isn't a real match. */
+  key: string | null;
+}
+
+const ORDINAL: Record<string, number> = { one: 1, two: 2, three: 3 };
+
+/**
+ * Normalise whatever the field management system calls a match into the
+ * official naming, plus its TBA key.
+ *
+ * Playoff matches use the modern double-elimination scheme: FIRST shows
+ * "Match 7 (R3)" and TBA keys them `sf7m1`. Finals are `f1m1`, `f1m2`, and the
+ * tiebreaker is `f1m3`.
+ */
+export function identify(displayName: string): MatchIdentity {
+  const s = displayName.trim();
+
+  // Qualification 42 / Qual 42 / Q42 / qm42
+  const qual = /^(?:qualification|qual|q|qm)\s*#?\s*(\d+)$/i.exec(s);
+  if (qual) return { name: `Qualification ${Number(qual[1])}`, key: `qm${Number(qual[1])}` };
+
+  // Practice matches exist but are never published.
+  if (/^practice/i.test(s)) return { name: s, key: null };
+
+  // Final Tiebreaker / Finals Tiebreaker / Final 3
+  if (/^finals?\s*(tiebreaker|tie-breaker|tie breaker)$/i.test(s)) {
+    return { name: 'Final Tiebreaker', key: 'f1m3' };
+  }
+
+  // Final 1 / Finals 2 / F1
+  const final = /^(?:finals?|f)\s*#?\s*(\d+)$/i.exec(s);
+  if (final) {
+    const n = Number(final[1]);
+    return n >= 3
+      ? { name: 'Final Tiebreaker', key: 'f1m3' }
+      : { name: `Final ${n}`, key: `f1m${n}` };
+  }
+
+  // Match 7 (R3) — already in official form
+  const withRound = /^match\s*#?\s*(\d+)\s*\(\s*r\s*(\d+)\s*\)$/i.exec(s);
+  if (withRound) {
+    return { name: `Match ${Number(withRound[1])} (R${Number(withRound[2])})`, key: `sf${Number(withRound[1])}m1` };
+  }
+
+  // Playoff 7 / Match 7 / P7 — derive the round from the match number.
+  const playoff = /^(?:playoff|elimination|elim|match|p)\s*#?\s*(\d+)$/i.exec(s);
+  if (playoff) {
+    const n = Number(playoff[1]);
+    return { name: `Match ${n} (R${roundOf(n)})`, key: `sf${n}m1` };
+  }
+
+  // Legacy bracket naming, still emitted by some tools.
+  const legacy = /^(quarterfinal|quarter-final|qf|semifinal|semi-final|sf)\s*#?\s*(\d+)(?:\s*(?:match|m)\s*(\d+))?$/i.exec(s);
+  if (legacy) {
+    const level = /^q/i.test(legacy[1]!) ? 'qf' : 'sf';
+    return { name: s, key: `${level}${Number(legacy[2])}m${Number(legacy[3] ?? 1)}` };
+  }
+
+  // Spelled-out finals, e.g. "Final Two".
+  const spelled = /^finals?\s+(one|two|three)$/i.exec(s);
+  if (spelled) {
+    const n = ORDINAL[spelled[1]!.toLowerCase()]!;
+    return n >= 3 ? { name: 'Final Tiebreaker', key: 'f1m3' } : { name: `Final ${n}`, key: `f1m${n}` };
+  }
+
+  return { name: s, key: null };
+}
+
+/**
+ * Round number for a 13-match double-elimination bracket, matching the (Rn)
+ * suffix FIRST puts on playoff titles.
+ */
+export function roundOf(matchNumber: number): number {
+  if (matchNumber <= 4) return 1;
+  if (matchNumber <= 6) return 2;
+  if (matchNumber <= 8) return 3;
+  if (matchNumber <= 10) return 4;
+  if (matchNumber <= 11) return 5;
+  return matchNumber <= 12 ? 6 : 7;
+}
+
+/** `Qualification 42 - CalGames` */
+export const videoTitle = (matchName: string, eventName: string): string =>
+  `${matchName} - ${eventName}`;
+
+/** `2026 CalGames - Day 1` */
+export const streamTitle = (year: number, eventName: string, day: number): string =>
+  `${year} ${eventName} - Day ${day}`;
+
+export interface DescriptionInput {
+  title: string;
+  red: { teams: number[]; score: number };
+  blue: { teams: number[]; score: number };
+  resultsUrl?: string;
+  credit: string;
+  copyright: string;
+}
+
+/**
+ * Matches the official description layout:
+ *
+ *   Final Tiebreaker - CalGames
+ *   Red (Teams 6238, 1323, 254) - 552
+ *   Blue (Teams 6665, 1678, 9470) - 527
+ *   https://…
+ *
+ *   Uploaded by …
+ *   (c) 2026 …
+ */
+export function description(d: DescriptionInput): string {
+  const side = (label: string, s: { teams: number[]; score: number }): string =>
+    `${label} (Teams ${s.teams.join(', ')}) - ${s.score}`;
+
+  return [
+    d.title,
+    side('Red', d.red),
+    side('Blue', d.blue),
+    ...(d.resultsUrl ? [d.resultsUrl] : []),
+    '',
+    d.credit,
+    d.copyright,
+  ].join('\n');
+}

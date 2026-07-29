@@ -15,6 +15,8 @@ import type { MediaLibrary } from './media.ts';
 import type { Recorder } from './recorder.ts';
 import { matchCut, type ClipStore, type Range } from './clips.ts';
 import { markersSince } from './markers.ts';
+import type { PublishQueue } from './publish/queue.ts';
+import { redacted, publishReadiness, type Config } from './config.ts';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -44,10 +46,13 @@ export interface ServerOpts {
   /** Absent when ffmpeg isn't installed — everything else still runs. */
   recorder?: Recorder | null;
   clips?: ClipStore | null;
+  publish?: PublishQueue | null;
+  config?: Config | null;
 }
 
 export function startServer(opts: ServerOpts) {
-  const { bus, media, root, port, host, recorder = null, clips = null } = opts;
+  const { bus, media, root, port, host, recorder = null, clips = null,
+          publish = null, config = null } = opts;
 
   /** Never let a path escape its mount point. */
   function safeJoin(base: string, urlPath: string): string | null {
@@ -165,6 +170,40 @@ export function startServer(opts: ServerOpts) {
           });
           bus.emit({ type: 'replay.clip_ready', source: 'replay', payload: { ...clip, kind: 'match' } });
           return json(res, 200, { ...clip, parts: ranges.length });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
+      // ---- publishing ----------------------------------------------------
+      // Never returns a credential — only whether each one is present.
+      if (path === '/api/publish') {
+        return json(res, 200, {
+          available: !!publish,
+          config: config ? redacted(config) : null,
+          missing: config ? publishReadiness(config) : null,
+          ready: publish?.ready ?? null,
+          items: publish?.items ?? [],
+        });
+      }
+
+      if (path.startsWith('/api/publish/') && req.method === 'POST') {
+        if (!publish) return json(res, 503, { error: 'Publishing is not available.' });
+        const action = path.slice('/api/publish/'.length);
+        try {
+          if (action === 'match') {
+            const item = await publish.queueMatch();
+            return json(res, item ? 200 : 409,
+              item ?? { error: 'Nothing to queue — no match has started, or it is already queued.' });
+          }
+          if (action === 'release') {
+            return json(res, 200, { released: await publish.release() });
+          }
+          if (action.startsWith('retry/')) {
+            await publish.retry(action.slice('retry/'.length));
+            return json(res, 200, { ok: true });
+          }
+          return json(res, 404, { error: `Unknown publish action "${action}"` });
         } catch (err) {
           return json(res, 422, { error: (err as Error).message });
         }

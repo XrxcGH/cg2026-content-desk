@@ -9,6 +9,8 @@
     "dev": "node --experimental-strip-types --watch apps/core/src/index.ts",
     "start": "node --experimental-strip-types apps/core/src/index.ts",
     "replay": "node --experimental-strip-types apps/core/src/index.ts --replay",
+    "auth:youtube": "node --experimental-strip-types apps/core/src/publish/youtube-auth.ts",
+    "test": "node --experimental-strip-types --test \"apps/core/src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

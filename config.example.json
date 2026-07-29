@@ -1,0 +1,61 @@
+{
+  "//": "Copy to config.json and fill in. config.json is gitignored — never commit it.",
+
+  "event": {
+    "//key": "TBA event key. CalGames 2026 is expected to be 2026cacg — confirm on thebluealliance.com before the event.",
+    "key": "2026cacg",
+
+    "//name": "Event name as it appears in titles, following the official FIRST channel convention: 'Qualification 1 - CalGames', 'Match 1 (R1) - CalGames', 'Final Tiebreaker - CalGames'. Livestreams read '2026 CalGames - Day 1'.",
+    "name": "CalGames",
+    "year": 2026,
+
+    "//resultsUrl": "Linked in every video description. Blank omits the line.",
+    "resultsUrl": "https://www.thebluealliance.com/event/2026cacg"
+  },
+
+  "publish": {
+    "//enabled": "Master switch. Nothing uploads while this is false.",
+    "enabled": false,
+
+    "//mode": "deferred | trickle | live. Keep deferred during competition — the live stream must never compete with an upload for the venue uplink. Measure the uplink on Friday before changing this.",
+    "mode": "deferred",
+
+    "autoQueueMatches": true,
+    "sourceId": "program",
+
+    "//privacy": "Videos upload unlisted and flip to public only once TBA linking succeeds, so a failed link never leaves an orphan video with no context.",
+    "privacy": "unlisted",
+    "publicAfterLink": true,
+
+    "//playlists": "YouTube playlist IDs (PL...). Leave blank to skip playlist insertion.",
+    "playlists": { "match": "", "analysis": "", "segment": "" },
+
+    "//credit": "Closing lines of every description, mirroring the official channel's layout. FIRST's own videos end '(c) 2026 FIRST Robotics Competition' — that is theirs to claim. CalGames is a WRRF off-season event, so these default to WRRF.",
+    "credit": "Uploaded by the CalGames Content Desk",
+    "copyright": "(c) 2026 Western Region Robotics Forum"
+  },
+
+  "youtube": {
+    "//": "Google Cloud project -> OAuth 2.0 Client ID (Desktop app), with the YouTube Data API v3 enabled. Scope needed: https://www.googleapis.com/auth/youtube.upload",
+    "//refreshToken": "Obtained once via the OAuth consent flow. Run `npm run auth:youtube` for the walkthrough.",
+    "//before-the-event": "Use WRRF's established, verified channel — a new channel's per-day upload cap is low and separate from API quota. Enable live streaming 24h in advance.",
+    "clientId": "",
+    "clientSecret": "",
+    "refreshToken": ""
+  },
+
+  "tba": {
+    "//": "Request Trusted API access for the event from The Blue Alliance. They issue an auth id and secret per event.",
+    "//scope": "We publish video and webcasts only. Cheesy Arena owns match data on TBA — we never call matches/update, rankings/update, awards/update, alliance_selections/update, or team_list/update, which require the FULL dataset and would delete anything not included.",
+    "authId": "",
+    "authSecret": "",
+
+    "//readKey": "Optional. Read APIv3 key for team names and avatars.",
+    "readKey": ""
+  },
+
+  "stream": {
+    "//webcastUrl": "The public YouTube live URL. Registered on TBA so the event appears on GameDay. TBA does not ingest video — it embeds this.",
+    "webcastUrl": ""
+  }
+}

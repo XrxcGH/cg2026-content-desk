@@ -5,6 +5,10 @@ dist/
 data/events/*.ndjson
 !data/events/sample.ndjson
 
+# Runtime state: queued uploads, local file paths, video ids.
+data/publish-queue.json
+data/publish-queue.json.tmp
+
 # Team media library. Robot cutouts are large and event-specific; the
 # manifest is regenerated from disk on boot.
 media/teams/*/
@@ -13,5 +17,6 @@ media/manifest.json
 # Rolling record scratch — 4 cams x 1080p60 is ~22GB/hour. Never commit.
 rec/
 
+# Credentials. config.example.json is the committed template.
 config.json
 *.log

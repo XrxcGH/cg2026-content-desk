@@ -196,19 +196,42 @@ checkbox somebody has to remember to tick. The desk can still force one on or of
 Extraction is the same ffmpeg concat-and-trim the replay service uses, at different bounds. One
 implementation.
 
-### Metadata
+### Naming — matches the official FIRST channel
 
-Templated, so nobody is typing titles at 9pm:
+So CalGames content sits alongside official uploads instead of looking homemade. Titles are
+`{match} - {event}`; livestreams are `{year} {event} - Day {n}`.
+
+| Field system says | Title | TBA key |
+| --- | --- | --- |
+| `Qualification 42`, `Q42`, `qm42` | `Qualification 42 - CalGames` | `qm42` |
+| `Playoff 5`, `Match 5` | `Match 5 (R2) - CalGames` | `sf5m1` |
+| `Match 1 (R1)` | `Match 1 (R1) - CalGames` | `sf1m1` |
+| `Final 1` | `Final 1 - CalGames` | `f1m1` |
+| `Final 3`, `Final Tiebreaker` | `Final Tiebreaker - CalGames` | `f1m3` |
+| `Practice 3` | *never published* | — |
+
+Playoff titles carry the `(Rn)` round suffix from the 13-match double-elimination bracket, and a
+third final **is** the tiebreaker however the field system spells it.
+
+Descriptions follow the official layout:
 
 ```
-Title:  CalGames 2026 · Qualification 42 · Red 148 – 132 Blue
-Desc:   Red:  846 The Funky Monkeys, 1868 Space Cookies, 253 Boba Bots
-        Blue: 100 The Wildhats, 115 MVRT, 670 Homestead Robotics
-        …
-        Presented by the Western Region Robotics Forum · calgames.org
-Playlist: CalGames 2026 — Qualification Matches
-Privacy:  unlisted → public on link success
+Final Tiebreaker - CalGames
+Red (Teams 6238, 1323, 254) - 552
+Blue (Teams 6665, 1678, 9470) - 527
+https://www.thebluealliance.com/event/2026cacg
+
+Uploaded by the CalGames Content Desk
+(c) 2026 Western Region Robotics Forum
 ```
+
+> **One deliberate difference.** FIRST's own descriptions close with
+> *"(c) 2026 FIRST Robotics Competition"* — theirs to claim. CalGames is a WRRF off-season event,
+> so copying that line verbatim would be inaccurate. The credit and copyright lines are
+> configurable and default to WRRF.
+
+All of it lives in `apps/core/src/publish/naming.ts` and is covered by tests, because a title
+typo'd across 80 uploads is not something you fix afterwards.
 
 Uploading **unlisted first and flipping to public only after the TBA link succeeds** means a failed
 link never leaves an orphan video with no context.
