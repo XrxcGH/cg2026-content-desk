@@ -49,6 +49,10 @@ export interface Config {
     credit: string;
     copyright: string;
   };
+  // The Cheesy Arena bridge is deliberately NOT configured here — it is a
+  // launch flag (`--cheesy`). It needs FTA sign-off, so switching it on should
+  // be an explicit act at the point of use rather than something inherited
+  // from a file copied between machines. See docs/10-field-bridge.md.
   youtube: { clientId: string; clientSecret: string; refreshToken: string };
   tba: { authId: string; authSecret: string; readKey: string };
   stream: {

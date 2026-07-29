@@ -17,6 +17,8 @@ import { matchCut, type ClipStore, type Range } from './clips.ts';
 import { markersSince } from './markers.ts';
 import type { PublishQueue } from './publish/queue.ts';
 import { redacted, publishReadiness, type Config } from './config.ts';
+import type { CheesyAdapter } from './ingest/cheesy/adapter.ts';
+import { ALLOWED_PATHS, ALLOWED_SOCKETS } from './ingest/cheesy/client.ts';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -48,11 +50,13 @@ export interface ServerOpts {
   clips?: ClipStore | null;
   publish?: PublishQueue | null;
   config?: Config | null;
+  /** Absent unless the bridge was started with --cheesy. */
+  cheesy?: CheesyAdapter | null;
 }
 
 export function startServer(opts: ServerOpts) {
   const { bus, media, root, port, host, recorder = null, clips = null,
-          publish = null, config = null } = opts;
+          publish = null, config = null, cheesy = null } = opts;
 
   /** Never let a path escape its mount point. */
   function safeJoin(base: string, urlPath: string): string | null {
@@ -173,6 +177,31 @@ export function startServer(opts: ServerOpts) {
         } catch (err) {
           return json(res, 422, { error: (err as Error).message });
         }
+      }
+
+      // ---- field bridge ---------------------------------------------------
+      // docs/10 promises the FTA a printable list of every request we make.
+      // This is that list, plus the allowlist it is constrained to.
+      if (path === '/api/cheesy') {
+        return json(res, 200, {
+          bridged: !!cheesy,
+          connected: cheesy?.client.connected ?? false,
+          allowedSockets: ALLOWED_SOCKETS,
+          allowedPaths: ALLOWED_PATHS,
+          requests: cheesy?.client.audit.length ?? 0,
+        });
+      }
+
+      if (path === '/api/cheesy/audit') {
+        const rows = cheesy?.client.audit ?? [];
+        if (url.searchParams.get('format') === 'text') {
+          const text = rows.map(r =>
+            `${new Date(r.ts).toISOString()}  ${r.method.padEnd(4)} ${r.status}  ${r.url}`).join('\n');
+          res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end(text + (rows.length ? '\n' : 'No requests made.\n'));
+          return;
+        }
+        return json(res, 200, rows);
       }
 
       // ---- publishing ----------------------------------------------------

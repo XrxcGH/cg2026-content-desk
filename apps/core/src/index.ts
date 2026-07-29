@@ -13,6 +13,7 @@ import { MediaLibrary } from './media.ts';
 import { startServer } from './server.ts';
 import { startDemo } from './demo.ts';
 import { attachMarkers } from './markers.ts';
+import { CheesyAdapter } from './ingest/cheesy/adapter.ts';
 import { loadConfig, publishReadiness } from './config.ts';
 import { PublishQueue } from './publish/queue.ts';
 import { chooseEncoder, findFfmpeg } from './ffmpeg.ts';
@@ -86,6 +87,28 @@ if (!tools) {
   }
 }
 
+// ---- Cheesy Arena field bridge ---------------------------------------------
+// Deliberately a launch flag rather than a config setting: the bridge needs FTA
+// sign-off, and turning it on should be an explicit act at the point of use,
+// not something inherited from a file that got copied between machines.
+//
+//   --cheesy [--cheesy-host 10.0.100.5:8080] [--display-id contentdesk1]
+//
+// See docs/10-field-bridge.md. Only HandleNotifiers-only sockets are reachable.
+let cheesy: CheesyAdapter | null = null;
+if (has('cheesy')) {
+  cheesy = new CheesyAdapter({
+    bus,
+    host: arg('cheesy-host') || '10.0.100.5:8080',
+    displayId: arg('display-id') || 'contentdesk1',
+  });
+  cheesy.start();
+  console.log(`[cheesy] bridging ${arg('cheesy-host') || '10.0.100.5:8080'} ` +
+    `as display "${arg('display-id') || 'contentdesk1'}"`);
+} else {
+  console.log('[cheesy] bridge off — pass --cheesy to connect to the field');
+}
+
 // ---- publishing -----------------------------------------------------------
 const config = await loadConfig(ROOT);
 const publish = new PublishQueue(ROOT, config, bus, clips);
@@ -114,7 +137,9 @@ if (config.publish.autoQueueMatches) {
   });
 }
 
-const server = startServer({ bus, media, root: ROOT, port, host, recorder, clips, publish, config });
+const server = startServer({
+  bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy,
+});
 
 // Phase boundaries are time-driven, not event-driven — endgame lockdown and
 // the auto-end marker have to land even if nothing else is happening.
@@ -131,6 +156,7 @@ if (replayFile) {
 const shutdown = (): void => {
   console.log('\n[core] shutting down');
   clearInterval(ticker);
+  cheesy?.stop();
   server.close();
   // Give ffmpeg a moment to finalise the segment it's mid-way through —
   // SIGKILL would leave the most recent file unplayable, which is exactly the
