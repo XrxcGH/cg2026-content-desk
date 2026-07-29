@@ -451,9 +451,14 @@ function phaseOf(c) {
   if (c < 0)   return ['Auto', 'both'];
   if (c < 10)  return ['Transition', 'both'];
   if (c < 110) {
+    // Odd shifts belong to the AUTO LOSER, even shifts to the winner —
+    // verified against Cheesy Arena's Hub.isShiftActive. Winning auto buys the
+    // LATER shifts. The real system takes this from the field rather than
+    // inferring it, because Cheesy decides auto on fuel count alone and
+    // settles a tie with a coin flip. See docs/10-field-bridge.md.
     const shift = Math.floor((c - 10) / 25) + 1;
-    const other = S.autoWinner === 'red' ? 'blue' : 'red';
-    return [`Shift ${shift}`, shift % 2 ? S.autoWinner : other];
+    const loser = S.autoWinner === 'red' ? 'blue' : 'red';
+    return [`Shift ${shift}`, shift % 2 ? loser : S.autoWinner];
   }
   if (c < 140) return ['End game', 'both'];
   return ['Final', 'both'];

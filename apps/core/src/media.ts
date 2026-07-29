@@ -9,7 +9,7 @@
  * upload time on Friday is worth a lot more than catching it Sunday.
  */
 
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export interface RobotMedia {
@@ -212,7 +212,4 @@ export class MediaLibrary {
     };
   }
 
-  async exists(path: string): Promise<boolean> {
-    try { await stat(path); return true; } catch { return false; }
-  }
 }

@@ -70,7 +70,7 @@ export class YouTubeClient {
   }
 
   /** Begin a resumable session. Returns the URL to PUT bytes to. */
-  async #startSession(file: string, meta: VideoMeta, size: number): Promise<string> {
+  async #startSession(meta: VideoMeta, size: number): Promise<string> {
     const token = await this.#accessToken();
     const res = await fetch(`${UPLOAD_URL}?uploadType=resumable&part=snippet,status`, {
       method: 'POST',
@@ -123,7 +123,7 @@ export class YouTubeClient {
             onSession?: (url: string) => void; attempts?: number } = {},
   ): Promise<string> {
     const size = (await stat(file)).size;
-    let sessionUrl = opts.sessionUrl ?? await this.#startSession(file, meta, size);
+    let sessionUrl = opts.sessionUrl ?? await this.#startSession(meta, size);
     opts.onSession?.(sessionUrl);
 
     const maxAttempts = opts.attempts ?? 5;
@@ -161,7 +161,7 @@ export class YouTubeClient {
         }
         // 404 means the session expired — start a fresh one and try again.
         if (res.status === 404) {
-          sessionUrl = await this.#startSession(file, meta, size);
+          sessionUrl = await this.#startSession(meta, size);
           opts.onSession?.(sessionUrl);
           offset = 0;
           continue;

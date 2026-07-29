@@ -147,7 +147,7 @@ That's what people actually want to watch, and it's what makes the CalGames grap
 built. So the recorder captures the composited program output *in addition to* the ISO cameras.
 
 - **Program record** → archive, match videos, uploads
-- **ISO camera records** → replay source ([04](docs/04-replay-and-telestrator.md))
+- **ISO camera records** → replay source ([04](04-replay-and-telestrator.md))
 
 ### Cut bounds come from the event log — and a match video is two parts, not one
 

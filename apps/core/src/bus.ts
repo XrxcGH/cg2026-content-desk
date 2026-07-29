@@ -7,7 +7,7 @@
  * live or die on whether people can practice without hardware.
  */
 
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { createWriteStream, type WriteStream } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { phaseAt } from './clock.ts';
@@ -127,5 +127,3 @@ export class EventBus {
 
 export const logPathFor = (dir: string, d = new Date()): string =>
   join(dir, `${d.toISOString().slice(0, 19).replace(/[:T]/g, '-')}.ndjson`);
-
-export { appendFile };

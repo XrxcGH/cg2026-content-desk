@@ -87,8 +87,48 @@ without cameras:
 npm start -- --demo --record --test-sources
 ```
 
+Program takes `?key=alpha|luma` and `?scale=stream|venue`. It contains the alliance overview, live
+match, and final score in one page — screens switch on state, so the switcher operator never
+changes sources.
+
+Replay a recorded event log instead of running live:
+
+```bash
+npm run replay -- data/events/2026-10-17-09-14-02.ndjson 4
+```
+
 ```bash
 npm test
+```
+
+## Connecting to the field
+
+The Cheesy Arena bridge is a **launch flag, never a config setting** — it needs FTA sign-off, so
+switching it on should be an explicit act at the point of use rather than something inherited from
+a file copied between machines.
+
+```bash
+npm start -- --cheesy --cheesy-host 10.0.100.5:8080 --display-id contentdesk1
+```
+
+Agree the display id with the scorekeeper in advance so it can't collide with a real audience
+screen. `GET /api/cheesy/audit?format=text` prints every request the bridge has made, which is what
+[docs/10-field-bridge.md](docs/10-field-bridge.md) promises the FTA.
+
+Show automation and OBS are separate flags. Cues start **disarmed** — nobody should discover
+automation by having it happen to them mid-match — and are armed individually from `/api/cues`.
+The OBS password comes from the environment, never a CLI argument, because `argv` is visible in
+`ps` and in shell history.
+
+```bash
+OBS_PASSWORD=… npm start -- --cheesy --obs --obs-host 127.0.0.1:4455
+```
+
+To rehearse without a field, build [Cheesy Arena](https://github.com/Team254/cheesy-arena), run it
+with `-dev`, and drive a real scored match through it:
+
+```bash
+node harness.mjs
 ```
 
 ## Publishing
@@ -101,16 +141,6 @@ event and uploads afterwards so nothing competes with the live stream for the ve
 Titles follow the official FIRST channel convention — `Qualification 42 - CalGames`,
 `Match 5 (R2) - CalGames`, `Final Tiebreaker - CalGames`. Details in
 [docs/11-distribution.md](docs/11-distribution.md).
-
-Program takes `?key=alpha\|luma` and `?scale=stream\|venue`. It contains the alliance overview,
-live match, and final score in one page — screens switch on state, so the switcher operator never
-changes sources.
-
-Replay a recorded event log instead of running live:
-
-```bash
-npm run replay -- data/events/2026-10-17-09-14-02.ndjson 4
-```
 
 ## Try the standalone prototype
 
@@ -137,19 +167,27 @@ lockdown, and the telestrator.
 
 ## Status
 
-Design phase, blocking decisions resolved:
+**P0 and P1 are built and validated.** The bridge has been run against a real `cheesy-arena -dev`
+build of the 2026 source through a genuine scored match. Outstanding: YouTube and TBA credentials,
+and P2 (see [docs/09-roadmap-and-risks.md](docs/09-roadmap-and-risks.md)).
 
-- **CalGames 2026 runs Cheesy Arena.** The `cheesy` adapter is the only ingest path being built.
-- **The field bridge is approved.** Any software is fine as long as it can't interfere with Cheesy
-  Arena controlling the field.
+Two decisions shaped everything:
 
-That resolves to a hard endpoint allowlist, and the guarantee is **structural rather than
-procedural**: Cheesy Arena's `HandleNotifiers` never calls `Read()`, so the display endpoints we
-subscribe to *cannot* process anything we send. What's forbidden is short and specific —
-`/match_play/*` (abort match), `/panels/scoring/*` (game-piece scoring), `/panels/referee/*`, and
-every `/setup/*`. The remaining interference vector is the *host*, not the API, so nothing of ours
-runs on the FMS machine. Spec and a printable FTA sign-off sheet:
+- **CalGames 2026 runs Cheesy Arena.** The `cheesy` adapter is the only ingest path.
+- **The field bridge is approved**, on the condition that nothing can interfere with Cheesy Arena
+  controlling the field.
+
+That condition resolves to a hard endpoint allowlist, and the guarantee behind it is **structural
+rather than procedural**: Cheesy Arena's `HandleNotifiers` never calls `Read()`, so the display
+endpoints we subscribe to *cannot* process anything we send. What's forbidden is short and
+specific — `/match_play/*` (abort match), `/panels/scoring/*` (game-piece scoring),
+`/panels/referee/*`, and every `/setup/*`. The remaining interference vector is the *host*, not
+the API, so nothing of ours runs on the FMS machine. Spec and a printable FTA sign-off sheet:
 [docs/10-field-bridge.md](docs/10-field-bridge.md).
+
+Running the bridge against the real thing was worth more than the code it checked — it found the
+hub alternation inverted, the auto winner decided on fuel count rather than points, and a tied auto
+settled by a **coin flip**. Hub state now comes from the field rather than any local inference.
 
 Next up is P0 in [docs/09-roadmap-and-risks.md](docs/09-roadmap-and-risks.md) — none of it needs
 the bridge.

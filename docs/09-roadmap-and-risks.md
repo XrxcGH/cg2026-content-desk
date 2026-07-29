@@ -40,24 +40,29 @@ no network approval needed.
 
 **P0 is complete.** Everything above runs today; only the credentials are outstanding.
 
-**Ship criterion:** a producer, a switcher op, and an analyst can run a full match with replay and
-telestration using nothing but keyboards. *Currently met for everything except replay playback and
-telestration.*
+**Ship criterion — met.** A producer, a switcher op, and an analyst can run a full match with
+replay and telestration using nothing but keyboards.
 
 ### P1 — Live data *(target: end of September)*
 
-- `core` event bus, event log, snapshot store, WS fan-out
-- **Cheesy Arena adapter** — near pass-through, low effort
-- **The bridge**, hardened per [10-field-bridge.md](10-field-bridge.md): GET-only client, no
-  gateway, Windows discovery protocols off, audit log, kill switch. Rehearse against a local
-  `cheesy-arena -dev` instance in August
-- `score.delta` synthesis → automatic replay markers (scoring bursts, lead changes, climbs), plus
+- ✅ **Cheesy Arena adapter** — wire shapes transcribed from the 2026 source, not guessed
+- ✅ **The bridge**, hardened per [10-field-bridge.md](10-field-bridge.md): socket and REST
+  allowlists as constants with tests, GET-only client, exponential backoff, request audit log,
+  kill switch. Launch flag (`--cheesy`), never a config setting
+- ✅ `score.delta` synthesis → automatic replay markers (bursts, lead changes, climbs), plus
   "robot dropped" markers off `arenaStatus`
-- Hub state indicator + shift clock — *the* 2026-specific graphic
-- Cue engine with per-cue autopilot toggles
+- ✅ Hub state indicator + shift clock — taken from the field, not inferred (see below)
+- ✅ Cue engine with per-cue autopilot toggles, and a hand-rolled obs-websocket v5 client
+- ✅ **Validated against a real `cheesy-arena -dev` build** driving a genuine scored match.
+  `harness.mjs` makes it repeatable
 
-**Ship criterion:** the score bar is correct without anyone typing, and replay markers land on
-their own.
+**Ship criterion — met.** The score bar is correct without anyone typing, and replay markers land
+on their own.
+
+The validation was worth more than the code it checked: it found the hub alternation inverted, the
+auto winner decided on fuel count rather than points, and a tied auto settled by a **coin flip** —
+which is why hub state now comes from the field rather than any local inference. Details in
+[10-field-bridge.md](10-field-bridge.md).
 
 ### P2 — Depth *(target: first week of October)*
 
