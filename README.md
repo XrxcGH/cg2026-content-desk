@@ -79,6 +79,12 @@ built without a field. Drop it to run on desk input alone.
 | Telestrator pad | `/s/draw` | iPad + Pencil, on the production Wi-Fi |
 | Telestrator render | `/s/tele` | OBS Browser Source, layered over the replay |
 | Replay console | `/s/replay` | Match-clock timeline, markers, cut and send |
+| Arcade overlay | `/s/arcade` | OBS Browser Source — Smash sets, Mario Kart standings |
+| Arcade console | `/s/arcadedesk` | Run the side tournament |
+| Side screen | `/s/side` | Venue TVs — on-deck and rankings, venue scale |
+| Post-match cards | `/s/cards` | 1080×1080 result graphics, auto-built on score |
+
+The index page at `/` lists every surface with a one-line description — start there.
 
 Recording and replay need ffmpeg. Add `--record --test-sources` to exercise the whole pipeline
 without cameras:

@@ -6,7 +6,7 @@
  */
 
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -43,6 +43,7 @@ export const SURFACES = [
   { id: 'arcade',  name: 'Arcade overlay',  note: 'OBS Browser Source. Smash sets and Mario Kart standings for the gaps.' },
   { id: 'arcadedesk', name: 'Arcade console', note: 'Run the side tournament. Operator-authoritative scoring.' },
   { id: 'side',    name: 'Side screen',     note: 'Venue TVs. On deck and rankings, rotating on a timer. Venue scale by default.' },
+  { id: 'cards',   name: 'Post-match cards', note: '1080x1080 result graphics, auto-built when the score posts. Download or save to the desk.' },
 ] as const;
 
 export interface ServerOpts {
@@ -366,12 +367,35 @@ export function startServer(opts: ServerOpts) {
         }
       }
 
+      // Save a rendered post-match card PNG to the desk, so it's on disk for
+      // batch posting or the publish flow rather than only in a browser tab.
+      if (path.startsWith('/api/cards/') && req.method === 'POST') {
+        const raw = decodeURIComponent(path.slice('/api/cards/'.length));
+        const name = (raw.replace(/[^\w.-]+/g, '_').slice(0, 80) || 'match');
+        try {
+          const body = await readBody(req, 8 * 1024 * 1024);
+          // Reject anything that isn't actually a PNG — the byte we serve back
+          // as image/png must be one.
+          if (body.length < 8 || body.readUInt32BE(0) !== 0x89504e47) {
+            return json(res, 422, { error: 'Body is not a PNG.' });
+          }
+          const dir = join(root, 'rec', 'cards');
+          await mkdir(dir, { recursive: true });
+          const file = `${name}.png`;
+          await writeFile(join(dir, file), body);
+          return json(res, 200, { url: `/cards/${file}`, bytes: body.length });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
       // ---- Static mounts -------------------------------------------------
       const mounts: [string, string][] = [
         ['/theme/',  join(root, 'packages', 'theme')],
         ['/shared/', join(root, 'surfaces', '_shared')],
         ['/media/',  join(root, 'media')],
         ['/clips/',  join(root, 'rec', 'clips')],
+        ['/cards/',  join(root, 'rec', 'cards')],
       ];
       for (const [prefix, base] of mounts) {
         if (!path.startsWith(prefix)) continue;

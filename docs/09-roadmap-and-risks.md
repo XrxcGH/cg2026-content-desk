@@ -69,15 +69,17 @@ which is why hub state now comes from the field rather than any local inference.
 - ✅ Arcade: head-to-head sets, Mario Kart GP points model with the MK8D table and
   best-finish tie-break, `/s/arcade` overlay and `/s/arcadedesk` console. Entrants can
   register by FRC team, so the card reads `846 The Funky Monkeys` rather than a gamertag
-- ⬜ start.gg adapter — bracket metadata only. The live score stays operator-authoritative
-  because start.gg lags reality by up to a full round
 - ✅ Cheesy REST polling (60s): rankings and schedule, feeding the side screens
 - ✅ Side screens (`/s/side`): on-deck and rankings, rotating on a timer, venue scale
   by default — the only surface that is *only* ever seen in the room
+- ✅ Post-match social cards (`/s/cards`): 1080×1080 canvas-rendered result graphics, auto-built
+  on `match.score_posted`. Download a PNG or save it to the desk. Same shape language and WRRF
+  palette as the broadcast — winner cap, RP pips, team lists
 - ⬜ Statbotics pre-match prediction + alliance selection value board.
   **Blocked:** `api.statbotics.io` serves its root but every `/v3` path returns 500/503,
   so the schema can't be verified. Re-check before building
-- ⬜ Post-match social cards
+- ⬜ start.gg adapter — bracket metadata only. The live score stays operator-authoritative
+  because start.gg lags reality by up to a full round
 
 Capture is a hardware task, not a software one: HDMI splitter first so players never play
 through a capture card, then Elgato/Cam Link into an OBS scene. See

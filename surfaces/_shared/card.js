@@ -1,0 +1,223 @@
+/**
+ * Post-match social card renderer.
+ *
+ * Drawn on a canvas rather than laid out in HTML, for one reason: the output
+ * has to be a real PNG somebody can post. `canvas.toBlob()` gives that with no
+ * dependency, whereas rasterising a DOM node needs a library or a headless
+ * browser. The trade is doing layout by hand, which for a fixed 1080x1080
+ * composition is a fair price.
+ *
+ * Colours come from the same CSS custom properties every other surface uses,
+ * so the card can never drift from the broadcast look.
+ */
+
+export const CARD_SIZE = 1080;
+
+const css = name => getComputedStyle(document.documentElement)
+  .getPropertyValue(name).trim();
+
+function palette() {
+  return {
+    purple: css('--cg-purple') || '#560F6B',
+    purpleHi: css('--cg-purple-hi') || '#7B2394',
+    purpleLo: css('--cg-purple-lo') || '#33073F',
+    void: css('--cg-purple-void') || '#0E0113',
+    gold: css('--cg-gold') || '#F0AF00',
+    green: css('--cg-green-hi') || '#0D9B74',
+    white: css('--cg-white') || '#FFFFFF',
+    dim: css('--cg-white-dim') || '#C9BCD0',
+    red: css('--alliance-red') || '#ED1C24',
+    blue: css('--alliance-blue') || '#0066B3',
+  };
+}
+
+/** Chamfered rect — the shape language from docs/03, in canvas form. */
+function chamfer(ctx, x, y, w, h, ch) {
+  ctx.beginPath();
+  ctx.moveTo(x + ch, y);
+  ctx.lineTo(x + w, y);
+  ctx.lineTo(x + w, y + h - ch);
+  ctx.lineTo(x + w - ch, y + h);
+  ctx.lineTo(x, y + h);
+  ctx.lineTo(x, y + ch);
+  ctx.closePath();
+}
+
+/** Perforated-aluminium dots, same motif as the overlays. */
+function perf(ctx, x, y, w, h, step = 18) {
+  ctx.save();
+  chamfer(ctx, x, y, w, h, 0);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  for (let py = y; py < y + h; py += step) {
+    for (let px = x; px < x + w; px += step) {
+      ctx.beginPath();
+      ctx.arc(px, py, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function fitText(ctx, text, maxWidth, startPx, font, minPx = 12) {
+  let size = startPx;
+  do {
+    ctx.font = font(size);
+    if (ctx.measureText(text).width <= maxWidth) break;
+    size -= 2;
+  } while (size > minPx);
+  return size;
+}
+
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {object} card
+ *   { eventName, matchName, red:{teams:[{number,name}], score, rp}, blue:{...},
+ *     footer }
+ */
+export function drawCard(ctx, card) {
+  const S = CARD_SIZE;
+  const p = palette();
+  const num = w => size => `${w} ${size}px Chivo, Archivo, system-ui, sans-serif`;
+  const cond = w => size => `${w} ${size}px "Saira Condensed", Archivo, system-ui, sans-serif`;
+
+  // ---- background -------------------------------------------------------
+  const bg = ctx.createLinearGradient(0, 0, S, S);
+  bg.addColorStop(0, p.purple);
+  bg.addColorStop(1, p.void);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, S, S);
+  perf(ctx, 0, 0, S, S, 22);
+
+  // ---- header -----------------------------------------------------------
+  ctx.fillStyle = p.gold;
+  ctx.font = cond(700)(34);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.letterSpacing = '6px';
+  ctx.fillText((card.eventName ?? '').toUpperCase(), S / 2, 92);
+  ctx.letterSpacing = '0px';
+
+  ctx.fillStyle = p.white;
+  const mSize = fitText(ctx, card.matchName ?? '', S - 160, 66, num(900));
+  ctx.font = num(900)(mSize);
+  ctx.fillText(card.matchName ?? '', S / 2, 168);
+
+  // measurement ticks, the blueprint motif
+  ctx.fillStyle = p.gold;
+  for (let x = S / 2 - 210; x < S / 2 + 210; x += 14) ctx.fillRect(x, 196, 2, 5);
+
+  // ---- score blocks -----------------------------------------------------
+  const won = (card.red?.score ?? 0) > (card.blue?.score ?? 0) ? 'red'
+    : (card.blue?.score ?? 0) > (card.red?.score ?? 0) ? 'blue' : 'tie';
+
+  const blockY = 240, blockH = 300, gap = 24;
+  const blockW = (S - 120 - gap) / 2;
+
+  const side = (x, data, colour, label, isWinner) => {
+    ctx.save();
+    chamfer(ctx, x, blockY, blockW, blockH, 26);
+    ctx.fillStyle = colour;
+    ctx.fill();
+    ctx.restore();
+    perf(ctx, x, blockY, blockW, blockH, 20);
+
+    // Winner gets a gold cap — position and a label carry it too, never colour
+    // alone, because red/blue is ~8% of male viewers' worst case.
+    if (isWinner) {
+      ctx.fillStyle = p.gold;
+      ctx.fillRect(x, blockY, blockW, 10);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = p.white;
+    ctx.font = cond(700)(30);
+    ctx.letterSpacing = '5px';
+    ctx.fillText(label.toUpperCase(), x + blockW / 2, blockY + 74);
+    ctx.letterSpacing = '0px';
+
+    ctx.font = num(900)(150);
+    ctx.fillText(String(data?.score ?? 0), x + blockW / 2, blockY + 218);
+
+    if (isWinner) {
+      ctx.fillStyle = p.gold;
+      ctx.font = cond(700)(28);
+      ctx.letterSpacing = '4px';
+      ctx.fillText('WINNER', x + blockW / 2, blockY + 264);
+      ctx.letterSpacing = '0px';
+    } else if (won === 'tie') {
+      ctx.fillStyle = p.dim;
+      ctx.font = cond(600)(26);
+      ctx.fillText('TIE', x + blockW / 2, blockY + 264);
+    }
+  };
+
+  side(60, card.red, p.red, 'Red', won === 'red');
+  side(60 + blockW + gap, card.blue, p.blue, 'Blue', won === 'blue');
+
+  // ---- team lists -------------------------------------------------------
+  const teamsY = blockY + blockH + 54;
+  const drawTeams = (x, teams) => {
+    ctx.textAlign = 'center';
+    (teams ?? []).slice(0, 3).forEach((t, i) => {
+      const y = teamsY + i * 78;
+      ctx.fillStyle = p.gold;
+      ctx.font = num(900)(46);
+      ctx.fillText(String(t.number ?? ''), x + blockW / 2, y);
+
+      ctx.fillStyle = p.dim;
+      const nameSize = fitText(ctx, t.name ?? '', blockW - 40, 26, cond(600));
+      ctx.font = cond(600)(nameSize);
+      ctx.letterSpacing = '2px';
+      ctx.fillText((t.name ?? '').toUpperCase(), x + blockW / 2, y + 28);
+      ctx.letterSpacing = '0px';
+    });
+  };
+  drawTeams(60, card.red?.teams);
+  drawTeams(60 + blockW + gap, card.blue?.teams);
+
+  // ---- ranking point pips ----------------------------------------------
+  const rpY = teamsY + 3 * 78 + 26;
+  const drawRp = (x, rp) => {
+    const keys = ['energized', 'supercharged', 'traversal'];
+    const w = 26, sp = 12;
+    const total = keys.length * w + (keys.length - 1) * sp;
+    let px = x + blockW / 2 - total / 2;
+    for (const k of keys) {
+      ctx.save();
+      chamfer(ctx, px, rpY, w, w, 8);
+      ctx.fillStyle = rp?.[k] ? p.green : p.purpleHi;
+      ctx.fill();
+      ctx.restore();
+      px += w + sp;
+    }
+  };
+  drawRp(60, card.red?.rp);
+  drawRp(60 + blockW + gap, card.blue?.rp);
+
+  // ---- footer -----------------------------------------------------------
+  ctx.fillStyle = p.gold;
+  ctx.fillRect(60, S - 96, S - 120, 4);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = p.dim;
+  ctx.font = cond(600)(26);
+  ctx.letterSpacing = '4px';
+  ctx.fillText((card.footer ?? '').toUpperCase(), S / 2, S - 52);
+  ctx.letterSpacing = '0px';
+}
+
+/** Build the card model from a DeskState snapshot. */
+export function cardFromState(state, opts = {}) {
+  const side = which => ({
+    teams: (state.match?.[which] ?? []).map(t => ({ number: t.number, name: t.name })),
+    score: state.score?.[which]?.total ?? 0,
+    rp: state.score?.[which]?.rp ?? {},
+  });
+  return {
+    eventName: opts.eventName ?? 'CalGames 2026',
+    matchName: state.match?.displayName ?? 'Match',
+    red: side('red'),
+    blue: side('blue'),
+    footer: opts.footer ?? 'calgames.org',
+  };
+}
