@@ -1,0 +1,141 @@
+/**
+ * Minimal obs-websocket v5 client.
+ *
+ * Hand-rolled rather than pulling in obs-websocket-js: the whole protocol we
+ * need is a SHA256 handshake and one request opcode, and this project's only
+ * runtime dependency is `ws`. Fewer moving parts to debug at 11pm on a
+ * Saturday.
+ *
+ * Protocol: Hello(0) -> Identify(1) -> Identified(2), then Request(6) /
+ * RequestResponse(7). Events arrive as op 5 and we ignore them — the cue
+ * engine drives OBS, not the other way round.
+ */
+
+import { createHash } from 'node:crypto';
+import { WebSocket } from 'ws';
+
+const OP = { Hello: 0, Identify: 1, Identified: 2, Event: 5, Request: 6, RequestResponse: 7 } as const;
+
+interface Pending { resolve: (data: unknown) => void; reject: (err: Error) => void; timer: NodeJS.Timeout }
+
+export interface ObsOpts {
+  /** e.g. "127.0.0.1:4455" */
+  host: string;
+  /** Read from the environment, never a CLI arg — argv is visible in `ps`. */
+  password?: string;
+  onStatus?: (connected: boolean, detail: string) => void;
+}
+
+export class ObsClient {
+  #opts: ObsOpts;
+  #ws: WebSocket | null = null;
+  #ready = false;
+  #pending = new Map<string, Pending>();
+  #seq = 0;
+  #backoff = 500;
+  #timer: NodeJS.Timeout | null = null;
+  #stopping = false;
+
+  constructor(opts: ObsOpts) { this.#opts = opts; }
+
+  get connected(): boolean { return this.#ready; }
+
+  connect(): void {
+    if (this.#stopping) return;
+    const ws = new WebSocket(`ws://${this.#opts.host}`);
+    this.#ws = ws;
+
+    ws.on('message', raw => {
+      let msg: { op?: number; d?: Record<string, unknown> };
+      try { msg = JSON.parse(String(raw)) as typeof msg; } catch { return; }
+
+      if (msg.op === OP.Hello) {
+        const auth = msg.d?.['authentication'] as { challenge: string; salt: string } | undefined;
+        const identify: Record<string, unknown> = {
+          rpcVersion: (msg.d?.['rpcVersion'] as number) ?? 1,
+          eventSubscriptions: 0,          // we only send; subscribing is wasted traffic
+        };
+        if (auth) {
+          if (!this.#opts.password) {
+            this.#opts.onStatus?.(false, 'OBS requires a password — set OBS_PASSWORD');
+            ws.close();
+            return;
+          }
+          identify['authentication'] = sign(this.#opts.password, auth.salt, auth.challenge);
+        }
+        ws.send(JSON.stringify({ op: OP.Identify, d: identify }));
+        return;
+      }
+
+      if (msg.op === OP.Identified) {
+        this.#ready = true;
+        this.#backoff = 500;
+        this.#opts.onStatus?.(true, 'identified');
+        return;
+      }
+
+      if (msg.op === OP.RequestResponse) {
+        const d = msg.d as {
+          requestId?: string;
+          requestStatus?: { result?: boolean; comment?: string };
+          responseData?: unknown;
+        };
+        const pending = d.requestId ? this.#pending.get(d.requestId) : undefined;
+        if (!pending || !d.requestId) return;
+        this.#pending.delete(d.requestId);
+        clearTimeout(pending.timer);
+        d.requestStatus?.result
+          ? pending.resolve(d.responseData)
+          : pending.reject(new Error(d.requestStatus?.comment ?? 'OBS request failed'));
+      }
+    });
+
+    ws.on('close', () => this.#reconnect('closed'));
+    ws.on('error', err => this.#reconnect(err.message));
+  }
+
+  #reconnect(why: string): void {
+    this.#ready = false;
+    this.#ws = null;
+    // Fail every in-flight request rather than leaving a cue hanging forever.
+    for (const [, p] of this.#pending) { clearTimeout(p.timer); p.reject(new Error(`OBS ${why}`)); }
+    this.#pending.clear();
+    this.#opts.onStatus?.(false, why);
+
+    if (this.#stopping || this.#timer) return;
+    const wait = Math.min(15_000, this.#backoff * 2);
+    this.#backoff = wait;
+    this.#timer = setTimeout(() => { this.#timer = null; this.connect(); }, wait);
+  }
+
+  request<T = unknown>(requestType: string, requestData: unknown = {}, timeoutMs = 4000): Promise<T> {
+    if (!this.#ready || !this.#ws) return Promise.reject(new Error('OBS is not connected'));
+    const requestId = `r${this.#seq++}`;
+
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#pending.delete(requestId);
+        reject(new Error(`OBS ${requestType} timed out`));
+      }, timeoutMs);
+      this.#pending.set(requestId, { resolve: resolve as (d: unknown) => void, reject, timer });
+      this.#ws!.send(JSON.stringify({ op: OP.Request, d: { requestType, requestId, requestData } }));
+    });
+  }
+
+  setScene(sceneName: string): Promise<unknown> {
+    return this.request('SetCurrentProgramScene', { sceneName });
+  }
+
+  close(): void {
+    this.#stopping = true;
+    if (this.#timer) clearTimeout(this.#timer);
+    this.#ws?.close();
+    this.#ready = false;
+  }
+}
+
+/** base64(sha256(base64(sha256(password + salt)) + challenge)) */
+export function sign(password: string, salt: string, challenge: string): string {
+  const secret = createHash('sha256').update(password + salt).digest('base64');
+  return createHash('sha256').update(secret + challenge).digest('base64');
+}

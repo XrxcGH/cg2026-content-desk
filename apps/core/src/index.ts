@@ -14,6 +14,8 @@ import { startServer } from './server.ts';
 import { startDemo } from './demo.ts';
 import { attachMarkers } from './markers.ts';
 import { CheesyAdapter } from './ingest/cheesy/adapter.ts';
+import { CueEngine } from './cue/engine.ts';
+import { ObsClient } from './cue/obs.ts';
 import { loadConfig, publishReadiness } from './config.ts';
 import { PublishQueue } from './publish/queue.ts';
 import { chooseEncoder, findFfmpeg } from './ffmpeg.ts';
@@ -109,6 +111,29 @@ if (has('cheesy')) {
   console.log('[cheesy] bridge off — pass --cheesy to connect to the field');
 }
 
+// ---- show automation --------------------------------------------------------
+// OBS password comes from the environment, never a CLI arg — argv is visible
+// in `ps` and in the shell history of whoever launched it.
+//
+//   --obs [--obs-host 127.0.0.1:4455]   OBS_PASSWORD=…
+//   --autopilot                          arm every cue at boot (default: off)
+let obs: ObsClient | null = null;
+if (has('obs')) {
+  obs = new ObsClient({
+    host: arg('obs-host') || '127.0.0.1:4455',
+    ...(process.env['OBS_PASSWORD'] ? { password: process.env['OBS_PASSWORD'] } : {}),
+    onStatus: (up, detail) => console.log(`[obs] ${up ? 'connected' : 'down'} — ${detail}`),
+  });
+  obs.connect();
+}
+
+// Cues start disarmed. Nobody should discover automation by having it happen
+// to them mid-match — the producer arms each cue after watching it be right.
+const cues = new CueEngine(bus, obs, { autopilot: has('autopilot') });
+cues.attach();
+console.log(`[cue] ${cues.status.length} cues loaded, autopilot ` +
+  `${has('autopilot') ? 'ARMED' : 'off'} — arm per-cue from the desk`);
+
 // ---- publishing -----------------------------------------------------------
 const config = await loadConfig(ROOT);
 const publish = new PublishQueue(ROOT, config, bus, clips);
@@ -138,7 +163,7 @@ if (config.publish.autoQueueMatches) {
 }
 
 const server = startServer({
-  bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy,
+  bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
 });
 
 // Phase boundaries are time-driven, not event-driven — endgame lockdown and
@@ -157,6 +182,8 @@ const shutdown = (): void => {
   console.log('\n[core] shutting down');
   clearInterval(ticker);
   cheesy?.stop();
+  cues.detach();
+  obs?.close();
   server.close();
   // Give ffmpeg a moment to finalise the segment it's mid-way through —
   // SIGKILL would leave the most recent file unplayable, which is exactly the

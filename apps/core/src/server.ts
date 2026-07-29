@@ -19,6 +19,8 @@ import type { PublishQueue } from './publish/queue.ts';
 import { redacted, publishReadiness, type Config } from './config.ts';
 import type { CheesyAdapter } from './ingest/cheesy/adapter.ts';
 import { ALLOWED_PATHS, ALLOWED_SOCKETS } from './ingest/cheesy/client.ts';
+import type { CueEngine } from './cue/engine.ts';
+import type { ObsClient } from './cue/obs.ts';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -52,11 +54,13 @@ export interface ServerOpts {
   config?: Config | null;
   /** Absent unless the bridge was started with --cheesy. */
   cheesy?: CheesyAdapter | null;
+  cues?: CueEngine | null;
+  obs?: ObsClient | null;
 }
 
 export function startServer(opts: ServerOpts) {
   const { bus, media, root, port, host, recorder = null, clips = null,
-          publish = null, config = null, cheesy = null } = opts;
+          publish = null, config = null, cheesy = null, cues = null, obs = null } = opts;
 
   /** Never let a path escape its mount point. */
   function safeJoin(base: string, urlPath: string): string | null {
@@ -177,6 +181,37 @@ export function startServer(opts: ServerOpts) {
         } catch (err) {
           return json(res, 422, { error: (err as Error).message });
         }
+      }
+
+      // ---- show automation -------------------------------------------------
+      if (path === '/api/cues') {
+        return json(res, 200, {
+          available: !!cues,
+          obs: { connected: obs?.connected ?? false, attached: !!obs },
+          cues: cues?.status ?? [],
+        });
+      }
+
+      if (path.startsWith('/api/cues/') && req.method === 'POST') {
+        if (!cues) return json(res, 503, { error: 'Cue engine is not running.' });
+        const [id, action] = path.slice('/api/cues/'.length).split('/');
+
+        if (id === 'all' && (action === 'arm' || action === 'disarm')) {
+          cues.setAll(action === 'arm');
+          return json(res, 200, { cues: cues.status });
+        }
+        if (!id) return json(res, 400, { error: 'Cue id required' });
+
+        if (action === 'arm' || action === 'disarm') {
+          const ok = cues.setAutopilot(id, action === 'arm');
+          return json(res, ok ? 200 : 404, ok ? { cues: cues.status } : { error: `No cue "${id}"` });
+        }
+        if (action === 'fire') {
+          // Manual always wins — fires regardless of the autopilot setting.
+          const ok = await cues.fire(id);
+          return json(res, ok ? 200 : 404, ok ? { ok: true } : { error: `No cue "${id}"` });
+        }
+        return json(res, 404, { error: `Unknown cue action "${action}"` });
       }
 
       // ---- field bridge ---------------------------------------------------

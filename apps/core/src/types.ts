@@ -53,7 +53,9 @@ export type DeskEventType =
   | 'break.started' | 'queue.updated'
   // production
   | 'graphic.show' | 'graphic.hide' | 'lower_third.show' | 'lower_third.hide'
-  | 'screen.change' | 'sound.play'
+  // `screen.change` is our overlay switching pages; `scene.change` is the
+  // switcher cutting cameras. Different layers, deliberately different events.
+  | 'screen.change' | 'scene.change' | 'sound.play'
   | 'replay.marker' | 'replay.clip_ready' | 'replay.play'
   | 'telestrator.stroke' | 'telestrator.undo' | 'telestrator.clear'
   | 'telestrator.frame' | 'telestrator.hide'
