@@ -1,0 +1,25 @@
+{
+  "name": "cg2026-content-desk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "In-house analysis and broadcast content desk for CalGames 2026.",
+  "engines": { "node": ">=22.6" },
+  "scripts": {
+    "dev": "node --experimental-strip-types --watch apps/core/src/index.ts",
+    "start": "node --experimental-strip-types apps/core/src/index.ts",
+    "replay": "node --experimental-strip-types apps/core/src/index.ts --replay",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.2"
+  }
+}

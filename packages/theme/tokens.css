@@ -1,0 +1,441 @@
+/* ==========================================================================
+   CalGames 2026 Content Desk — design tokens
+
+   Palette is mandated: official WRRF Purple #560F6B, Gold #F0AF00,
+   Green #006549, black/white for text; official FIRST Red #ED1C24 and
+   Blue #0066B3 for alliances. We don't get to choose colors — so the
+   character comes from TYPOGRAPHY, GEOMETRY, and TEXTURE instead.
+
+   The visual language is "field-built": chamfered corners cut like the
+   lightening holes on a gusset plate, perforated-aluminum texture, and
+   blueprint tick rules. It should look machined, not templated.
+
+   Modes, set on <html>:
+     data-key="alpha"      transparent background   (OBS Browser Source)
+     data-key="luma"       black background         (Blackmagic downstream luma key)
+     data-scale="stream"   phone/laptop viewing     (default)
+     data-scale="venue"    30-90 ft across a gym    (see docs/08-motion.md)
+     data-surface="light"  light operator UI
+     data-lockdown         endgame: suppress decorative motion only
+   ========================================================================== */
+
+:root {
+  /* ---- Brand: purple ---------------------------------------------------- */
+  --cg-purple:        #560F6B;
+  --cg-purple-hi:     #7B2394;
+  --cg-purple-lo:     #33073F;
+  --cg-purple-deep:   #1B0322;
+  --cg-purple-void:   #0E0113;  /* deepest atmosphere stop */
+
+  /* ---- Brand: gold ------------------------------------------------------ */
+  --cg-gold:          #F0AF00;
+  --cg-gold-hi:       #FFCA3D;
+  --cg-gold-lo:       #A87A00;
+
+  /* ---- Brand: green ----------------------------------------------------- */
+  --cg-green:         #006549;
+  --cg-green-hi:      #0D9B74;
+  --cg-green-lo:      #003D2C;
+
+  /* ---- Ink -------------------------------------------------------------- */
+  --cg-black:         #000000;
+  --cg-white:         #FFFFFF;
+  --cg-white-dim:     #C9BCD0;  /* white tinted toward purple, not grey */
+
+  /* ---- Alliance: official FIRST red/blue. --------------------------------
+     RESERVED — semantic only, never decorative. Fixed by FIRST; the only
+     colors in this system we do not get to choose. The -lo shades are ours,
+     for recessed fills behind the canonical color. */
+  --alliance-red:     #ED1C24;
+  --alliance-blue:    #0066B3;
+  --alliance-red-lo:  #7A0F13;
+  --alliance-blue-lo: #00375F;
+
+  /* ---- Status ----------------------------------------------------------- */
+  --st-live:          #F0AF00;
+  --st-ok:            #0D9B74;
+  --st-warn:          #FFCA3D;  /* degraded / ESTIMATED data */
+  --st-bad:           #C13030;  /* OPERATOR SURFACES ONLY */
+
+  /* ---- Semantic roles --------------------------------------------------- */
+  --surface:          var(--cg-purple);
+  --surface-raised:   var(--cg-purple-hi);
+  --surface-sunken:   var(--cg-purple-lo);
+  --page-bg:          transparent;
+  --accent:           var(--cg-gold);
+  --accent-2:         var(--cg-green-hi);
+  --text:             var(--cg-white);
+  --text-dim:         var(--cg-white-dim);
+  --text-on-accent:   var(--cg-black);
+
+  /* The gold rule separating alliance fills from purple chrome. Structural:
+     FIRST blue and WRRF purple blur together at 720p without it. */
+  --rule:             3px solid var(--cg-gold);
+  --rule-thin:        2px solid var(--cg-gold);
+  --edge-w:           3px;
+
+  /* ---- Type ------------------------------------------------------------
+     Deliberately NOT Inter/Roboto/Poppins. Three siblings from the same
+     grotesque lineage, so they cohere without matching:
+       Archivo         — variable width axis, pushed expanded. Wide and
+                         confident; expanded grotesques are the native
+                         language of scoreboards.
+       Chivo           — headline face with genuinely good tabular figures.
+                         Sturdier and less anonymous than Archivo's numerals.
+       Saira Condensed — fits "Homestead Robotics" in a lower third without
+                         ellipsis, and has more spine than Barlow.
+     calgames.org uses Poppins; that stays the WEB face. Broadcast needs
+     more weight and width than Poppins can give at 90 feet.               */
+  --font-display:  "Archivo", "Archivo Expanded", system-ui, sans-serif;
+  --font-num:      "Chivo", "Archivo", system-ui, sans-serif;
+  --font-cond:     "Saira Condensed", "Archivo Narrow", system-ui, sans-serif;
+  --font-mono:     "JetBrains Mono", ui-monospace, monospace;
+
+  --wdth-display:  118;   /* Archivo width axis — expanded, not default */
+  --wdth-wide:     125;
+
+  /* ---- Type scale: STREAM (default) --------------------------------------
+     Viewed at 12-24in on a phone at 720p. 28px is the hard floor.          */
+  --t-hero:   112px;
+  --t-score:   72px;
+  --t-clock:   64px;
+  --t-title:   44px;
+  --t-body:    32px;
+  --t-label:   28px;
+
+  /* Operator surfaces are viewed at 2ft and exempt from broadcast floors */
+  --font-ui-body:  15px;
+  --font-ui-label: 12px;
+
+  /* ---- Geometry ----------------------------------------------------------
+     The chamfer is the signature shape. 20px cut on two opposite corners —
+     a lightening cut on a gusset plate, not a rounded rectangle.           */
+  --ch: 20px;
+  --chamfer: polygon(
+    var(--ch) 0, 100% 0,
+    100% calc(100% - var(--ch)), calc(100% - var(--ch)) 100%,
+    0 100%, 0 var(--ch)
+  );
+  --chamfer-flat: polygon(
+    var(--ch) 0, 100% 0, 100% 100%, 0 100%, 0 var(--ch)
+  );
+
+  --safe-x: 96px;   /* 5% title-safe, 1920 wide */
+  --safe-y: 54px;
+  --gap:     16px;
+  --pad:     24px;
+
+  /* ---- Texture + atmosphere ----------------------------------------------
+     Perforated aluminum, and an off-center glow so nothing is ever a flat
+     fill. Subtle enough to survive stream compression.                     */
+  --tex-perf: radial-gradient(circle at center,
+              rgba(255,255,255,.055) 1.4px, transparent 1.5px);
+  --tex-perf-size: 13px 13px;
+
+  /* Blueprint tick rule — measurement marks along a panel's top edge */
+  --tick: repeating-linear-gradient(90deg,
+          var(--cg-gold) 0 2px, transparent 2px 14px);
+
+  --atmo:
+    radial-gradient(120% 90% at 16% -10%, rgba(123,35,148,.60), transparent 62%),
+    radial-gradient(90% 80% at 104% 108%, rgba(240,175,0,.11), transparent 58%),
+    linear-gradient(180deg, var(--cg-purple-deep), var(--cg-purple-void));
+
+  /* ---- Motion: durations --------------------------------------------------
+     Calibrated for gym viewing. Under 300ms is invisible at 90ft.           */
+  --dur-tap:    120ms;
+  --dur-in:     380ms;
+  --dur-out:    260ms;
+  --dur-sweep:  480ms;
+  --dur-count:  600ms;
+  --dur-pop:    340ms;
+  --dur-third:  420ms;
+  --dur-pulse: 1200ms;  /* 0.83Hz — WCAG 2.3.1 safe, never above 3Hz */
+  --stagger:     90ms;
+  --dwell:      8000ms;
+
+  /* ---- Motion: easing --------------------------------------------------- */
+  --ease-enter: cubic-bezier(.16, 1, .3, 1);      /* expo-out: decisive */
+  --ease-sweep: cubic-bezier(.65, 0, .35, 1);     /* in-out: wipes      */
+  --ease-pop:   cubic-bezier(.34, 1.56, .64, 1);  /* back-out overshoot */
+  --ease-exit:  cubic-bezier(.4, 0, 1, 1);
+
+  /* ---- Motion: travel amplitude -------------------------------------------
+     1 degree of visual angle from the back row (~90ft) is about 190px here.
+     Venue entrances must exceed that or nobody notices them.                */
+  --travel-sm:  48px;
+  --travel-md: 120px;
+  --travel-lg: 320px;
+
+  /* ---- Telestrator ink -------------------------------------------------- */
+  --ink-default: var(--cg-gold);
+  --ink-good:    var(--cg-green-hi);
+  --ink-note:    var(--cg-white);
+  --ink-red:     var(--alliance-red);
+  --ink-blue:    var(--alliance-blue);
+  --ink-outline: var(--cg-black);
+  --ink-width:   7px;
+  --ink-fade:    6000ms;
+
+  --cg-logo-slot-w: 320px;
+  --cg-logo-slot-h: 120px;
+}
+
+/* --------------------------------------------------------------------------
+   VENUE SCALE
+   Back row of a HS gym is ~90ft from a 12-16ft screen — roughly 10x image
+   height, past the AVIXA threshold for detailed content. Only the largest
+   2-3 elements are readable. 72px hard type floor; see docs/08-motion.md.
+   -------------------------------------------------------------------------- */
+:root[data-scale="venue"] {
+  --t-hero:  220px;
+  --t-score: 140px;
+  --t-clock: 120px;
+  --t-title:  84px;
+  --t-body:   76px;
+  --t-label:  72px;   /* HARD FLOOR */
+
+  --travel-sm: 120px;
+  --travel-md: 220px;
+  --travel-lg: 420px;
+
+  --pad: 40px;
+  --gap: 28px;
+  --ch:  34px;             /* chamfer scales too, or it vanishes */
+  --edge-w: 6px;
+  --rule: 6px solid var(--cg-gold);
+  --rule-thin: 4px solid var(--cg-gold);
+  --tex-perf-size: 22px 22px;
+  --wdth-display: 125;     /* push wider — width reads before weight at distance */
+}
+
+/* A venue surface holds 5-7 elements, not 15. Reduce, don't shrink. */
+:root[data-scale="venue"] [data-density="rich"] { display: none !important; }
+
+/* --------------------------------------------------------------------------
+   LUMA KEY MODE
+   Cheesy Arena's audience overlay feeds a Blackmagic downstream key, and the
+   DSK only does LUMA — black is transparent, chroma unavailable. No shadows,
+   no translucency, and purple-deep is too dark to survive as a panel fill.
+   Chamfers work beautifully here: the cut corner keys straight out.
+   -------------------------------------------------------------------------- */
+:root[data-key="luma"] {
+  --page-bg: var(--cg-black);
+  --surface: var(--cg-purple);
+  --surface-sunken: var(--cg-purple);
+  --atmo: none;
+}
+:root[data-key="luma"] * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   LIGHT OPERATOR SURFACES
+   Gold on white is 1.9:1 — unusable. On light surfaces gold becomes purple.
+   -------------------------------------------------------------------------- */
+:root[data-surface="light"] {
+  --page-bg:        #FBF8FC;
+  --surface:        #F1EAF4;
+  --surface-raised: #FFFFFF;
+  --surface-sunken: #E4D9E9;
+  --accent:         var(--cg-purple);
+  --text:           var(--cg-black);
+  --text-dim:       #5A4A62;
+  --text-on-accent: var(--cg-white);
+  --rule:           3px solid var(--cg-purple);
+  --atmo:           none;
+  --tex-perf:       radial-gradient(circle at center, rgba(86,15,107,.07) 1.4px, transparent 1.5px);
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+html, body {
+  margin: 0; padding: 0;
+  background: var(--page-bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-variation-settings: "wdth" var(--wdth-display);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures everywhere a number can change. A score that shifts width
+   while counting looks broken. */
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-variation-settings: normal;
+  letter-spacing: -.015em;
+}
+
+/* Atmosphere layer — full-bleed backdrops are never a flat fill. */
+.atmosphere {
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+}
+
+/* --------------------------------------------------------------------------
+   Primitives — panel, chip, numeral block.
+   Every broadcast component composes from these three.
+
+   The panel is a gold chamfered plate with a purple face inset by --edge-w.
+   clip-path clips borders, so the "edge" is a background layer, not a border.
+   -------------------------------------------------------------------------- */
+.panel {
+  position: relative;
+  background: var(--cg-gold);
+  clip-path: var(--chamfer);
+  padding: calc(var(--pad) + var(--edge-w));
+}
+.panel::before {
+  content: "";
+  position: absolute; inset: var(--edge-w);
+  background-color: var(--surface);
+  background-image: var(--tex-perf);
+  background-size: var(--tex-perf-size);
+  clip-path: var(--chamfer);
+}
+.panel > * { position: relative; }
+
+/* Blueprint tick rule — CAD reference, and it reads as texture at distance */
+.tickrule { height: 4px; background: var(--tick); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 18px;
+  clip-path: var(--chamfer);
+  --ch: 10px;
+  background: var(--cg-purple-hi);
+  color: var(--text);
+  font-family: var(--font-cond);
+  font-weight: 600; font-size: var(--t-label);
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.chip--accent { background: var(--accent); color: var(--text-on-accent); }
+.chip--live   { background: var(--st-live); color: var(--cg-black); }
+.chip--est    { background: transparent; color: var(--st-warn); box-shadow: inset 0 0 0 2px var(--st-warn); }
+
+/* Alliance blocks. The gold rule is structural, not decorative. */
+.alliance { padding: 0 var(--pad); }
+.alliance--red  { background: var(--alliance-red);  border-right: var(--rule); }
+.alliance--blue { background: var(--alliance-blue); border-left:  var(--rule); }
+
+/* Ranking-point pips — chamfered, not circles. Consistency of shape language
+   matters more than the 3px of extra polish a circle would give. */
+.pip {
+  width: 20px; height: 20px;
+  clip-path: var(--chamfer); --ch: 6px;
+  background: var(--cg-purple-hi);
+  box-shadow: inset 0 0 0 2px var(--cg-purple-deep);
+}
+:root[data-scale="venue"] .pip { width: 44px; height: 44px; --ch: 12px; }
+.pip[data-earned="true"] {
+  background: var(--cg-green-hi);
+  animation: cg-pip-pop var(--dur-pop) var(--ease-pop) both;
+}
+
+/* --------------------------------------------------------------------------
+   THE MOTION SYSTEM — seven named transitions. See docs/08-motion.md.
+   Animate transform/opacity only; anything else drops browser-source frames.
+   -------------------------------------------------------------------------- */
+
+/* 1. Gold Sweep — the signature. A gold bar with a CHAMFERED leading edge
+      wipes across; content changes behind it. Highest-amplitude motion
+      available, and the skewed edge ties the motion to the geometry. */
+.sweep { position: relative; overflow: hidden; }
+.sweep::after {
+  content: "";
+  position: absolute; top: 0; bottom: 0; left: 0; width: 130%;
+  background: linear-gradient(90deg,
+    var(--cg-gold) 0 82%, var(--cg-gold-hi) 82% 88%, transparent 88%);
+  transform: translateX(-101%) skewX(-12deg);
+  will-change: transform;
+  pointer-events: none;
+}
+.sweep[data-run]::after { animation: cg-sweep var(--dur-sweep) var(--ease-sweep) both; }
+
+/* 2. Block Reveal — panels and cards. */
+.reveal { animation: cg-reveal var(--dur-in) var(--ease-enter) both; }
+.reveal--left  { --tx: calc(-1 * var(--travel-lg)); --ty: 0; }
+.reveal--right { --tx: var(--travel-lg);            --ty: 0; }
+.reveal--up    { --tx: 0; --ty: var(--travel-md); }
+.exit          { animation: cg-exit var(--dur-out) var(--ease-exit) both; }
+
+/* 3. Number Roll is JS-driven; this class just guards the reflow. */
+.roll { display: inline-block; min-width: 3ch; text-align: right; }
+
+/* 5. Stagger Build — set --i on each child. */
+.stagger > * { animation-delay: calc(var(--i, 0) * var(--stagger)); }
+
+/* 6. Alert Pulse — endgame / E-stop. Never faster than 3Hz. */
+.pulse { animation: cg-pulse var(--dur-pulse) ease-in-out 3; }
+
+/* 7. Slide Third — full off-screen travel, never a fade. */
+.third       { animation: cg-third-in  var(--dur-third) var(--ease-enter) both; }
+.third--exit { animation: cg-third-out var(--dur-out)   var(--ease-exit)  both; }
+
+@keyframes cg-sweep {
+  0%   { transform: translateX(-101%) skewX(-12deg); }
+  48%  { transform: translateX(-8%)   skewX(-12deg); }
+  100% { transform: translateX(101%)  skewX(-12deg); }
+}
+@keyframes cg-reveal {
+  from { opacity: 0; transform: translate(var(--tx, 0), var(--ty, 0)) scale(.85); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes cg-exit {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: scale(.92); }
+}
+@keyframes cg-pip-pop {
+  0%   { transform: scale(1); }
+  55%  { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+@keyframes cg-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .45; }
+}
+@keyframes cg-third-in  { from { transform: translateX(-110%); } to   { transform: none; } }
+@keyframes cg-third-out { from { transform: none; } to { transform: translateX(-110%); } }
+
+/* Operator buttons: fast and tactile. Over 150ms feels laggy to someone
+   hitting it 40 times a match. */
+.btn {
+  font-family: var(--font-cond);
+  font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 0;
+  clip-path: var(--chamfer); --ch: 9px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: transform var(--dur-tap) var(--ease-pop),
+              background var(--dur-tap) linear,
+              color var(--dur-tap) linear;
+}
+.btn:hover  { background: var(--cg-purple-hi); }
+.btn:active { transform: scale(.96); background: var(--cg-gold-lo); }
+.btn:focus-visible { outline: 3px solid var(--cg-gold-hi); outline-offset: 3px; }
+.btn[aria-pressed="true"] { background: var(--accent); color: var(--text-on-accent); }
+
+/* --------------------------------------------------------------------------
+   LOCKDOWN — endgame (matchClock >= 110).
+   Suppress DECORATIVE motion only. The score climbing during endgame is the
+   most important motion on screen all weekend; freezing it would be backwards.
+   -------------------------------------------------------------------------- */
+:root[data-lockdown] .reveal,
+:root[data-lockdown] .third,
+:root[data-lockdown] .sweep[data-run]::after { animation: none; }
+
+:root[data-lockdown] [data-motion="essential"] { animation-play-state: running; }
+
+/* Reduced motion collapses to instant state changes, never half-speed. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .exit, .third, .third--exit, .pulse,
+  .pip[data-earned="true"], .sweep[data-run]::after { animation: none !important; }
+  .btn { transition: none; }
+}

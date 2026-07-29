@@ -1,0 +1,249 @@
+# 02 — Architecture
+
+## The shape
+
+```
+ SOURCES                    CORE                          SURFACES
+ ─────────────────────      ─────────────────────────     ──────────────────────────
+ Cheesy Arena WS      ─┐                                ┌─ Program overlay  (OBS browser src)
+ FMS Audience Display ─┤    ┌──────────────┐            ├─ Telestrator draw pad (tablet)
+   · Companion HTTP    ├───▶│   Ingest     │            ├─ Replay console      (operator)
+   · OBS scene events  │    │   Adapters   │            ├─ Venue side screens
+ FRC Events API       ─┤    └──────┬───────┘            ├─ Arcade overlay      (Smash / MK)
+ The Blue Alliance    ─┤           ▼                    ├─ Announcer / analyst tablet
+ Statbotics           ─┤    ┌──────────────┐            ├─ Post-match card renderer
+ start.gg             ─┤    │  Normalizer  │            └─ Rundown / stage manager view
+ Desk console (manual)─┘    └──────┬───────┘                        ▲
+                                   ▼                                │
+                            ┌──────────────┐   ┌────────────────┐   │
+                            │  Event Log   │──▶│  Fan-out hub   │───┘
+                            │  + Snapshot  │   │  (WS + REST)   │
+                            └──────┬───────┘   └────────┬───────┘
+                                   │                    ▼
+                                   │           ┌────────────────┐
+                                   └──────────▶│  Cue Engine    │──▶ OBS-WS · ATEM · Companion
+                                               │  (show automation) │   · replay markers · audio
+                                               └────────────────┘
+```
+
+Three rules that keep this honest:
+
+1. **Sources never talk to surfaces.** Everything goes through the normalizer. Swapping Cheesy
+   Arena for FMS changes one adapter and nothing else.
+2. **The event log is append-only and dual-clocked.** Every event carries both wall-clock and
+   `matchClock` (signed seconds relative to match start). Replay, analysis, and post-match cards
+   all key off `matchClock`; nothing else works.
+3. **Manual always wins.** Every automated cue has a manual override, and the desk console can
+   inject any event. A volunteer with a keyboard must be able to run the whole show if every
+   integration dies.
+
+---
+
+## Core data contract
+
+One envelope. Everything is a `DeskEvent`.
+
+```ts
+type DeskEvent = {
+  id: string;              // ULID — sortable, unique
+  ts: number;              // wall clock, epoch ms, from the desk's clock
+  matchClock: number|null; // signed seconds vs. match start. -20 = auto start, 0 = teleop... see below
+  source: 'cheesy'|'fms'|'frcapi'|'tba'|'statbotics'|'startgg'|'manual'|'cue';
+  confidence: 'authoritative'|'derived'|'estimated';
+  type: string;            // see vocabulary
+  payload: unknown;
+};
+```
+
+`confidence` matters more than it looks. FMS-via-Companion gives `authoritative` state but no
+numbers. A scene-change inferred from OBS is `derived`. An operator's guess is `estimated`.
+Graphics can then decide: show a live score only if `authoritative`, otherwise show the clock and
+shut up.
+
+### Match clock convention
+
+REBUILT is 20s auto + 2:20 teleop. We use a single continuous axis so replay scrubbing is sane:
+
+| `matchClock` | Phase |
+| --- | --- |
+| `-20 … 0` | AUTO |
+| `0 … 10` | Transition Shift |
+| `10 … 110` | Shifts 1–4 (25s each) |
+| `110 … 140` | End Game |
+| `> 140` | post-match |
+
+Derived from `matchTiming` (Cheesy) or hard-coded + `Match Start` trigger (FMS).
+
+### Event vocabulary
+
+Deliberately a superset of Cheesy Arena's notifiers so the Cheesy adapter is near-pass-through.
+
+**Match lifecycle** — `match.loaded` · `match.prestart` · `match.preview` · `match.armed` ·
+`match.start` · `match.auto_end` · `match.shift_change` · `match.endgame` · `match.end` ·
+`match.aborted` · `match.replay_scheduled` · `match.score_posted`
+
+**Live state** — `score.realtime` · `score.delta` · `hub.state` · `robot.status` ·
+`arena.status` · `card.issued` · `foul.called`
+
+**Event flow** — `alliance_selection.*` · `award.presented` · `break.started` · `queue.updated` ·
+`rankings.updated`
+
+**Production** — `graphic.show` · `graphic.hide` · `lower_third.show` · `replay.marker` ·
+`replay.clip_ready` · `replay.play` · `telestrator.stroke` · `telestrator.clear` ·
+`scene.change` · `sound.play`
+
+**Arcade** — `arcade.set_start` · `arcade.score` · `arcade.set_end` · `arcade.bracket_updated`
+
+### `score.delta` — the one we synthesize
+
+Neither Cheesy Arena nor FMS emits "team X just scored." We derive it by diffing consecutive
+`realtimeScore` snapshots:
+
+```ts
+{ type: 'score.delta',
+  matchClock: 47.3,
+  payload: { alliance: 'red', field: 'fuel', from: 118, to: 124, amount: 6, hubActive: true } }
+```
+
+This is what powers scoring-rate charts, auto replay markers ("6 fuel in 1.2s — that's a burst,
+mark it"), and the post-match timeline card. It is the highest-value thing in the whole system
+and it costs ~40 lines.
+
+---
+
+## Ingest adapters
+
+### `cheesy` — **the primary and only ingest adapter**
+
+CalGames 2026 runs Cheesy Arena with an approved field bridge. The operating rule is *any software
+is fine as long as it can't interfere with Cheesy Arena controlling the field*, which resolves to a
+hard endpoint allowlist — read [10-field-bridge.md](10-field-bridge.md) before writing a line of
+this adapter. Short version: connect only to handlers whose body is `ws.HandleNotifiers(...)`,
+because that function never calls `Read()` and therefore **cannot process anything we send**. Never
+touch `/match_play/*` (abort match), `/panels/scoring/*` (game-piece scoring), `/panels/referee/*`,
+or `/setup/*`.
+
+**WebSocket subscriptions** (register with a scorekeeper-agreed `displayId`):
+
+| Endpoint | Notifiers |
+| --- | --- |
+| `/api/arena/websocket` | `matchTiming`, `matchLoad`, `matchTime` |
+| `/displays/audience/websocket` | `realtimeScore`, `scorePosted`, `lowerThird`, `audienceDisplayMode`, `allianceSelection`, `playSound` |
+| `/displays/field_monitor/websocket` | `arenaStatus` — station health, robot comms |
+| `/displays/queueing/websocket` | queueing, `eventStatus` |
+| `/displays/rankings/websocket`, `/displays/bracket/websocket` | rankings, bracket |
+
+**REST**, `GET` only, 60s (3s in the post-match window): `/api/matches/{type}`, `/api/rankings`,
+`/api/alliances`. Assets cached once: `/api/teams/{id}/avatar`, `/api/bracket/svg`.
+
+Confidence: `authoritative` throughout. Every derived signal in this document — `score.delta`,
+automatic replay markers, hub state, the cue engine following the scorekeeper's screen — is
+available.
+
+Effort: low. It's close to a straight rename of fields.
+
+### `fms` — **not being built.** Kept as reference only
+
+CalGames 2026 runs Cheesy Arena, so this adapter is out of scope. The notes below stay because the
+Companion-shim technique is the right answer if a future CalGames switches to official FMS, and
+because it took real digging to find.
+
+Three legs, best-effort combined:
+
+1. **Companion shim (primary).** Stand up an HTTP endpoint that speaks Companion's press API and
+   point Audience Display's automation URL at it. Yields the 10 documented state transitions with
+   real timing. → `match.prestart`, `match.preview`, `match.start`, `match.endgame`, `match.end`,
+   `match.score_posted`, `alliance_selection.start`, `award.presented`. `authoritative`.
+   *If A/V already uses Companion for switching, don't fight it — run Companion and consume its
+   own HTTP/TCP API, or chain our shim after it.*
+2. **OBS scene watch (fallback).** Subscribe to obs-websocket `CurrentProgramSceneChanged`; map
+   `FMS_PREVIEW`/`FMS_SCORE`/`FMS_RESULT`/`FMS_ALLIANCE`/`FMS_AWARDS`. `derived`.
+3. **FRC Events API poll (numbers).** Post-match scores, rankings. Internet-dependent and
+   delayed — good enough for rankings graphics, useless for live score.
+
+Live score under FMS: we do **not** get one. Options, in order of preference:
+- Accept it. Show clock + hub state + pre-match analytics live; show final score on `Post Result`.
+  This is what most community broadcasts do and it's fine.
+- A "shadow scorer" volunteer on the desk console tapping fuel counts (`estimated` confidence,
+  visually distinguished — e.g. score shown in outline rather than solid).
+- Stretch: OCR the Audience Display score bar from a capture card. Cheap to prototype, brittle
+  under stress. Not on the critical path.
+
+### `frcapi` / `tba`
+
+Schedule, team list, nicknames, avatars, historical results. Runs off the production LAN's
+internet, not the field network. Cache aggressively to a local JSON store on load-in day so a
+venue internet failure can't blank the graphics.
+
+Also: **TBA Trusted API** for pushing CalGames results out live. Cheesy Arena does this natively;
+under FMS, off-season sync handles it. Either way we consume, not duplicate.
+
+### `statbotics`
+
+Pulled once on Friday, cached. Team EPA, component EPAs (auto/teleop/endgame), RP EPAs → pre-match
+prediction bar, "biggest EPA delta on the field", alliance-selection value board. No key required.
+
+**Caveat to state on air:** EPA is season-long and CalGames is an off-season event with swapped
+drivers, B-teams (2025 had five `999x` B-team entries), and rebuilt robots. Label predictions as
+season-form, not a forecast. A graphic that's confidently wrong costs more credibility than no
+graphic.
+
+### `manual`
+
+The desk console. Injects any event, overrides any field, and is the source of truth for anything
+the automation can't see (a robot that lost comms, a great save, "that's a foul"). Keyboard-first
+with a Stream Deck binding.
+
+---
+
+## Services
+
+| Service | Job | Notes |
+| --- | --- | --- |
+| `bridge` | sits on the field-adjacent NIC, reads Cheesy/FMS, republishes to production LAN | only component allowed to touch the field side; read-only |
+| `core` | normalizer, event log, snapshot store, WS fan-out, REST | single process; NDJSON log to disk, replayable |
+| `replay` | rolling record, clip extraction, clip library | separate process/box — a crash here must not take program down |
+| `cue` | show automation: `on(state) → actions` | drives OBS-WS / ATEM / Companion / sounds |
+| `surfaces` | static web bundles, one per surface | served by `core`; every one is just a WS subscriber |
+
+Deliberately small. Five processes, one of which is optional, all on a LAN, no cloud dependency
+during show.
+
+### Why the event log matters
+
+Because it makes the whole thing **replayable in development**. Record Friday's practice matches
+to NDJSON, then `core --replay friday.ndjson --speed 4` and you can build and test every graphic
+on Sunday night in October — or in March, on a laptop, with no field. Volunteer-run systems live
+or die on whether people can practice without hardware.
+
+---
+
+## Surfaces
+
+All surfaces are browser pages that consume the same WS stream and the same
+[theme tokens](../packages/theme/tokens.css). Every one takes `?key=alpha|luma` (see
+[03-brand.md](03-brand.md)).
+
+| Surface | Route | Runs on |
+| --- | --- | --- |
+| Program overlay | `/s/program` | OBS Browser Source, 1920×1080 |
+| Telestrator draw pad | `/s/draw` | iPad + Pencil, on the production Wi-Fi |
+| Telestrator render | `/s/tele` | OBS Browser Source, layered over replay |
+| Replay console | `/s/replay` | operator laptop |
+| Desk console | `/s/desk` | operator laptop, keyboard-first |
+| Arcade overlay | `/s/arcade` | OBS Browser Source |
+| Side screen | `/s/side` | venue TVs — queueing, rankings, next match |
+| Rundown | `/s/rundown` | stage manager / producer tablet |
+
+---
+
+## Non-goals
+
+Worth writing down so scope doesn't creep in September:
+
+- **Not a field management system.** We never control the field, never score officially, never
+  touch team VLANs. Cheesy Arena / FMS owns the match; we observe it.
+- **Not a replacement for the audience display.** The in-venue audience screen stays FMS/Cheesy.
+  We own the *stream* and any secondary screens.
+- **Not a cloud service.** Everything runs on the production LAN. Internet is a nice-to-have.
+- **Not multi-event.** Build for one field, one venue, one weekend. Generalize later if it works.
