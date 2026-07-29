@@ -131,6 +131,39 @@ with `-dev`, and drive a real scored match through it:
 node harness.mjs
 ```
 
+## Phone remote
+
+`/s/remote` runs the show from a phone — screen changes, match lifecycle, replay marks,
+telestrator kill, and per-cue arming. Big thumb targets, haptic confirmation, and it
+re-authenticates itself after a reconnect so it can't quietly stop working mid-show.
+
+**Set a PIN before exposing it to any network.** Anyone who can load the page can drive the
+broadcast; the read path stays open so overlays and pit TVs never need a credential, but anything
+that *changes* the show requires the PIN.
+
+```bash
+$env:REMOTE_PIN = "4726"; npm start
+```
+
+The desk prints its reachable addresses, and `GET /api/remote` returns them. On the phone, open
+`http://<desk-ip>:8720/s/remote`.
+
+Two things have to be true for the phone to reach it:
+
+1. **Windows Firewall must allow inbound TCP 8720.** This needs an elevated shell:
+
+```bash
+New-NetFirewallRule -DisplayName "CalGames Content Desk 8720" -Direction Inbound -Protocol TCP -LocalPort 8720 -Action Allow -Profile Private
+```
+
+2. **Both devices must be on a network that permits client-to-client traffic.** Guest and
+   captive-portal Wi-Fi (university visitor networks, hotel Wi-Fi) almost always enable client
+   isolation, which blocks this no matter what the firewall says. Use the event's own production
+   AP — which [docs/06](docs/06-hardware-and-network.md) already calls for, on 5GHz clear of the
+   field AP — or a phone hotspot to test.
+
+Note the `-Profile Private` above: don't open the port on a public profile you don't control.
+
 ## Publishing
 
 Copy [config.example.json](config.example.json) to `config.json` (gitignored — it holds

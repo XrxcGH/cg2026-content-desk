@@ -8,6 +8,7 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { networkInterfaces } from 'node:os';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { EventBus, EmitInit } from './bus.ts';
@@ -43,7 +44,19 @@ export const SURFACES = [
   { id: 'arcade',  name: 'Arcade overlay',  note: 'OBS Browser Source. Smash sets and Mario Kart standings for the gaps.' },
   { id: 'arcadedesk', name: 'Arcade console', note: 'Run the side tournament. Operator-authoritative scoring.' },
   { id: 'side',    name: 'Side screen',     note: 'Venue TVs. On deck and rankings, rotating on a timer. Venue scale by default.' },
+  { id: 'remote',  name: 'Phone remote',    note: 'Run the show from a phone. Big targets, PIN-gated when REMOTE_PIN is set.' },
 ] as const;
+
+/** Every IPv4 the desk is reachable on, so the remote can print a real URL. */
+export function lanAddresses(): string[] {
+  const out: string[] = [];
+  for (const addrs of Object.values(networkInterfaces())) {
+    for (const a of addrs ?? []) {
+      if (a.family === 'IPv4' && !a.internal) out.push(a.address);
+    }
+  }
+  return out;
+}
 
 export interface ServerOpts {
   bus: EventBus;
@@ -120,6 +133,16 @@ export function startServer(opts: ServerOpts) {
     try {
       // ---- API ----------------------------------------------------------
       if (path === '/api/state') return json(res, 200, bus.state);
+
+      // Lets the remote show a PIN prompt only when one is actually required.
+      // Never reveals the PIN itself.
+      if (path === '/api/remote') {
+        return json(res, 200, {
+          needsPin: !!process.env['REMOTE_PIN'],
+          addresses: lanAddresses(),
+          port,
+        });
+      }
       if (path === '/api/media/manifest') return json(res, 200, media.manifest);
       if (path === '/api/events/recent') return json(res, 200, bus.recent.slice(-200));
 
@@ -437,13 +460,40 @@ ${rows}</body></html>`;
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
   };
 
+  /**
+   * Optional shared PIN, from REMOTE_PIN.
+   *
+   * The read path is always open — overlays and pit TVs must never need a
+   * credential, and they can only observe. Anything that CHANGES the show
+   * (emit, relay) requires the PIN once one is set. That matters the moment a
+   * phone can reach the desk: without it, anyone on the same Wi-Fi can take
+   * the broadcast.
+   */
+  const REMOTE_PIN = process.env['REMOTE_PIN'] ?? '';
+  const authed = new WeakSet<WebSocket>();
+  const mayWrite = (ws: WebSocket): boolean => !REMOTE_PIN || authed.has(ws);
+
   wss.on('connection', (ws, req) => {
     const who = new URL(req.url ?? '/', 'http://x').searchParams.get('surface') ?? 'anon';
-    send(ws, { t: 'snapshot', state: bus.state, media: media.manifest });
+    send(ws, { t: 'snapshot', state: bus.state, media: media.manifest, needsPin: !!REMOTE_PIN });
 
     ws.on('message', raw => {
-      let msg: { t?: string; init?: EmitInit; channel?: string; data?: unknown };
+      let msg: { t?: string; init?: EmitInit; channel?: string; data?: unknown; pin?: string };
       try { msg = JSON.parse(String(raw)) as typeof msg; } catch { return; }
+
+      if (msg.t === 'auth') {
+        // Constant-time-ish: compare full strings, and never echo the PIN back.
+        const ok = !!REMOTE_PIN && msg.pin === REMOTE_PIN;
+        if (ok) authed.add(ws);
+        send(ws, { t: 'auth', ok });
+        if (!ok) console.warn(`[ws:${who}] rejected PIN attempt`);
+        return;
+      }
+
+      if ((msg.t === 'emit' || msg.t === 'relay') && !mayWrite(ws)) {
+        send(ws, { t: 'denied', reason: 'PIN required' });
+        return;
+      }
 
       // Surfaces may inject events. Source is forced to 'manual' — a surface
       // can never claim to be the field.
