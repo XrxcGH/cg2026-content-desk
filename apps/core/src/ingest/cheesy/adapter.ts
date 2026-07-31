@@ -111,6 +111,15 @@ export class CheesyAdapter {
   #matchLoaded = false;
   /** Latched per match: armed fires once, when the field first goes ready. */
   #armedSent = false;
+  /** Id of the last loaded match, to tell a reconnect replay from a fresh load. */
+  #loadedMatchId: string | null = null;
+  /**
+   * Cards already announced. The realtime score message carries the whole
+   * card map on every frame, so without this one yellow card would re-emit
+   * (and re-mark for replay) on every score change for the rest of the match.
+   * Keyed alliance:team:card so an upgrade to red still gets announced.
+   */
+  #cardsSeen = new Set<string>();
   #pollTimer: NodeJS.Timeout | null = null;
   #refreshTimer: NodeJS.Timeout | null = null;
   /** True while a REST round-trip is in flight, to hold the one-request budget. */
@@ -191,8 +200,18 @@ export class CheesyAdapter {
       }
 
       try {
-        const matches = await this.#client.get<MatchWithResult[]>('/api/matches/qualification');
-        this.#emit({ type: 'queue.updated', payload: { upcoming: mapUpcoming(matches) } });
+        const qual = await this.#client.get<MatchWithResult[]>('/api/matches/qualification');
+        // Playoff matches live under their own type. Polling qualification
+        // alone emptied the Sunday on-deck queue: once the last qual match is
+        // played, nothing in that list is Scheduled any more. Sequential, to
+        // hold the one-concurrent-request budget.
+        let playoff: MatchWithResult[] = [];
+        try {
+          playoff = await this.#client.get<MatchWithResult[]>('/api/matches/playoff');
+        } catch {
+          // No bracket yet. Quals alone is still a correct queue.
+        }
+        this.#emit({ type: 'queue.updated', payload: { upcoming: mapUpcoming([...qual, ...playoff]) } });
       } catch (err) {
         console.warn('[cheesy] schedule poll failed:', (err as Error).message);
       }
@@ -254,12 +273,26 @@ export class CheesyAdapter {
       ...((m.PlayoffBlueAlliance ?? 0) > 0 ? { blueAlliance: m.PlayoffBlueAlliance } : {}),
     };
 
+    // Cheesy replays its matchLoad snapshot whenever a display (re)subscribes,
+    // so a mid-match websocket reconnect delivers the SAME load again. Treating
+    // that as a fresh load wiped the live score, killed the clock, and flipped
+    // program back to the overview mid-match. Skip the reset while this exact
+    // match is being played; a re-load of the same match with the field idle
+    // (a scorekeeper replay) still resets.
+    const inProgress = this.#matchState === MatchState.StartMatch
+      || this.#matchState === MatchState.AutoPeriod
+      || this.#matchState === MatchState.PausePeriod
+      || this.#matchState === MatchState.TeleopPeriod;
+    if (inProgress && match.id === this.#loadedMatchId) return;
+
     this.#last = { red: zero(), blue: zero() };
     this.#started = false;
     this.#autoFuel = { red: 0, blue: 0 };
     this.#autoWinnerSent = false;
     this.#matchLoaded = true;
     this.#armedSent = false;
+    this.#loadedMatchId = match.id;
+    this.#cardsSeen.clear();
     this.#emit({ type: 'match.loaded', payload: match });
   }
 
@@ -290,6 +323,18 @@ export class CheesyAdapter {
       case MatchState.PreMatch:
         this.#started = false;
         this.#emit({ type: 'match.prestart' });
+        break;
+      case MatchState.TeleopPeriod:
+        // The auto-to-teleop pause has no fixed length on a real field, so a
+        // clock anchored at match.start runs ahead of the field by however
+        // long the pause ran. This marks the moment teleop actually began, for
+        // the reducer's match.teleop_start case to re-anchor on. Its own event
+        // type, not a shift_change: the ticker owns shift1..4, and a foreign
+        // phase value in that stream would reach every surface that renders
+        // shift labels.
+        if (previous === MatchState.PausePeriod || previous === MatchState.AutoPeriod) {
+          this.#emit({ type: 'match.teleop_start' });
+        }
         break;
       case MatchState.TimeoutActive:
         this.#emit({ type: 'break.started', payload: { kind: 'timeout' } });
@@ -370,7 +415,12 @@ export class CheesyAdapter {
     } else if (!this.#autoWinnerSent && this.#started
                && (state === MatchState.PausePeriod || state === MatchState.TeleopPeriod)) {
       this.#autoWinnerSent = true;
-      const { red, blue } = this.#autoFuel;
+      // Prefer the deciding frame's own numbers over the cache: a ball counted
+      // after Cheesy's own period transition arrives stamped PausePeriod, so
+      // the last frame stamped AutoPeriod can be missing the final auto fuel.
+      // AutoFuelPoints is frozen after auto, so this is never older data.
+      const red = summaries.red?.AutoFuelPoints ?? this.#autoFuel.red;
+      const blue = summaries.blue?.AutoFuelPoints ?? this.#autoFuel.blue;
       // On a TIE Cheesy flips a coin (`redWonAuto = rand.Intn(2) == 1`), so
       // there is no answer to derive: report null and let the authoritative
       // per-alliance active state carry the hub indicator. This is why the
@@ -398,7 +448,11 @@ export class CheesyAdapter {
 
     for (const [side, cards] of [['red', msg.RedCards], ['blue', msg.BlueCards]] as const) {
       for (const [team, card] of Object.entries(cards ?? {})) {
-        if (card) this.#emit({ type: 'card.issued', payload: { alliance: side, team: Number(team), card } });
+        if (!card) continue;
+        const key = `${side}:${team}:${card}`;
+        if (this.#cardsSeen.has(key)) continue;
+        this.#cardsSeen.add(key);
+        this.#emit({ type: 'card.issued', payload: { alliance: side, team: Number(team), card } });
       }
     }
   }

@@ -72,6 +72,12 @@ export function behindMinutes(
 export function attachPace(bus: EventBus): () => void {
   const starts: number[] = [];
   let lastEmit = '';
+  // From match.start until its score commits, upcoming[0] is still the match
+  // on the field, and comparing the NEXT match's projection against it read
+  // a full cycle behind on a field running exactly on time, snapping back at
+  // every commit. So the figure is latched at each start (this match against
+  // its own scheduled time) and held until the queue head moves on.
+  let held: { behindMin: number; head: string } | null = null;
 
   const compute = (now = Date.now()): Pace => {
     const lastStartAt = starts.at(-1) ?? null;
@@ -82,7 +88,9 @@ export function attachPace(bus: EventBus): () => void {
     return {
       cycleSec: cycleMs === null ? null : Math.round(cycleMs / 1000),
       nextStartAt,
-      behindMin: behindMinutes(nextStartAt, Number.isFinite(nextScheduledAt) ? nextScheduledAt : null),
+      behindMin: held !== null
+        ? held.behindMin
+        : behindMinutes(nextStartAt, Number.isFinite(nextScheduledAt) ? nextScheduledAt : null),
       lastStartAt,
     };
   };
@@ -98,10 +106,18 @@ export function attachPace(bus: EventBus): () => void {
 
   const unsubscribe = bus.subscribe(ev => {
     if (ev.type === 'match.start') {
+      // Captured before the queue advances: the head IS the match starting.
+      const head = bus.state.upcoming[0];
+      const schedAt = head?.time ? Date.parse(head.time) : NaN;
+      held = head && Number.isFinite(schedAt)
+        ? { behindMin: Math.round((ev.ts - schedAt) / 60_000), head: head.shortName }
+        : null;
       starts.push(ev.ts);
       while (starts.length > KEEP + 1) starts.shift();
       emit();
     } else if (ev.type === 'queue.updated') {
+      // The committed match has left the queue: back to projecting the next.
+      if (held && bus.state.upcoming[0]?.shortName !== held.head) held = null;
       emit();
     }
   });

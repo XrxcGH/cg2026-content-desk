@@ -45,6 +45,13 @@ export class EventBus {
   async openLog(path: string): Promise<void> {
     await mkdir(dirname(path), { recursive: true });
     this.#log = createWriteStream(path, { flags: 'a' });
+    // A write failure mid-show (disk full, media ejected) raises the stream's
+    // 'error' event, and an unhandled one kills the whole process. Losing the
+    // log is survivable; losing the overlay is not.
+    this.#log.on('error', err => {
+      console.error('[bus] event log write failed, logging disabled:', err.message);
+      this.#log = null;
+    });
   }
 
   emit<T>(init: EmitInit<T>): DeskEvent<T> {
@@ -69,9 +76,13 @@ export class EventBus {
     // moment after the real one, double-firing every subscriber downstream
     // (scene cuts, replay markers). This only closes the race when the
     // authoritative event lands before the ticker's own estimate does; see
-    // the review notes for the remaining direction.
+    // the review notes for the remaining direction. match.teleop_start is in
+    // the list because re-anchoring can pull the clock back across a boundary
+    // the ticker already crossed, which would otherwise read as a fresh
+    // transition and re-fire it.
     if (ev.type === 'match.auto_end' || ev.type === 'match.endgame'
-      || ev.type === 'match.end' || ev.type === 'match.shift_change') {
+      || ev.type === 'match.end' || ev.type === 'match.shift_change'
+      || ev.type === 'match.teleop_start') {
       this.#lastPhase = this.#state.phase;
     }
     this.#record(ev);
@@ -92,11 +103,15 @@ export class EventBus {
     const phase = after.phase;
     this.#lastPhase = phase;
 
-    if (phase === 'transition') this.emit({ type: 'match.auto_end', source: 'cue', ts: now });
-    else if (phase === 'endgame') this.emit({ type: 'match.endgame', source: 'cue', ts: now });
-    else if (phase === 'post') this.emit({ type: 'match.end', source: 'cue', ts: now });
+    // Source 'clock', never 'cue': the cue engine drops cue-sourced events to
+    // break feedback loops, so stamping these 'cue' made every clock-driven
+    // boundary invisible to cues. The endgame trigger was dead code and the
+    // buzzer hold could not fire at all in desk-only or demo operation.
+    if (phase === 'transition') this.emit({ type: 'match.auto_end', source: 'clock', ts: now });
+    else if (phase === 'endgame') this.emit({ type: 'match.endgame', source: 'clock', ts: now });
+    else if (phase === 'post') this.emit({ type: 'match.end', source: 'clock', ts: now });
     else if (phase.startsWith('shift')) {
-      this.emit({ type: 'match.shift_change', payload: { phase }, source: 'cue', ts: now });
+      this.emit({ type: 'match.shift_change', payload: { phase }, source: 'clock', ts: now });
     }
   }
 
@@ -118,8 +133,10 @@ export class EventBus {
   /** Replay a recorded log. speed=0 replays as fast as possible. */
   async replay(path: string, speed = 1): Promise<void> {
     const lines = (await readFile(path, 'utf8')).split('\n').filter(Boolean);
-    console.log(`[bus] replaying ${lines.length} events from ${path} at ${speed || 'max'}x`);
+    console.log(`[bus] replaying ${lines.length} events from ${path} at ` +
+      (speed ? `${speed}x` : 'max speed'));
     let prev: number | null = null;
+    let offset: number | null = null;
 
     for (const line of lines) {
       let ev: DeskEvent;
@@ -132,14 +149,30 @@ export class EventBus {
         continue;
       }
 
+      // attachMarkers and attachPace stay attached during replay and re-derive
+      // from the primary events, so re-emitting the logged copies doubled
+      // every automatic marker and mixed the recording's stale pace numbers
+      // with fresh ones. Manual markers are primary: nothing regenerates
+      // them, so they must replay.
+      if (ev.type === 'pace.updated') continue;
+      if (ev.type === 'replay.marker' && ev.source !== 'manual') continue;
+
       if (speed > 0 && prev !== null) {
         const wait = (ev.ts - prev) / speed;
         if (wait > 0) await new Promise(r => setTimeout(r, Math.min(wait, 5000)));
       }
       prev = ev.ts;
 
-      // Re-stamp to now so the clock runs live rather than in 2026-10-17.
-      this.emit({ type: ev.type, payload: ev.payload, source: ev.source, confidence: ev.confidence });
+      // Re-stamp by a constant offset so the clock runs live rather than in
+      // 2026-10-17. The offset preserves the recording's own spacing: the
+      // reducer attributes score deltas by ev.ts, so re-stamping each event
+      // to its delivery time pushed auto scores into teleop at any pacing
+      // other than exact 1x.
+      offset ??= Date.now() - ev.ts;
+      this.emit({
+        type: ev.type, payload: ev.payload, source: ev.source,
+        confidence: ev.confidence, ts: ev.ts + offset,
+      });
     }
     console.log('[bus] replay complete');
   }

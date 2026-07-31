@@ -71,7 +71,7 @@ export function attachMarkers(bus: EventBus): () => void {
         break;
 
       case 'match.endgame':
-        mark({ kind: 'endgame', label: 'Endgame', priority: 2 }, ev.ts);
+        mark({ kind: 'endgame', label: 'End game', priority: 2 }, ev.ts);
         break;
 
       case 'match.shift_change': {
@@ -150,7 +150,20 @@ export function attachMarkers(bus: EventBus): () => void {
 export function markersSince(bus: EventBus, sinceMs: number): Marker[] {
   return bus.recent
     .filter(ev => ev.type === 'replay.marker' && ev.ts >= sinceMs)
-    .map(ev => ev.payload as Marker)
-    .filter(m => m && typeof m.ts === 'number')
+    .map(ev => {
+      // The consoles send a manual mark as {kind:'manual', matchClock} and
+      // nothing more, so filtering on payload.ts silently dropped every
+      // operator Mark from the timeline. Backfill what is missing from the
+      // event envelope instead of trusting the payload to be a full Marker.
+      const p = (ev.payload ?? {}) as Partial<Marker>;
+      return {
+        kind: 'manual',
+        label: 'Manual',
+        priority: 2,
+        matchClock: ev.matchClock,
+        ...p,
+        ts: typeof p.ts === 'number' ? p.ts : ev.ts,
+      } as Marker;
+    })
     .sort((a, b) => a.ts - b.ts);
 }

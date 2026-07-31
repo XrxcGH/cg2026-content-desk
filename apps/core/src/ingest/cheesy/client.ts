@@ -49,12 +49,19 @@ export function assertSocketAllowed(path: string): asserts path is AllowedSocket
   }
 }
 
-export function assertPathAllowed(path: string): void {
-  const bare = path.split('?')[0] ?? '';
-  // A dot segment would let an otherwise-allowed prefix resolve somewhere else
-  // once the URL is actually parsed (`/api/matches/../../setup/settings` passes
-  // a naive prefix check but fetch() would normalise it onto /setup/settings).
-  // Reject it here, before the string match, not after.
+/** Throws unless the path is on the read allowlist. Returns the normalized
+ *  path, which is what MUST be requested: checking one string and fetching
+ *  another is how the allowlist gets bypassed. */
+export function assertPathAllowed(path: string): string {
+  // Parse the way fetch() will before matching anything. A raw-string check
+  // missed percent-encoded dot segments: "/api/matches/%2e%2e/%2e%2e/setup/
+  // settings" contains no literal ".." and starts with an allowed prefix, but
+  // fetch normalises it onto /setup/settings. Checking the parsed pathname
+  // closes that gap, and the same parsed value is what gets requested.
+  const parsed = new URL(path, 'http://placeholder');
+  const bare = parsed.pathname;
+  // Parsing resolves ordinary dot segments, so any ".." still present here
+  // (e.g. a half-encoded "..%2f" segment) is hostile enough to reject outright.
   if (bare.includes('..')) {
     throw new Error(`Refusing to request "${bare}": a path segment is not allowed.`);
   }
@@ -65,6 +72,7 @@ export function assertPathAllowed(path: string): void {
   if (!allowed) {
     throw new Error(`Refusing to request "${bare}". Not on the read allowlist.`);
   }
+  return bare + parsed.search;
 }
 
 export interface AuditEntry { ts: number; method: string; url: string; status: number | string }
@@ -165,17 +173,24 @@ export class CheesyClient {
    * POST to /setup/db/clear.
    */
   async get<T>(path: string, timeoutMs = 8000): Promise<T> {
-    assertPathAllowed(path);
-    const url = `http://${this.#opts.host}${path}`;
+    // The URL is built from what the allowlist actually checked, so the
+    // checked string and the requested string cannot diverge.
+    const safePath = assertPathAllowed(path);
+    const url = `http://${this.#opts.host}${safePath}`;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    // The audit log promises one entry per request. A non-ok response used to
+    // land twice: once with its status, again from the catch with the thrown
+    // error's name, overstating the request count shown to the FTA.
+    let recorded = false;
     try {
       const res = await fetch(url, { method: 'GET', signal: ctrl.signal });
       this.#record('GET', url, res.status);
+      recorded = true;
       if (!res.ok) throw new Error(`Cheesy GET ${path} -> ${res.status}`);
       return await res.json() as T;
     } catch (err) {
-      this.#record('GET', url, (err as Error).name);
+      if (!recorded) this.#record('GET', url, (err as Error).name);
       throw err;
     } finally {
       clearTimeout(timer);

@@ -15,7 +15,6 @@
 
 import type { EventBus } from '../bus.ts';
 import type { DeskEvent, DeskState } from '../types.ts';
-import { REBUILT } from '../types.ts';
 import type { ObsClient } from './obs.ts';
 
 export interface CueContext {
@@ -62,6 +61,11 @@ export type SceneMap = Record<keyof typeof DEFAULT_SCENES, string>;
 const GAP_MS = 3 * 60_000;
 
 export function defaultCues(): Cue[] {
+  // The gap-filler's condition is a level, not an edge: once a gap is three
+  // minutes old it stays true on every bus event until the next match. The
+  // latch makes it fire once per gap; without it the cue re-cut to the arcade
+  // on every trivia join and schedule poll, stomping any manual OBS take.
+  let gapFilledAt: number | null = null;
   return [
     {
       id: 'on-deck',
@@ -69,6 +73,8 @@ export function defaultCues(): Cue[] {
       does: 'Show the alliance overview when a match is loaded.',
       when: ev => ev.type === 'match.loaded',
       run: async ctx => {
+        // Source 'cue' is load-bearing: the reducer lets cue-sourced screen
+        // changes ride under an operator's hold instead of engaging one.
         ctx.bus.emit({ type: 'screen.change', source: 'cue', payload: { screen: 'overview' } });
         await ctx.scene('intro');
       },
@@ -95,11 +101,13 @@ export function defaultCues(): Cue[] {
     },
     {
       id: 'endgame',
-      name: 'Endgame',
-      does: 'Endgame chip and tight camera as the towers come into play.',
-      when: (ev, state) =>
-        ev.type === 'match.endgame'
-        || (ev.type === 'score.delta' && (state.matchClock ?? -999) >= REBUILT.ENDGAME_START),
+      name: 'End game',
+      does: 'End game chip as the towers come into play. The camera stays manual: the wide-shot lock holds mid-match.',
+      // The clock owns this boundary: bus.advance() emits match.endgame in
+      // every mode, so it fires exactly once. A score.delta fallback used to
+      // sit alongside it; it re-fired on every delta for the whole endgame
+      // window, so it is gone.
+      when: ev => ev.type === 'match.endgame',
       run: ctx => {
         ctx.bus.emit({ type: 'graphic.show', source: 'cue', payload: { graphic: 'endgame' } });
       },
@@ -138,13 +146,20 @@ export function defaultCues(): Cue[] {
       // rankings poll every 60s even when nothing changed) rather than on
       // `match.score_posted` alone, which fires exactly when scorePostedAt is
       // set to "now" and so could never itself be three minutes stale.
-      when: (_ev, state) =>
-        state.matchStartedAt === null
-        // A score has to have been posted at all. Treating "never" as an
-        // infinitely long gap made this true from boot, so the arcade bumper
-        // fired on the first event of the day, over the pre-match overview.
-        && state.scorePostedAt !== null
-        && Date.now() - state.scorePostedAt > GAP_MS,
+      when: (_ev, state) => {
+        const inGap = state.matchStartedAt === null
+          // A score has to have been posted at all. Treating "never" as an
+          // infinitely long gap made this true from boot, so the arcade bumper
+          // fired on the first event of the day, over the pre-match overview.
+          && state.scorePostedAt !== null
+          && Date.now() - state.scorePostedAt > GAP_MS;
+        if (!inGap) { gapFilledAt = null; return false; }
+        if (gapFilledAt === state.scorePostedAt) return false;
+        // Latched here rather than in run(), so a disarmed cue counts one
+        // would-have-fired per gap instead of one per event for the whole gap.
+        gapFilledAt = state.scorePostedAt;
+        return true;
+      },
       run: async ctx => { await ctx.scene('arcade'); },
     },
   ];

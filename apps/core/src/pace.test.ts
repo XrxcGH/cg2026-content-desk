@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { behindMinutes, medianCycleMs, projectNextStart } from './pace.ts';
+import { attachPace, behindMinutes, medianCycleMs, projectNextStart } from './pace.ts';
+import { EventBus } from './bus.ts';
 
 const MIN = 60_000;
 
@@ -43,4 +44,41 @@ test('behind-schedule math, both directions', () => {
   assert.equal(behindMinutes(sched - 3 * MIN, sched), -3, 'ahead, which is rare but honest');
   assert.equal(behindMinutes(null, sched), null);
   assert.equal(behindMinutes(sched, null), null, 'no published times, no claim');
+});
+
+test('behindMin stays honest while the queue head is still the playing match', () => {
+  const bus = new EventBus();
+  const detach = attachPace(bus);
+  try {
+    const updates: { behindMin: number | null }[] = [];
+    bus.subscribe(ev => {
+      if (ev.type === 'pace.updated') updates.push(ev.payload as { behindMin: number | null });
+    });
+
+    // A 7-minute schedule running exactly on time. Cheesy keeps a match in
+    // the upcoming queue until its score commits, so while a match plays the
+    // head is that match, not the next one; comparing the NEXT start's
+    // projection against it used to read a full cycle behind here.
+    const t0 = Date.now() - 7 * MIN;
+    const iso = (t: number) => new Date(t).toISOString();
+    const queue = (head: number) => bus.emit({
+      type: 'queue.updated', source: 'cheesy',
+      payload: {
+        upcoming: [{
+          name: `Qualification ${head}`, shortName: `Q${head}`,
+          time: iso(t0 + (head - 42) * 7 * MIN), red: [], blue: [],
+        }],
+      },
+    });
+
+    queue(42);
+    bus.emit({ type: 'match.start', source: 'cheesy', ts: t0 });
+    queue(43);                                             // Q42 committed
+    bus.emit({ type: 'match.start', source: 'cheesy', ts: t0 + 7 * MIN });
+
+    assert.equal(updates.at(-1)!.behindMin, 0,
+      'a field running exactly on schedule must not read a cycle behind mid-match');
+  } finally {
+    detach();
+  }
 });

@@ -123,6 +123,59 @@ test('autopilot never cuts away from a live match; operators still can', async (
   assert.deepEqual(scenes, ['CG_ARCADE'], 'lock lifts once the match ends');
 });
 
+test('the gap-filler fires once per gap, not once per event', () => {
+  const bus = new EventBus();
+  const engine = new CueEngine(bus, null);
+  engine.attach();
+  engine.setAutopilot('gap-filler', true);
+
+  const scenes: string[] = [];
+  bus.subscribe(ev => {
+    if (ev.type === 'scene.change') scenes.push((ev.payload as { scene: string }).scene);
+  });
+
+  // A score posted four minutes ago: the gap condition is already true, and
+  // stays true on every event that follows (trivia joins, schedule polls).
+  bus.emit({ type: 'match.score_posted', source: 'cheesy', ts: Date.now() - 4 * 60_000 });
+  bus.emit({ type: 'trivia.updated', source: 'manual' });
+  bus.emit({ type: 'rankings.updated', source: 'cheesy' });
+
+  assert.deepEqual(scenes, ['CG_ARCADE'], 'one cut per gap, never one per event');
+
+  // The next gap re-arms it.
+  bus.emit({
+    type: 'match.loaded', source: 'cheesy',
+    payload: { id: 'q43', displayName: 'Qualification 43', red: [], blue: [] },
+  });
+  bus.emit({ type: 'match.score_posted', source: 'cheesy', ts: Date.now() - 4 * 60_000 });
+  assert.deepEqual(scenes, ['CG_ARCADE', 'CG_ARCADE']);
+});
+
+test('clock-driven boundaries reach cues: desk-only still gets the buzzer', () => {
+  const bus = new EventBus();
+  const engine = new CueEngine(bus, null);
+  engine.attach();
+  engine.setAutopilot('endgame', true);
+  engine.setAutopilot('hold-celebration', true);
+
+  const scenes: string[] = [];
+  const graphics: string[] = [];
+  bus.subscribe(ev => {
+    if (ev.type === 'scene.change') scenes.push((ev.payload as { scene: string }).scene);
+    if (ev.type === 'graphic.show') graphics.push((ev.payload as { graphic: string }).graphic);
+  });
+
+  // Desk-only: no field bridge, so the 10Hz ticker is the only source of
+  // match.endgame and match.end. Stamped 'cue' they never reached the engine.
+  const t0 = Date.now();
+  bus.emit({ type: 'match.start', source: 'manual', ts: t0 - 135_000 });
+  bus.advance(t0);                       // matchClock 115: endgame
+  assert.deepEqual(graphics, ['endgame'], 'the endgame trigger fires from the clock');
+
+  bus.advance(t0 + 30_000);              // matchClock 145: post
+  assert.deepEqual(scenes, ['CG_MATCH'], 'the buzzer hold fires from the clock');
+});
+
 test('a cue can be fired by hand while its autopilot is off', async () => {
   const bus = new EventBus();
   const engine = new CueEngine(bus, null);

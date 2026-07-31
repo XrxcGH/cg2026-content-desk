@@ -14,6 +14,12 @@ export type Source =
   | 'startgg'
   | 'manual'    // desk console, always authoritative override
   | 'cue'       // show automation
+  // The 10Hz ticker's time-driven phase boundaries. Not 'cue': the cue
+  // engine drops cue-sourced events to break feedback loops, and stamping
+  // the ticker's events 'cue' made every clock-driven boundary invisible
+  // to cues.
+  | 'clock'
+  | 'demo'      // simulated match driver, never a real show
   | 'replay';
 
 /**
@@ -43,7 +49,8 @@ export interface DeskEvent<T = unknown> {
 export type DeskEventType =
   // match lifecycle
   | 'match.loaded' | 'match.prestart' | 'match.preview' | 'match.armed'
-  | 'match.start' | 'match.auto_end' | 'match.shift_change' | 'match.endgame'
+  | 'match.start' | 'match.auto_end' | 'match.teleop_start'
+  | 'match.shift_change' | 'match.endgame'
   | 'match.end' | 'match.aborted' | 'match.score_posted'
   // live state
   | 'score.realtime' | 'score.delta' | 'hub.state' | 'arena.status'

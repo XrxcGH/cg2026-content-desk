@@ -1,6 +1,7 @@
 ﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertPathAllowed, assertSocketAllowed, ALLOWED_SOCKETS } from './client.ts';
+import { createServer } from 'node:http';
+import { CheesyClient, assertPathAllowed, assertSocketAllowed, ALLOWED_SOCKETS } from './client.ts';
 import { fuelPoints, towerPoints, MatchState, MatchStatus } from './protocol.ts';
 import { CheesyAdapter, mapRankings, mapSelection, mapUpcoming } from './adapter.ts';
 import { EventBus } from '../../bus.ts';
@@ -36,6 +37,46 @@ test('refuses REST paths outside the read allowlist', () => {
     '/api/teams/846/avatar', '/api/bracket/svg']) {
     assert.doesNotThrow(() => assertPathAllowed(path), path);
   }
+});
+
+test('percent-encoded dot segments cannot sidestep the allowlist', () => {
+  // fetch() decodes %2e%2e while parsing the URL, so a raw-string check and
+  // the request on the wire saw two different paths. The check must see the
+  // parsed path, and the parsed path is what must be requested.
+  for (const path of [
+    '/api/matches/%2e%2e/%2e%2e/setup/settings',
+    '/api/matches/%2E%2E/settings',
+    '/api/matches/..%2fsettings',
+  ]) {
+    assert.throws(() => assertPathAllowed(path), /Refusing to request/, path);
+  }
+  // The returned string is the one the client fetches: already normalized,
+  // query preserved.
+  assert.equal(assertPathAllowed('/api/rankings'), '/api/rankings');
+  assert.equal(assertPathAllowed('/api/matches/playoff'), '/api/matches/playoff');
+});
+
+test('a failed GET lands in the audit log exactly once', async () => {
+  // The audit log is shown to the FTA as "every request we have made, in
+  // order". A non-ok response used to append two entries for one request.
+  const server = createServer((_req, res) => { res.writeHead(500); res.end(); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as { port: number };
+  const client = new CheesyClient({ host: `127.0.0.1:${port}`, displayId: 'test', onEvent: () => {} });
+
+  try {
+    await assert.rejects(() => client.get('/api/rankings'));
+    assert.equal(client.audit.length, 1, 'one request, one entry');
+    assert.equal(client.audit[0]?.status, 500);
+  } finally {
+    // A failing assertion must not leave the port open and hang the runner.
+    await new Promise(resolve => server.close(resolve));
+  }
+
+  // A request that never got a status still logs one entry, with the error.
+  await assert.rejects(() => client.get('/api/rankings'));
+  assert.equal(client.audit.length, 2);
+  assert.equal(typeof client.audit[1]?.status, 'string');
 });
 
 test('fuel and tower points combine auto and teleop', () => {
@@ -149,6 +190,113 @@ test('maps a loaded match into teams and a display name', () => {
   assert.equal(bus.state.match?.blue[2]?.name, 'Homestead Robotics');
 });
 
+test('a reconnect replay of the same load mid-match does not reset the match', () => {
+  const bus = new EventBus();
+  const types: string[] = [];
+  bus.subscribe(ev => types.push(ev.type));
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  const load = { Match: { Id: 42, LongName: 'Qualification 42', Red1: 846, Blue1: 100 } };
+  adapter.ingest('matchLoad', load);
+  adapter.ingest('matchTime', { MatchState: MatchState.StartMatch });
+  adapter.ingest('matchTime', { MatchState: MatchState.AutoPeriod });
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.AutoPeriod,
+    Red: { ScoreSummary: { AutoFuelPoints: 5 } },
+    Blue: { ScoreSummary: { AutoFuelPoints: 2 } },
+  });
+  adapter.ingest('matchTime', { MatchState: MatchState.TeleopPeriod });
+
+  const started = bus.state.matchStartedAt;
+  assert.notEqual(started, null);
+  types.length = 0;
+
+  // The websocket drops and comes back mid-match. Cheesy replays its current
+  // snapshot to the fresh subscription: the same matchLoad, then matchTime.
+  adapter.ingest('matchLoad', load);
+  adapter.ingest('matchTime', { MatchState: MatchState.TeleopPeriod });
+
+  assert.equal(types.filter(t => t === 'match.loaded').length, 0, 'not a fresh load');
+  assert.equal(bus.state.matchStartedAt, started, 'clock still anchored');
+  assert.equal(bus.state.screen, 'match', 'score bar stays up');
+
+  // The replayed score snapshot diffs against the kept totals, not zero, so
+  // no bogus burst markers land on the replay timeline.
+  types.length = 0;
+  const deltas: unknown[] = [];
+  const stop = bus.subscribe(ev => { if (ev.type === 'score.delta') deltas.push(ev.payload); });
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.TeleopPeriod,
+    Red: { ScoreSummary: { AutoFuelPoints: 5, TeleopFuelPoints: 3 } },
+    Blue: { ScoreSummary: { AutoFuelPoints: 2 } },
+  });
+  stop();
+  assert.deepEqual(deltas, [{ alliance: 'red', field: 'fuel', amount: 3 }]);
+
+  // The same match loaded again with the field idle IS a fresh start (a
+  // scorekeeper replay), and must reset.
+  adapter.ingest('matchTime', { MatchState: MatchState.PostMatch });
+  adapter.ingest('matchTime', { MatchState: MatchState.PreMatch });
+  types.length = 0;
+  adapter.ingest('matchLoad', load);
+  assert.equal(types.filter(t => t === 'match.loaded').length, 1);
+  assert.equal(bus.state.score.red.total, 0);
+});
+
+test('a card is announced once, not once per score frame', () => {
+  const bus = new EventBus();
+  const seen: DeskEvent[] = [];
+  bus.subscribe(ev => seen.push(ev));
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  adapter.ingest('matchLoad', { Match: { Id: 1, LongName: 'Qualification 1' } });
+  const frame = (fuel: number) => ({
+    Red: { ScoreSummary: { TeleopFuelPoints: fuel } },
+    Blue: { ScoreSummary: {} },
+    RedCards: { '846': 'yellow' },
+  });
+  // The card map rides along on EVERY realtime frame for the rest of the
+  // match; each frame must not become another Card marker for replay.
+  adapter.ingest('realtimeScore', frame(1));
+  adapter.ingest('realtimeScore', frame(2));
+  adapter.ingest('realtimeScore', frame(3));
+
+  const cards = () => seen.filter(e => e.type === 'card.issued');
+  assert.equal(cards().length, 1);
+  assert.deepEqual(cards()[0]?.payload, { alliance: 'red', team: 846, card: 'yellow' });
+
+  // An upgrade to red is a new fact and is announced again.
+  adapter.ingest('realtimeScore', { ...frame(4), RedCards: { '846': 'red' } });
+  assert.equal(cards().length, 2);
+
+  // The next match starts clean.
+  adapter.ingest('matchLoad', { Match: { Id: 2, LongName: 'Qualification 2' } });
+  adapter.ingest('realtimeScore', frame(0));
+  assert.equal(cards().length, 3);
+});
+
+test('teleop start after the pause emits the clock re-anchor event', () => {
+  const bus = new EventBus();
+  const seen: DeskEvent[] = [];
+  bus.subscribe(ev => seen.push(ev));
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  adapter.ingest('matchTime', { MatchState: MatchState.StartMatch });
+  adapter.ingest('matchTime', { MatchState: MatchState.AutoPeriod });
+  adapter.ingest('matchTime', { MatchState: MatchState.PausePeriod });
+  adapter.ingest('matchTime', { MatchState: MatchState.TeleopPeriod });
+
+  // The field's pause has no fixed length, so the desk clock needs the real
+  // teleop start to re-anchor on. Its own event type, not a shift_change:
+  // the reducer's match.teleop_start case is what re-anchors, and the ticker
+  // owns the shift1..4 stream.
+  const anchors = seen.filter(e => e.type === 'match.teleop_start');
+  assert.equal(anchors.length, 1);
+  assert.equal(anchors[0]?.source, 'cheesy');
+  assert.equal(seen.filter(e => e.type === 'match.shift_change').length, 0,
+    'the transition must not leak into the shift stream the surfaces render');
+});
+
 test('the field decides the auto winner, on fuel alone', () => {
   const bus = new EventBus();
   const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
@@ -193,6 +341,30 @@ test('auto fuel, not points, picks the winner', () => {
 
   // Red leads on auto points 34-9 and still loses auto.
   assert.equal(bus.state.autoWinner, 'blue');
+});
+
+test('auto fuel that lands on the pause frame still decides the winner', () => {
+  const bus = new EventBus();
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  adapter.ingest('matchLoad', { Match: { Id: 1, LongName: 'Qualification 1' } });
+  adapter.ingest('matchTime', { MatchState: MatchState.AutoPeriod });
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.AutoPeriod,
+    Red: { ScoreSummary: { AutoFuelPoints: 4 } },
+    Blue: { ScoreSummary: { AutoFuelPoints: 3 } },
+  });
+  // A ball counted after Cheesy's own period transition arrives stamped
+  // PausePeriod. Deciding from the cached auto-period values alone called
+  // this one for red.
+  adapter.ingest('realtimeScore', {
+    MatchState: MatchState.PausePeriod,
+    Red: { ScoreSummary: { AutoFuelPoints: 4 } },
+    Blue: { ScoreSummary: { AutoFuelPoints: 6 } },
+  });
+
+  assert.equal(bus.state.autoWinner, 'blue');
+  assert.equal(bus.state.autoWinnerKnown, true);
 });
 
 test('hub state from the field beats inference', () => {
@@ -442,7 +614,7 @@ test('playoff seeds ride along, and qualification carries none', () => {
   assert.equal(bus.state.match?.blueAlliance, undefined);
 
   adapter.ingest('matchLoad', {
-    Match: { Id: 2, LongName: 'Match 7 (R3)', Red1: 254, Red2: 846, Red3: 1678,
+    Match: { Id: 2, LongName: 'Match 7 (R2)', Red1: 254, Red2: 846, Red3: 1678,
              Blue1: 100, Blue2: 115, Blue3: 670, PlayoffRedAlliance: 1, PlayoffBlueAlliance: 4 },
   });
   assert.equal(bus.state.match?.redAlliance, 1);
@@ -457,7 +629,7 @@ test('surfaces can size off the alliance rather than a hard-coded three', () => 
   bus.emit({
     type: 'match.loaded', source: 'cheesy',
     payload: {
-      id: 'sf1m1', displayName: 'Match 7 (R3)',
+      id: 'sf1m1', displayName: 'Match 7 (R2)',
       red: [{ number: 254, name: 'A' }, { number: 846, name: 'B' },
             { number: 1678, name: 'C' }, { number: 25801, name: 'D' }],
       blue: [{ number: 100, name: 'E' }, { number: 115, name: 'F' }],

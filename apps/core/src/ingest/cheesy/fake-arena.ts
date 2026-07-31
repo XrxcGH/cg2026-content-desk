@@ -34,6 +34,20 @@ import { ALLOWED_SOCKETS } from './client.ts';
 // instead of silently drifting into testing a stale set of endpoints.
 const SOCKET_PATHS: readonly string[] = ALLOWED_SOCKETS;
 
+// Real Cheesy fans each notifier out only on the endpoints that carry it (the
+// docs/10 endpoint table). This used to broadcast every notifier to every
+// socket, so the desk, which subscribes to all six, ingested six copies of
+// every frame: six match.loaded per load and sixfold robot_down markers,
+// none of which happens against a real field.
+const ROUTES: Record<string, readonly string[]> = {
+  matchLoad: ['/api/arena/websocket', '/displays/audience/websocket'],
+  matchTime: ['/api/arena/websocket', '/displays/audience/websocket'],
+  realtimeScore: ['/displays/audience/websocket'],
+  scorePosted: ['/displays/audience/websocket'],
+  allianceSelection: ['/displays/audience/websocket'],
+  arenaStatus: ['/displays/field_monitor/websocket'],
+};
+
 const TEAMS = {
   R1: { Id: 846, Nickname: 'The Funky Monkeys' },
   R2: { Id: 1868, Nickname: 'Space Cookies' },
@@ -80,7 +94,8 @@ export function startFakeArena(opts: FakeArenaOpts) {
   const log = opts.log ?? (line => console.log(`[fake-arena] ${line}`));
   const ms = (realMs: number): number => Math.max(20, realMs / speed);
 
-  const sockets = new Set<WebSocket>();
+  // Socket -> the path it upgraded on, because delivery is routed per path.
+  const sockets = new Map<WebSocket, string>();
   const timers = new Set<NodeJS.Timeout>();
   let stopped = false;
 
@@ -94,6 +109,9 @@ export function startFakeArena(opts: FakeArenaOpts) {
     if (req.method !== 'GET') { res.writeHead(405).end(); return; }
     if (path === '/api/rankings') return json(RANKINGS);
     if (path === '/api/matches/qualification') return json(SCHEDULE);
+    // The scripted event never reaches Sunday. An empty list is what a real
+    // arena serves before the bracket exists, and the desk polls this type.
+    if (path === '/api/matches/playoff') return json([]);
     res.writeHead(404).end('fake-arena: not found');
   });
 
@@ -108,8 +126,11 @@ export function startFakeArena(opts: FakeArenaOpts) {
     const path = (req.url ?? '/').split('?')[0]!;
     if (!SOCKET_PATHS.includes(path)) { socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, ws => {
-      sockets.add(ws);
+      sockets.set(ws, path);
       for (const type of REPLAY_ORDER) {
+        // Replay only what this endpoint carries on a real arena: the
+        // rankings socket never delivers a matchLoad, so neither does this.
+        if (!(ROUTES[type] ?? []).includes(path)) continue;
         if (latest.has(type)) ws.send(JSON.stringify({ type, data: latest.get(type) }));
       }
       ws.on('close', () => sockets.delete(ws));
@@ -125,8 +146,18 @@ export function startFakeArena(opts: FakeArenaOpts) {
 
   const send = (type: string, data: unknown): void => {
     latest.set(type, data);
+    const routes = ROUTES[type];
+    if (!routes) {
+      // A notifier nobody routed would vanish silently; fail the rehearsal
+      // loudly instead so the routing table gets extended with the script.
+      log(`ERROR: no endpoint route for notifier "${type}"`);
+      process.exitCode = 2;
+      return;
+    }
     const frame = JSON.stringify({ type, data });
-    for (const ws of sockets) if (ws.readyState === ws.OPEN) ws.send(frame);
+    for (const [ws, wsPath] of sockets) {
+      if (routes.includes(wsPath) && ws.readyState === ws.OPEN) ws.send(frame);
+    }
   };
 
   const at = (realMs: number, fn: () => void): void => {
@@ -299,7 +330,9 @@ export function startFakeArena(opts: FakeArenaOpts) {
     });
   }
 
-  http.listen(opts.port, () => {
+  // Loopback explicitly: a host-less listen() binds every interface, and a
+  // rehearsal box plugged into the venue network must not be reachable from it.
+  http.listen(opts.port, '127.0.0.1', () => {
     log(`listening on 127.0.0.1:${opts.port} at ${speed}x speed`);
     runMatch();
   });
@@ -309,7 +342,7 @@ export function startFakeArena(opts: FakeArenaOpts) {
       stopped = true;
       for (const t of timers) clearTimeout(t);
       timers.clear();
-      for (const ws of sockets) ws.close();
+      for (const ws of sockets.keys()) ws.close();
       wss.close();
       http.close();
     },

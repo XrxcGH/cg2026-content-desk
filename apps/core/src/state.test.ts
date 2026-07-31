@@ -140,3 +140,66 @@ test('with no hold, the show still runs itself', () => {
   s = reduce(s, ev('match.score_posted', T0 + 2));
   assert.equal(s.screen, 'score');
 });
+
+test('a cue screen change is automation: it never sets or breaks a hold', () => {
+  let s = initialState();
+
+  // No hold: the cue moves the screen and leaves automatic switching alive.
+  s = reduce(s, { ...ev('screen.change', T0, { screen: 'overview' }), source: 'cue' });
+  assert.equal(s.screen, 'overview');
+  assert.equal(s.screenHold, false, 'a cue take must not freeze the lifecycle');
+  s = reduce(s, ev('match.armed', T0 + 1));
+  assert.equal(s.screen, 'match', 'automatic transitions still run after a cue change');
+
+  // Operator holds: the cue loses.
+  s = reduce(s, ev('screen.change', T0 + 2, { screen: 'arcade' }));
+  s = reduce(s, { ...ev('screen.change', T0 + 3, { screen: 'score' }), source: 'cue' });
+  assert.equal(s.screen, 'arcade', 'a cue never overrides an operator hold');
+  assert.equal(s.screenHold, true);
+
+  // And a cue cannot hand control back on the operator's behalf.
+  s = reduce(s, { ...ev('screen.change', T0 + 4, { screen: 'auto' }), source: 'cue' });
+  assert.equal(s.screenHold, true);
+});
+
+test('teleop start re-anchors the clock across the field pause', () => {
+  let s = started();
+  // The field pauses (here 2s) between auto and teleop, so teleop begins at
+  // wall +22s even though the desk axis says +20. Without the re-anchor every
+  // teleop boundary, including the synthesised buzzer, ran 2s early.
+  s = reduce(s, ev('match.teleop_start', T0 + 22_000));
+  assert.equal(s.matchClock, 0, 'matchClock is exactly 0 at the field teleop start');
+  assert.equal(s.lastMatchStartedAt, T0, 'the true start survives for clip cutting');
+
+  // 139s of teleop later the match is still live on the field's axis.
+  s = reduce(s, ev('score.delta', T0 + 22_000 + 139_000, { alliance: 'red', field: 'fuel', amount: 1 }));
+  assert.equal(s.phase, 'endgame', 'not post: the buzzer lands 140s after the REAL teleop start');
+  assert.equal(s.score.red.teleopFuel, 1);
+});
+
+test('the re-anchor is ignored when no match is running', () => {
+  const s = reduce(initialState(), ev('match.teleop_start', T0));
+  assert.equal(s.matchStartedAt, null);
+  assert.equal(s.matchClock, null);
+});
+
+test('a field timeout raises the delay card and prestart retires it', () => {
+  let s = reduce(initialState(), ev('break.started', T0, { kind: 'timeout' }));
+  assert.equal(s.status?.kind, 'delay');
+  assert.equal(s.status?.message, 'Field timeout');
+
+  // The field coming back is what ends a timeout; no operator action needed.
+  s = reduce(s, ev('match.prestart', T0 + 60_000));
+  assert.equal(s.status, null);
+});
+
+test('the automatic timeout card never overwrites the producer', () => {
+  let s = reduce(initialState(), ev('status.show', T0,
+    { kind: 'fault', message: 'Arena fault, back soon', backAt: null }));
+  s = reduce(s, ev('break.started', T0 + 1000, { kind: 'timeout' }));
+  assert.equal(s.status?.message, 'Arena fault, back soon', 'operator wording wins');
+
+  // And prestart leaves the operator card alone too.
+  s = reduce(s, ev('match.prestart', T0 + 2000));
+  assert.equal(s.status?.kind, 'fault');
+});

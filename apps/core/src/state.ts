@@ -8,7 +8,7 @@
 
 import { clockDisplay, clockFrom, hubActiveAt, isLockdown, phaseAt } from './clock.ts';
 import {
-  emptyAllianceScore,
+  emptyAllianceScore, REBUILT,
   type Alliance, type AllianceScore, type DeskEvent, type DeskState, type RpThresholds,
 } from './types.ts';
 
@@ -110,8 +110,14 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
 
       // Field reset between matches. Deliberately no screen change: the next
       // match's `match.loaded` owns the transition back to the overview.
+      // Prestart is also how a timeout visibly ends (TimeoutActive returns
+      // through PreMatch), so it retires the automatic timeout card. Only
+      // that one: an operator card carries the producer's wording and stays
+      // until they clear it themselves.
       case 'match.prestart':
-        return state;
+        return state.status?.message === 'Field timeout'
+          ? { ...state, status: null }
+          : state;
 
       // The field is armed and ready: every robot linked, scorekeeper about to
       // hand it to the announcer. Flip to the score bar NOW, so the graphic is
@@ -137,6 +143,19 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
           red.total > blue.total ? 'red' : blue.total > red.total ? 'blue' : null;
         return { ...state, autoWinner: winner };
       }
+
+      // Cheesy Arena pauses between auto and teleop, and the pause length is
+      // not fixed, so a clock anchored only at match.start ran ahead of the
+      // field for the whole teleop: shifts, endgame, and the synthesised
+      // buzzer all fired early by the pause length, and the field's real
+      // match.end then landed as a duplicate. The field bridge emits this at
+      // the teleop transition; re-anchoring puts matchClock at exactly 0
+      // there, on the field's own axis. lastMatchStartedAt keeps the true
+      // wall-clock start for clip cutting. Desk-only operation never sees
+      // this event and the clock simply stays contiguous.
+      case 'match.teleop_start':
+        return state.matchStartedAt === null ? state
+          : { ...state, matchStartedAt: ev.ts + REBUILT.AUTO_START * 1000 };
 
       case 'match.aborted':
         return { ...state, matchStartedAt: null, screen: auto(state, 'match') };
@@ -221,6 +240,13 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
        */
       case 'screen.change': {
         const wanted = (ev.payload as { screen: string }).screen;
+        // Automation rides the same event as the operator, so the source is
+        // all that separates a cue from a take. A cue must respect a manual
+        // hold and never set or release one: treating cue changes as takes
+        // froze automatic screen switching the moment any screen cue armed.
+        if (ev.source === 'cue') {
+          return wanted === 'auto' ? state : { ...state, screen: auto(state, wanted) };
+        }
         if (wanted === 'auto') return { ...state, screenHold: false };
         return { ...state, screen: wanted, screenHold: true };
       }
@@ -250,6 +276,15 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
 
       case 'status.hide':
         return { ...state, status: null };
+
+      // A field timeout raises the delay card on its own, so the stoppage is
+      // explained even if nobody at the desk reacts. Never over an
+      // operator-set card: the producer's wording wins. It clears itself when
+      // the field moves on, via the match lifecycle cases below clearing
+      // status only when it was this automatic card (marked by its message).
+      case 'break.started':
+        return state.status !== null ? state
+          : { ...state, status: { kind: 'delay', message: 'Field timeout', backAt: null } };
 
       // Thresholds arrive from config at boot. Re-scoring immediately means a
       // mid-event correction repaints every badge instead of waiting for the
