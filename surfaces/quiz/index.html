@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crowd Trivia · CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+/* The audience phone page. Broadcast look, thumb ergonomics: four big answer
+   plates, nothing to scroll, nothing to mistap. Polls: a phone that drops
+   off the venue wifi for 10s must recover without anyone noticing. */
+html, body { height: 100%; }
+body {
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+  color: var(--cg-white);
+  display: flex; flex-direction: column;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  box-sizing: border-box; gap: 14px;
+  max-width: 560px; margin: 0 auto;
+}
+h1 { margin: 0; text-align: center;
+  font-family: var(--font-cond); font-weight: 700; font-size: 22px;
+  letter-spacing: .22em; text-indent: .22em; text-transform: uppercase; color: var(--cg-gold); }
+.tick { width: 180px; height: 3px; margin: 6px auto 0; background: var(--tick); }
+.sub { text-align: center; font-family: var(--font-cond); font-size: 14px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--cg-white-dim); }
+
+.card { background-color: var(--cg-purple); background-image: var(--tex-perf);
+  background-size: var(--tex-perf-size); clip-path: var(--chamfer); --ch: 14px;
+  padding: 18px; }
+
+label { display: block; font-family: var(--font-cond); font-weight: 600; font-size: 14px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--cg-white-dim); margin: 10px 0 6px; }
+input { width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 17px;
+  font-family: var(--font-display); background: var(--cg-purple-lo); color: var(--cg-white);
+  border: 2px solid var(--cg-purple-hi); }
+input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; border-color: var(--cg-gold); }
+
+.btn-go { width: 100%; margin-top: 14px; padding: 15px; border: 0; cursor: pointer;
+  clip-path: var(--chamfer); --ch: 12px;
+  background: var(--cg-gold); color: var(--cg-black);
+  font-family: var(--font-cond); font-weight: 700; font-size: 17px;
+  letter-spacing: .12em; text-transform: uppercase; }
+.btn-go:active { transform: scale(.98); }
+/* clip-path clips outline/box-shadow/filter alike, so a ring drawn OUTSIDE
+   the chamfer (positive offset) is silently invisible. Drawing it inside
+   with a negative offset survives the clip, same trick as the
+   data-mine ring below. Black holds contrast on this gold fill; the
+   gold-hi focus-ring token would barely read against gold. */
+.btn-go:focus-visible { outline: 3px solid var(--cg-black); outline-offset: -6px; }
+
+#q { font-family: var(--font-display); font-weight: 800; font-size: 21px; line-height: 1.25;
+  font-variation-settings: "wdth" var(--wdth-display); margin: 0; }
+#cat { margin-bottom: 8px; }
+#fuse { height: 8px; margin-top: 12px; background: var(--cg-purple-lo); }
+#fuseFill { height: 100%; background: var(--cg-gold); width: 100%; }
+
+.opts { display: grid; gap: 10px; }
+.opt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  border: 0; cursor: pointer; padding: 14px;
+  clip-path: var(--chamfer); --ch: 10px;
+  background: var(--cg-purple); color: var(--cg-white); }
+.opt b { flex: none; width: 34px; height: 34px; display: grid; place-items: center;
+  clip-path: var(--chamfer); --ch: 8px; background: var(--cg-gold); color: var(--cg-black);
+  font-family: var(--font-num); font-size: 19px; }
+.opt span { font-family: var(--font-cond); font-weight: 600; font-size: 18px; line-height: 1.15; }
+.opt[data-mine="true"] { outline: 3px solid var(--cg-gold); outline-offset: -3px; }
+/* Green-hi is bright enough that white text on it fails 4.5:1 at this text
+   size (~3.5:1); black holds a comfortable ~6:1 and still matches the
+   gold-badge / black-text pairing used elsewhere on this card. */
+.opt[data-right="true"] { background: var(--cg-green-hi); color: var(--cg-black); }
+.opt[data-right="false"] { opacity: .45; }
+.opt:disabled { cursor: default; }
+/* Inset, like data-mine above: clip-path clips a positive-offset ring. */
+.opt:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
+
+.big { text-align: center; font-family: var(--font-num); font-weight: 900; font-size: 44px; line-height: 1; }
+.status { text-align: center; font-family: var(--font-cond); font-size: 15px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--cg-white-dim); min-height: 20px; }
+.verdict { text-align: center; font-family: var(--font-cond); font-weight: 700; font-size: 22px;
+  letter-spacing: .16em; text-indent: .16em; text-transform: uppercase; }
+.verdict[data-ok="true"] { color: var(--cg-green-hi); }
+.verdict[data-ok="false"] { color: var(--cg-white-dim); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <div>
+    <h1>Crowd Trivia</h1>
+    <div class="tick" aria-hidden="true"></div>
+  </div>
+
+  <!-- join -->
+  <div class="card" id="join">
+    <div class="sub">Play from your seat · fastest right answer wins</div>
+    <label for="name">Your name</label>
+    <input id="name" maxlength="24" autocomplete="nickname" placeholder="Ana">
+    <label for="team">FRC team · optional</label>
+    <input id="team" inputmode="numeric" pattern="[0-9]*" placeholder="846">
+    <button class="btn-go" id="go">Join the game</button>
+    <p class="status" id="joinErr" role="alert"></p>
+  </div>
+
+  <!-- play -->
+  <div id="play" hidden>
+    <div class="card">
+      <div class="sub" id="cat" aria-live="polite"></div>
+      <p id="q" aria-live="polite">Waiting for the next question…</p>
+      <div id="fuse" hidden aria-hidden="true"><div id="fuseFill"></div></div>
+    </div>
+    <div style="height:12px"></div>
+    <div class="opts" id="opts"></div>
+    <div style="height:12px"></div>
+    <p class="verdict" id="verdict" hidden aria-live="polite"></p>
+    <div class="big num" id="score" aria-live="polite" aria-label="Your score">0</div>
+    <p class="status" id="me" aria-live="polite"></p>
+  </div>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const LETTERS = ['A', 'B', 'C', 'D'];
+// The poll loop below repaints on every cycle whether or not anything
+// changed. Guard aria-live regions with this so a screen reader announces
+// a real change, not the same score or question every 1.5 seconds.
+const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
+
+let playerId = sessionStorage.getItem('trivia.player');
+let myName = sessionStorage.getItem('trivia.name') ?? '';
+let view = null;
+let pendingChoice = null;
+
+$('go').onclick = async () => {
+  try {
+    const res = await fetch('/api/trivia/join', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: $('name').value, team: Number($('team').value) || undefined }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? 'Could not join');
+    playerId = body.playerId; myName = body.name;
+    sessionStorage.setItem('trivia.player', playerId);
+    sessionStorage.setItem('trivia.name', myName);
+    swap();
+  } catch (e) { $('joinErr').textContent = e.message; }
+};
+
+function swap() {
+  $('join').hidden = !!playerId;
+  $('play').hidden = !playerId;
+}
+
+async function answer(i) {
+  if (!view || view.phase !== 'open') return;
+  pendingChoice = i;          // paint immediately; the server confirms next poll
+  paint(view);
+  try {
+    await fetch('/api/trivia/answer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, choice: i }),
+    });
+  } catch { /* poll will reconcile */ }
+}
+
+function paint(v) {
+  view = v;
+  const q = v.question;
+  const mine = v.me?.choice ?? pendingChoice;
+
+  setText($('cat'), q ? `${q.category ?? 'Question'} · ${v.questionIndex + 1} of ${v.questionCount}` : '');
+  setText($('q'), q ? q.text
+    : (v.phase === 'idle' ? 'Waiting for the next question…' : ''));
+  $('fuse').hidden = v.phase !== 'open';
+
+  $('opts').innerHTML = q ? q.options.map((text, i) => `
+    <button class="opt" data-i="${i}"
+      ${mine === i ? 'data-mine="true"' : ''}
+      ${v.phase === 'revealed' ? `data-right="${i === v.answer}"` : ''}
+      ${v.phase !== 'open' || mine !== null ? 'disabled' : ''}>
+      <b>${LETTERS[i]}</b><span>${esc(text)}</span>
+    </button>`).join('') : '';
+  for (const b of document.querySelectorAll('.opt')) {
+    b.onclick = () => answer(Number(b.dataset.i));
+  }
+
+  const verdict = $('verdict');
+  if (v.phase === 'revealed' && v.me) {
+    verdict.hidden = false;
+    if (v.me.correct === true) { verdict.dataset.ok = 'true'; setText(verdict, 'Correct!'); }
+    else if (v.me.correct === false) { verdict.dataset.ok = 'false'; setText(verdict, 'Not this time'); }
+    else { verdict.dataset.ok = 'false'; setText(verdict, 'No answer in time'); }
+  } else {
+    verdict.hidden = true;
+    if (v.phase !== 'revealed') pendingChoice = null;
+  }
+
+  setText($('score'), String(v.me?.score ?? 0));
+  setText($('me'), v.me
+    ? `${myName}${v.me.rank ? ` · #${v.me.rank} of ${v.players}` : ''}`
+    : '');
+}
+
+// The fuse burns locally between polls.
+setInterval(() => {
+  const q = view?.question;
+  if (!q || view.phase !== 'open') return;
+  const left = Math.max(0, Math.min(1,
+    (q.closesAt - Date.now()) / Math.max(1, q.closesAt - q.opensAt)));
+  $('fuseFill').style.width = `${left * 100}%`;
+}, 200);
+
+async function poll() {
+  try {
+    const v = await fetch(`/api/trivia/play${playerId ? `?player=${encodeURIComponent(playerId)}` : ''}`)
+      .then(r => r.json());
+    // A hard reset on the desk invalidates our id, so fall back to the join card.
+    if (playerId && !v.me) {
+      playerId = null; sessionStorage.removeItem('trivia.player'); swap();
+    }
+    if (playerId) paint(v);
+  } catch { /* venue wifi blip, next poll wins */ }
+}
+setInterval(poll, 1500);
+swap();
+poll();
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+</script>
+</body>
+</html>

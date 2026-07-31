@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en" data-key="luma">
+<head>
+<meta charset="utf-8">
+<title>Trivia overlay · CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<link rel="stylesheet" href="/shared/broadcast.css">
+<style>
+/* Crowd trivia, a full-frame gap-filler. Same head/tick lockup as the other
+   full-frame screens; question plates borrow the alliance-plate vocabulary.
+   Defaults to luma (it also runs on venue TVs); ?key=alpha for OBS. */
+#stage {
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+}
+:root[data-key="luma"] #stage { background-color: var(--cg-purple); background-image: var(--tex-perf); }
+
+.tv-head { position: absolute; top: var(--safe-y); left: 0; right: 0; text-align: center; }
+.tv-title {
+  font-family: var(--font-cond); font-weight: 700;
+  font-size: 72px; letter-spacing: .22em; text-indent: .22em; line-height: 1.05;
+  text-transform: uppercase; color: var(--cg-gold);
+}
+.tv-sub {
+  margin-top: 10px;
+  font-family: var(--font-cond); font-weight: 600; font-size: 40px;
+  letter-spacing: .2em; text-indent: .2em; line-height: 1.05; text-transform: uppercase;
+  color: var(--cg-white-dim);
+}
+.tv-tick { width: 480px; margin: 16px auto 0; height: 4px; background: var(--tick); }
+
+.pane { position: absolute; top: 260px; left: var(--safe-x); right: var(--safe-x); bottom: var(--safe-y);
+  display: none; flex-direction: column; align-items: center; justify-content: center; }
+.pane[data-active] { display: flex; }
+.pane > .chip { font-size: 36px; }
+
+/* ---- join / idle ---- */
+#joinQr { margin-top: 44px; width: 340px; height: 340px; }
+#joinQr svg { width: 100%; height: 100%; clip-path: var(--chamfer); --ch: 18px; }
+#joinUrl {
+  margin-top: 34px; max-width: 100%;
+  font-family: var(--font-num); font-weight: 900; font-size: 88px; line-height: 1;
+  color: var(--cg-white); letter-spacing: -.02em;
+  text-align: center; overflow-wrap: break-word;
+}
+#joinCount { margin-top: 40px; font-size: 36px; }
+
+/* ---- question ---- */
+.q-text {
+  max-width: 1680px; text-align: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 84px;
+  font-variation-settings: "wdth" var(--wdth-display); line-height: 1.12;
+  color: var(--cg-white);
+}
+/* Countdown: a shrinking gold bar, a block of color readable from the room. */
+#fuse { width: 1100px; height: 16px; margin: 40px 0 8px; background: var(--cg-purple-lo);
+  clip-path: var(--chamfer); --ch: 7px; }
+#fuseFill { height: 100%; width: 100%; background: var(--cg-gold); }
+
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 26px;
+  width: 100%; max-width: 1680px; margin-top: 36px; }
+.opt {
+  position: relative; display: flex; align-items: center; gap: 28px;
+  min-height: 148px; padding: 20px 36px;
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf); background-size: var(--tex-perf-size);
+  clip-path: var(--chamfer);
+}
+.opt-letter {
+  flex: none; width: 84px; height: 84px;
+  display: grid; place-items: center;
+  clip-path: var(--chamfer); --ch: 14px;
+  background: var(--cg-gold); color: var(--cg-black);
+  font-family: var(--font-num); font-weight: 900; font-size: 52px;
+}
+.opt-text {
+  font-family: var(--font-cond); font-weight: 600; font-size: 54px; line-height: 1.08;
+  color: var(--cg-white);
+}
+.opt-count {
+  margin-left: auto;
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: 58px; color: var(--cg-white-dim);
+}
+/* Reveal states: the right answer goes green; wrong options recede. */
+.opt[data-right="true"] { background-color: var(--cg-green-hi); }
+.opt[data-right="true"] .opt-text, .opt[data-right="true"] .opt-count { color: var(--cg-white); }
+.opt[data-right="false"] { opacity: .45; }
+
+#answersIn { margin-top: 34px; font-size: 36px; }
+
+/* ---- leaderboard ---- */
+.lb { width: 100%; max-width: 1520px; margin-top: 44px; display: flex; flex-direction: column; gap: 16px; }
+.lb-row {
+  display: grid; grid-template-columns: 120px 1fr auto; gap: 26px; align-items: center;
+  padding: 20px 36px;
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf); background-size: var(--tex-perf-size);
+  clip-path: var(--chamfer); --ch: 14px;
+}
+.lb-row:first-child { position: relative; }
+.lb-row:first-child::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px;
+  background: var(--cg-gold);
+}
+.lb-rank { font-family: var(--font-num); font-weight: 900; font-size: 60px; line-height: 1; color: var(--cg-gold); }
+.lb-name {
+  font-family: var(--font-cond); font-weight: 600; font-size: 60px; line-height: 1.1;
+  color: var(--cg-white); text-transform: uppercase; letter-spacing: .04em;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.lb-name b { font-family: var(--font-num); font-weight: 900; margin-right: 14px; color: var(--cg-gold); }
+.lb-pts { font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: 64px; line-height: 1; color: var(--cg-white); }
+.lb-empty { margin-top: 120px; font-family: var(--font-cond); font-size: 56px; line-height: 1.1;
+  letter-spacing: .1em; text-indent: .1em; text-align: center; text-transform: uppercase; color: var(--cg-white-dim); }
+</style>
+</head>
+<body>
+<div id="stageWrap"><div id="stage">
+
+  <div class="tv-head">
+    <div class="tv-title">Crowd trivia</div>
+    <div class="tv-sub" id="sub">CalGames 2026</div>
+    <div class="tv-tick"></div>
+  </div>
+
+  <!-- Join card: idle, nothing asked yet -->
+  <section class="pane" id="pane-join" data-active>
+    <span class="chip chip--accent" style="margin-top:30px">Play from your seat</span>
+    <div id="joinQr"></div>
+    <div id="joinUrl">…</div>
+    <span class="chip" id="joinCount">0 players in</span>
+  </section>
+
+  <!-- Live question / reveal -->
+  <section class="pane" id="pane-q">
+    <div class="q-text" id="qText"></div>
+    <div id="fuse"><div id="fuseFill"></div></div>
+    <div class="opts" id="opts"></div>
+    <span class="chip" id="answersIn">0 answers in</span>
+  </section>
+
+  <!-- Leaderboard: idle between questions -->
+  <section class="pane" id="pane-lb">
+    <div class="lb" id="lb"></div>
+    <div class="lb-empty" id="lbEmpty" hidden>Scores land after the first question</div>
+  </section>
+
+  <div id="sweep"></div>
+</div></div>
+
+<script type="module">
+import { connect, applyDisplayMode, fitStage, restart, startTicker } from '/shared/desk-client.js';
+import { qrSvg } from '/shared/qr.js';
+
+applyDisplayMode();
+const $ = id => document.getElementById(id);
+const desk = connect('trivia');
+
+fitStage($('stage'));
+
+const LETTERS = ['A', 'B', 'C', 'D'];
+let snap = null;
+let currentPane = 'pane-join';
+
+function showPane(id) {
+  if (id === currentPane) return;
+  currentPane = id;
+  restart($('sweep'));
+  const half = (parseFloat(getComputedStyle(document.documentElement)
+    .getPropertyValue('--dur-sweep')) / 2) || 240;
+  setTimeout(() => {
+    for (const p of document.querySelectorAll('.pane')) {
+      p.toggleAttribute('data-active', p.id === id);
+    }
+  }, half);
+}
+
+function paint(s) {
+  if (!s) return;
+  snap = s;
+
+  $('joinCount').textContent = `${s.players} player${s.players === 1 ? '' : 's'} in`;
+  $('joinUrl').textContent = (s.joinUrl ?? '').replace(/^https?:\/\//, '') || 'join from the desk';
+  if (s.joinUrl && $('joinQr').dataset.url !== s.joinUrl) {
+    $('joinQr').dataset.url = s.joinUrl;
+    try { $('joinQr').innerHTML = qrSvg(s.joinUrl); } catch { /* URL too long: text stands */ }
+  }
+
+  if (s.phase === 'idle') {
+    if (s.asked > 0 && s.standings.length) {
+      $('sub').textContent = `Standings · ${s.asked} asked`;
+      // Six rows is what fits at room-scale type; the phone page has the rest.
+      $('lb').innerHTML = s.standings.slice(0, 6).map(row =>
+        `<div class="lb-row">
+          <span class="lb-rank num">${row.rank}</span>
+          <span class="lb-name">${row.player.team ? `<b>${row.player.team}</b>` : ''}${esc(row.player.name)}</span>
+          <span class="lb-pts num">${row.player.score}</span>
+        </div>`).join('');
+      showPane('pane-lb');
+    } else {
+      $('sub').textContent = 'CalGames 2026';
+      showPane('pane-join');
+    }
+    return;
+  }
+
+  const q = s.question;
+  $('sub').textContent = `${q.category ?? 'Question'} · ${s.questionIndex + 1} of ${s.questionCount}`;
+  $('qText').textContent = q.text;
+  const revealed = s.phase === 'revealed';
+  $('opts').innerHTML = q.options.map((text, i) => `
+    <div class="opt" ${revealed ? `data-right="${i === q.answer}"` : ''}>
+      <span class="opt-letter">${LETTERS[i]}</span>
+      <span class="opt-text">${esc(text)}</span>
+      <span class="opt-count num">${revealed ? q.distribution[i] ?? 0 : ''}</span>
+    </div>`).join('');
+  $('answersIn').textContent = revealed
+    ? `${q.answers} answered · points to the fastest`
+    : `${q.answers} answer${q.answers === 1 ? '' : 's'} in`;
+  $('fuse').style.visibility = revealed ? 'hidden' : 'visible';
+  showPane('pane-q');
+}
+
+// The fuse burns locally between snapshots. No server ticks needed.
+startTicker(() => {
+  const q = snap?.question;
+  if (!q || snap.phase !== 'open') return;
+  const total = q.closesAt - q.opensAt;
+  const left = Math.max(0, Math.min(1, (q.closesAt - Date.now()) / total));
+  $('fuseFill').style.width = `${left * 100}%`;
+});
+
+desk.on('trivia.updated', ev => paint(ev.payload));
+desk.on('ready', async () => {
+  try { paint(await fetch('/api/trivia').then(r => r.json())); } catch { /* soon */ }
+});
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+</script>
+</body>
+</html>

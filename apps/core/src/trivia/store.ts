@@ -1,0 +1,385 @@
+/**
+ * Trivia store. Host-authoritative lifecycle, server-authoritative answers.
+ *
+ * The one security property that matters: THE CORRECT ANSWER NEVER LEAVES THE
+ * SERVER BEFORE REVEAL. This is a gym full of teenagers who build robots for
+ * fun. Assume someone opens dev tools. `snapshot()` and `playView()` only
+ * carry `answer` once the question is revealed, and scoring happens here, not
+ * on the phone.
+ */
+
+import type { EventBus } from '../bus.ts';
+import {
+  award, pickQuestion, resolvePick, standings,
+  type Standing, type TriviaAnswer, type TriviaPhase, type TriviaPlayer, type TriviaQuestion,
+} from './model.ts';
+import { DEFAULT_QUESTIONS } from './questions.ts';
+
+const MAX_PLAYERS = 500;
+const MAX_NAME = 24;
+
+export interface TriviaSnapshot {
+  phase: TriviaPhase;
+  players: number;
+  questionIndex: number;
+  questionCount: number;
+  /** Null while idle. `answer` is null until revealed: that is the contract. */
+  question: {
+    text: string;
+    options: string[];
+    category: string | null;
+    answer: number | null;
+    opensAt: number;
+    closesAt: number;
+    /** Live answer counts per option. Counts don't leak which one is right. */
+    distribution: number[];
+    answers: number;
+  } | null;
+  standings: Standing[];
+  asked: number;
+  joinUrl: string | null;
+}
+
+/**
+ * An untrusted question, straight off a form or an HTTP body.
+ *
+ * Deliberately looser than `TriviaQuestion`. The whole job of `#validate` is to
+ * turn one of these into the strict shape, so typing the input as the output
+ * would mean the caller had already done the validating.
+ */
+export interface QuestionDraft {
+  id?: unknown;
+  text?: unknown;
+  options?: unknown;
+  answer?: unknown;
+  category?: unknown;
+}
+
+export interface PlayView {
+  phase: TriviaPhase;
+  players: number;
+  questionIndex: number;
+  questionCount: number;
+  question: {
+    text: string; options: string[]; category: string | null;
+    opensAt: number; closesAt: number;
+  } | null;
+  /** Post-reveal only. */
+  answer: number | null;
+  me: {
+    name: string;
+    score: number;
+    rank: number | null;
+    choice: number | null;
+    /** Post-reveal only: whether the locked choice was right. */
+    correct: boolean | null;
+  } | null;
+}
+
+export class TriviaStore {
+  #bus: EventBus;
+  #questions: TriviaQuestion[];
+  #players = new Map<string, TriviaPlayer>();
+  #phase: TriviaPhase = 'idle';
+  #index = 0;
+  #asked = 0;
+  #opensAt = 0;
+  #closesAt = 0;
+  #answers = new Map<string, TriviaAnswer>();
+  #closeTimer: NodeJS.Timeout | null = null;
+  #joinUrl: string | null = null;
+  #seq = 0;
+
+  constructor(bus: EventBus, questions: TriviaQuestion[] = DEFAULT_QUESTIONS) {
+    this.#bus = bus;
+    this.#questions = questions;
+  }
+
+  setJoinUrl(url: string): void { this.#joinUrl = url; }
+
+  #publish(): void {
+    this.#bus.emit({ type: 'trivia.updated', source: 'manual', payload: this.snapshot() });
+  }
+
+  #current(): TriviaQuestion | null { return this.#questions[this.#index] ?? null; }
+
+  // ---- players --------------------------------------------------------------
+
+  join(rawName: string, team?: number): { playerId: string; name: string } {
+    if (this.#players.size >= MAX_PLAYERS) throw new Error('Trivia is full: 500 players.');
+    const name = String(rawName ?? '').trim().slice(0, MAX_NAME);
+    if (!name) throw new Error('A name is required.');
+    const id = `p${(++this.#seq).toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    const player: TriviaPlayer = {
+      id, name,
+      ...(team && Number.isInteger(team) && team > 0 && team < 100000 ? { team } : {}),
+      score: 0, correct: 0, joinedAt: Date.now(),
+    };
+    this.#players.set(id, player);
+    this.#publish();
+    return { playerId: id, name };
+  }
+
+  // ---- host lifecycle -------------------------------------------------------
+
+  /** Open the current question for `seconds`. */
+  open(seconds = 20): TriviaSnapshot {
+    const q = this.#current();
+    if (!q) throw new Error('No more questions. Reset to run the bank again.');
+    if (this.#phase === 'open') throw new Error('A question is already open.');
+    this.#phase = 'open';
+    this.#answers.clear();
+    this.#opensAt = Date.now();
+    this.#closesAt = this.#opensAt + Math.max(5, Math.min(120, seconds)) * 1000;
+    // Publish once when the window shuts so overlays flip to "locked" together.
+    if (this.#closeTimer) clearTimeout(this.#closeTimer);
+    this.#closeTimer = setTimeout(() => this.#publish(), this.#closesAt - this.#opensAt);
+    this.#publish();
+    return this.snapshot();
+  }
+
+  /** Lock in one answer per player. Scored server-side at reveal. */
+  answer(playerId: string, choice: number): { locked: boolean } {
+    if (this.#phase !== 'open') throw new Error('No question is open.');
+    if (Date.now() > this.#closesAt) throw new Error('Time is up.');
+    const player = this.#players.get(playerId);
+    if (!player) throw new Error('Join first.');
+    const q = this.#current()!;
+    if (!Number.isInteger(choice) || choice < 0 || choice >= q.options.length) {
+      throw new Error('Bad choice.');
+    }
+    if (this.#answers.has(playerId)) return { locked: true };   // first answer stands
+    this.#answers.set(playerId, { choice, at: Date.now() });
+    this.#publish();
+    return { locked: true };
+  }
+
+  /**
+   * Queue a pick-the-winner round on the match that is loaded.
+   *
+   * It goes in front of the bank rather than into it, because the question is
+   * only meaningful until that match is scored. Opening it is the host's call:
+   * it wants the pre-match gap, not the middle of auto.
+   */
+  pick(): TriviaSnapshot {
+    if (this.#phase === 'open') throw new Error('Reveal the open question first.');
+    const name = this.#bus.state.match?.displayName;
+    if (!name) throw new Error('No match is loaded, so there is nothing to pick.');
+
+    const q = pickQuestion(name);
+    if (this.#questions.some(existing => existing.id === q.id)) {
+      throw new Error(`${name} has already been picked.`);
+    }
+    this.#questions.splice(this.#index, 0, q);
+    this.#phase = 'idle';
+    this.#publish();
+    return this.snapshot();
+  }
+
+  // ---- editing the bank -----------------------------------------------------
+
+  /**
+   * The bank as the host sees it, answers included.
+   *
+   * Safe because this is a desk-only endpoint: the phone view goes through
+   * `playView()`, which never carries an unrevealed answer. The host has to
+   * see answers to edit them.
+   */
+  bank(): (TriviaQuestion & { live: boolean })[] {
+    return this.#questions.map((q, i) => ({
+      ...q,
+      live: i === this.#index && this.#phase !== 'idle',
+    }));
+  }
+
+  /** Reject anything that would put a broken question on the big screen. */
+  #validate(draft: QuestionDraft): TriviaQuestion {
+    const text = String(draft.text ?? '').trim();
+    if (!text) throw new Error('The question needs text.');
+
+    const options = (Array.isArray(draft.options) ? draft.options : [])
+      .map(o => String(o ?? '').trim());
+    if (options.length !== 4 || options.some(o => !o)) {
+      throw new Error('Four answer options are required, and none can be blank.');
+    }
+
+    const answer = Number(draft.answer);
+    if (!Number.isInteger(answer) || answer < 0 || answer > 3) {
+      throw new Error('Mark which option is correct.');
+    }
+
+    return {
+      id: String(draft.id ?? `q${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`),
+      text,
+      options: options as [string, string, string, string],
+      answer: answer as 0 | 1 | 2 | 3,
+      ...(draft.category ? { category: String(draft.category).trim() } : {}),
+    };
+  }
+
+  /**
+   * The question at `index` is the one the room is looking at, from the moment
+   * it opens until the host moves on. Revealed still counts: the answer is on
+   * the big screen. Editing it there would change the answer under people who
+   * have already locked one in, so it is refused rather than allowed to
+   * corrupt a round.
+   */
+  #assertNotLive(index: number): void {
+    if (this.#phase !== 'idle' && index === this.#index) {
+      throw new Error('That question is on the screen right now. Move on with Next first.');
+    }
+  }
+
+  addQuestion(draft: QuestionDraft): TriviaSnapshot {
+    this.#questions.push(this.#validate(draft));
+    this.#publish();
+    return this.snapshot();
+  }
+
+  editQuestion(index: number, draft: QuestionDraft): TriviaSnapshot {
+    const existing = this.#questions[index];
+    if (!existing) throw new Error('No such question.');
+    this.#assertNotLive(index);
+    // Keep the id so a half-finished edit cannot silently fork a duplicate.
+    this.#questions[index] = this.#validate({ ...draft, id: existing.id });
+    this.#publish();
+    return this.snapshot();
+  }
+
+  removeQuestion(index: number): TriviaSnapshot {
+    if (!this.#questions[index]) throw new Error('No such question.');
+    this.#assertNotLive(index);
+    this.#questions.splice(index, 1);
+    // Removing something already asked would otherwise shift the cursor onto a
+    // question the room has just seen.
+    if (index < this.#index) this.#index--;
+    this.#index = Math.max(0, Math.min(this.#index, this.#questions.length));
+    this.#publish();
+    return this.snapshot();
+  }
+
+  /** Move one question up or down the running order. */
+  moveQuestion(index: number, delta: number): TriviaSnapshot {
+    const to = index + delta;
+    if (!this.#questions[index] || !this.#questions[to]) return this.snapshot();
+    this.#assertNotLive(index);
+    this.#assertNotLive(to);
+    const [q] = this.#questions.splice(index, 1);
+    this.#questions.splice(to, 0, q!);
+    this.#publish();
+    return this.snapshot();
+  }
+
+  reveal(): TriviaSnapshot {
+    if (this.#phase !== 'open') throw new Error('Nothing to reveal.');
+    const q = this.#current()!;
+
+    // A prediction round has no answer until the field produces one. Reading
+    // it here, at reveal, is also what makes it unleakable: there is nothing
+    // to leak while the question is open.
+    if (q.kind === 'match') {
+      const { red, blue } = this.#bus.state.score;
+      if (this.#bus.state.scorePostedAt === null) {
+        throw new Error('The score is not posted yet, so there is no winner to reveal.');
+      }
+      q.answer = resolvePick(red.total, blue.total);
+    }
+    for (const [playerId, a] of this.#answers) {
+      if (a.choice !== q.answer) continue;
+      const player = this.#players.get(playerId);
+      if (!player) continue;
+      player.score += award(this.#opensAt, this.#closesAt, a.at);
+      player.correct++;
+    }
+    this.#phase = 'revealed';
+    this.#asked++;
+    if (this.#closeTimer) { clearTimeout(this.#closeTimer); this.#closeTimer = null; }
+    this.#publish();
+    return this.snapshot();
+  }
+
+  /** Advance to the next question and drop back to idle (leaderboard beat). */
+  next(): TriviaSnapshot {
+    if (this.#phase === 'open') throw new Error('Reveal before moving on.');
+    if (this.#index < this.#questions.length - 1) this.#index++;
+    else this.#index = this.#questions.length;      // bank exhausted
+    this.#phase = 'idle';
+    this.#publish();
+    return this.snapshot();
+  }
+
+  /** Full reset: scores, progress, and players stay unless `hard`. */
+  reset(hard = false): TriviaSnapshot {
+    this.#phase = 'idle';
+    this.#index = 0;
+    this.#asked = 0;
+    this.#answers.clear();
+    if (this.#closeTimer) { clearTimeout(this.#closeTimer); this.#closeTimer = null; }
+    if (hard) this.#players.clear();
+    else for (const p of this.#players.values()) { p.score = 0; p.correct = 0; }
+    this.#publish();
+    return this.snapshot();
+  }
+
+  // ---- views ----------------------------------------------------------------
+
+  snapshot(): TriviaSnapshot {
+    const q = this.#current();
+    const revealed = this.#phase === 'revealed';
+    const distribution = q ? q.options.map((_, i) =>
+      [...this.#answers.values()].filter(a => a.choice === i).length) : [];
+    return {
+      phase: this.#phase,
+      players: this.#players.size,
+      questionIndex: this.#index,
+      questionCount: this.#questions.length,
+      question: q && this.#phase !== 'idle' ? {
+        text: q.text,
+        options: [...q.options],
+        category: q.category ?? null,
+        answer: revealed ? q.answer : null,     // the contract
+        opensAt: this.#opensAt,
+        closesAt: this.#closesAt,
+        distribution,
+        answers: this.#answers.size,
+      } : null,
+      standings: standings(this.#players.values()).slice(0, 10),
+      asked: this.#asked,
+      joinUrl: this.#joinUrl,
+    };
+  }
+
+  playView(playerId?: string): PlayView {
+    const snap = this.snapshot();
+    const player = playerId ? this.#players.get(playerId) : undefined;
+    const mine = playerId ? this.#answers.get(playerId) : undefined;
+    const q = this.#current();
+    const revealed = this.#phase === 'revealed';
+    let rank: number | null = null;
+    if (player) {
+      rank = standings(this.#players.values())
+        .find(s => s.player.id === player.id)?.rank ?? null;
+    }
+    return {
+      phase: snap.phase,
+      players: snap.players,
+      questionIndex: snap.questionIndex,
+      questionCount: snap.questionCount,
+      question: snap.question ? {
+        text: snap.question.text,
+        options: snap.question.options,
+        category: snap.question.category,
+        opensAt: snap.question.opensAt,
+        closesAt: snap.question.closesAt,
+      } : null,
+      answer: revealed && q ? q.answer : null,
+      me: player ? {
+        name: player.name,
+        score: player.score,
+        rank,
+        choice: mine?.choice ?? null,
+        correct: revealed && q && mine ? mine.choice === q.answer : null,
+      } : null,
+    };
+  }
+}

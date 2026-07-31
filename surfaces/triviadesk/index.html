@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en" data-surface="console">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trivia host · CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+body { font-size: var(--font-ui-body); }
+.wrap { max-width: 1000px; margin: 0 auto; padding: 18px 22px 60px; }
+header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+h1 { font-size: 24px; font-variation-settings: "wdth" 118; margin: 0; }
+.hint { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+.spacer { margin-left: auto; }
+.dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px;
+  background: var(--st-bad); display: inline-block; }
+.dot[data-up="true"] { background: var(--st-ok); }
+
+section { background: var(--surface-raised); padding: 16px 18px; margin-bottom: 14px;
+  clip-path: var(--chamfer); --ch: 14px; }
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.btn { font-size: 14px; padding: 9px 14px; }
+.btn--go { background: var(--accent); color: var(--text-on-accent); }
+label.in { font-family: var(--font-cond); font-weight: 600; font-size: 13px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }
+input { padding: 8px 10px; font-family: var(--font-display); font-size: 14px;
+  background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
+input:focus { outline: none; border-color: var(--accent); }
+
+.qbox { background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 10px;
+  padding: 14px 18px; margin-bottom: 12px; }
+.qbox .cat { font-family: var(--font-cond); font-weight: 600; font-size: 13px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+.qbox .text { font-size: 17px; font-weight: 600; margin: 6px 0 10px; }
+.optline { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center;
+  padding: 5px 0; border-bottom: 1px solid var(--surface-raised); font-size: 14px; }
+.optline b { font-family: var(--font-num); }
+/* --cg-green is too dark to reach 4.5:1 on this dark console surface;
+   --cg-green-hi is the console-safe bright variant. Color is paired with a
+   visible "Correct" tag below, not left to color alone. */
+.optline[data-right="true"] { color: var(--cg-green-hi); font-weight: 700; }
+.optline .tag-correct { margin-left: 8px; font-family: var(--font-cond);
+  font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.mono { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); }
+#standings div { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid var(--surface-sunken); font-size: 13px; }
+#status { font-size: 14px; min-height: 18px; }
+#status[data-err] { color: var(--st-bad); }
+/* ---- question bank editor ---- */
+#bank { display: flex; flex-direction: column; gap: 8px; }
+.qrow { display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: center;
+  background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 8px; padding: 10px 14px; }
+.qrow[data-live] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qn { font-family: var(--font-mono); font-size: 14px; color: var(--text-dim); }
+.qtext { font-size: 15px; line-height: 1.4; }
+.qans { color: var(--st-ok); font-size: 13px; margin-top: 2px; }
+.qcat { font-family: var(--font-cond); font-size: 13px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-dim); }
+.qacts { display: flex; gap: 6px; }
+.qacts button { font-size: 13px; padding: 6px 10px; }
+.qform { margin-top: 12px; display: flex; flex-direction: column; gap: 4px;
+  background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 10px; padding: 14px 16px; }
+.qform input[type="text"] { width: 100%; box-sizing: border-box; padding: 9px 12px;
+  font-size: 15px; }
+.qopt { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center;
+  margin-top: 6px; }
+.qopt input[type="radio"] { width: 20px; height: 20px; accent-color: var(--accent); }
+#editor summary { cursor: pointer; list-style: none; }
+#editor summary::-webkit-details-marker { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Trivia host</h1>
+    <span class="hint">Answers stay on the server until you reveal. Read the room, keep the beat.</span>
+    <span class="spacer"></span>
+    <span class="hint" aria-live="polite"><span class="dot" id="dot" aria-hidden="true"></span>
+      <span id="linkText">connecting</span> · <span id="who">0 players</span></span>
+  </header>
+
+  <section>
+    <h2>Now · <span id="progress" aria-live="polite">-</span></h2>
+    <div class="qbox">
+      <div class="cat" id="cat">&nbsp;</div>
+      <div class="text" id="qText" aria-live="polite">Waiting. Hit Open question to put the next one on the board.</div>
+      <div id="optLines" aria-live="polite"></div>
+    </div>
+    <div class="row">
+      <label class="in" for="secs">Seconds</label>
+      <input id="secs" type="number" min="5" max="120" value="20" style="width:70px">
+      <button class="btn btn--go" id="open">Open question</button>
+      <button class="btn" id="reveal">Reveal</button>
+      <button class="btn" id="next">Next</button>
+    </div>
+    <p class="hint">Flow: <b>Open question</b> while the overlay is up. Phones answer.
+      <b>Reveal</b> it, and read the right answer out loud. <b>Next</b> drops the overlay
+      to the leaderboard. The correct answer only appears here after Reveal, so nobody
+      can shoulder-surf it.</p>
+    <div class="row">
+      <button class="btn" id="pick">Queue "pick the winner"</button>
+      <span class="hint">Loads a prediction round on the match that is up. Open it before the
+        match, reveal it once the score is posted.</span>
+    </div>
+    <p id="status" aria-live="polite"></p>
+  </section>
+
+  <section>
+    <h2>Questions</h2>
+    <p class="hint">Edits save to <code>data/trivia.json</code>, so they survive a restart.
+      A question that is on the screen cannot be changed until you move on from it.</p>
+    <div id="bank"></div>
+
+    <details id="editor">
+      <summary class="btn" style="display:inline-block; margin-top:10px">Add a question</summary>
+      <div class="qform">
+        <label class="in" for="qeText">Question</label>
+        <input id="qeText" type="text" placeholder="What does the Energized ranking point need?">
+
+        <label class="in" for="qeCat">Category (optional)</label>
+        <input id="qeCat" type="text" placeholder="REBUILT">
+
+        <p class="hint" style="margin:10px 0 4px">Four options. Pick the correct one.</p>
+        <div class="qopt"><input type="radio" name="qAnswer" value="0" id="qea0" checked
+          aria-label="Option A is correct"><input id="qeo0" type="text" placeholder="Option A"></div>
+        <div class="qopt"><input type="radio" name="qAnswer" value="1" id="qea1"
+          aria-label="Option B is correct"><input id="qeo1" type="text" placeholder="Option B"></div>
+        <div class="qopt"><input type="radio" name="qAnswer" value="2" id="qea2"
+          aria-label="Option C is correct"><input id="qeo2" type="text" placeholder="Option C"></div>
+        <div class="qopt"><input type="radio" name="qAnswer" value="3" id="qea3"
+          aria-label="Option D is correct"><input id="qeo3" type="text" placeholder="Option D"></div>
+
+        <div class="row" style="margin-top:12px">
+          <button class="btn btn--go" id="qSave">Save question</button>
+          <button class="btn" id="qCancel">Cancel</button>
+          <span class="hint" id="qState"></span>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <h2>Standings</h2>
+    <div id="standings" aria-live="polite"><p class="hint">Nobody in yet. The overlay shows the join URL.</p></div>
+  </section>
+
+  <section>
+    <h2>Game</h2>
+    <div class="row">
+      <button class="btn" id="resetSoft">Reset scores</button>
+      <button class="btn" id="resetHard">Reset everything</button>
+      <span class="hint">Soft keeps the room; hard clears the players too.</span>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { mountNav } from '/shared/nav.js';
+mountNav('triviadesk');
+const $ = id => document.getElementById(id);
+const LETTERS = ['A', 'B', 'C', 'D'];
+const say = (m, err = false) => { $('status').textContent = m; $('status').toggleAttribute('data-err', err); };
+
+async function post(action, body) {
+  const res = await fetch(`/api/trivia/${action}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? 'Request failed');
+  paint(json);
+  return json;
+}
+
+function paint(s) {
+  if (!s) return;
+  $('dot').dataset.up = 'true';
+  $('linkText').textContent = 'linked';
+  $('who').textContent = `${s.players} player${s.players === 1 ? '' : 's'}`;
+  $('progress').textContent = s.questionIndex >= s.questionCount
+    ? `bank done · ${s.asked} asked`
+    : `question ${s.questionIndex + 1} of ${s.questionCount} · ${s.phase}`;
+
+  const q = s.question;
+  $('cat').textContent = q?.category ?? ' ';
+  $('qText').textContent = q?.text ??
+    (s.questionIndex >= s.questionCount
+      ? 'Bank exhausted. Reset to run it again.'
+      : 'Waiting. Hit Open question to put the next one on the board.');
+  // The right answer gets a bright accessible green AND a visible "Correct" tag,
+  // never color alone, so it still reads for colorblind hosts.
+  $('optLines').innerHTML = q ? q.options.map((text, i) => `
+    <div class="optline" ${q.answer !== null ? `data-right="${i === q.answer}"` : ''}>
+      <b>${LETTERS[i]}</b><span>${esc(text)}${i === q.answer ? ' <span class="tag-correct">Correct</span>' : ''}</span>
+      <span class="mono">${q.distribution?.[i] ?? 0}</span>
+    </div>`).join('') : '';
+
+  $('standings').innerHTML = s.standings.length
+    ? s.standings.map(row =>
+        `<div><span class="mono">${row.rank}</span>` +
+        `<span>${esc(row.player.name)}${row.player.team ? ' · ' + row.player.team : ''}</span>` +
+        `<span class="mono">${row.player.score} pts · ${row.player.correct} right</span></div>`).join('')
+    : '<p class="hint">Nobody in yet. The overlay shows the join URL.</p>';
+}
+
+$('open').onclick = () => post('open', { seconds: Number($('secs').value) || 20 })
+  .then(() => say('Question is live.')).catch(e => say(e.message, true));
+$('reveal').onclick = () => post('reveal')
+  .then(() => say('Revealed. Read it out.')).catch(e => say(e.message, true));
+$('next').onclick = () => post('next')
+  .then(() => say('On to the next one. Overlay shows standings.')).catch(e => say(e.message, true));
+$('pick').onclick = () => post('pick')
+  .then(() => say('Prediction round queued. Open it before the match starts.'))
+  .catch(e => say(e.message, true));
+$('resetSoft').onclick = () => post('reset')
+  .then(() => say('Scores reset.')).catch(e => say(e.message, true));
+$('resetHard').onclick = () => post('reset', { hard: true })
+  .then(() => say('Everything reset.')).catch(e => say(e.message, true));
+
+const load = async () => {
+  try { paint(await fetch('/api/trivia').then(r => r.json())); }
+  catch { $('dot').dataset.up = 'false'; $('linkText').textContent = 'reconnecting…'; }
+};
+setInterval(load, 2000);
+load();
+
+// ---- question bank ---------------------------------------------------------
+// Editing index is a plain number rather than an id: the store addresses
+// questions positionally, and the list is short enough that the two can never
+// drift within a single edit.
+let editing = null;
+
+async function loadBank() {
+  let bank;
+  try { bank = await fetch('/api/trivia/bank').then(r => r.json()); }
+  catch { return; }
+  if (!Array.isArray(bank)) return;
+
+  $('bank').innerHTML = bank.length ? bank.map((q, i) => `
+    <div class="qrow"${q.live ? ' data-live' : ''}>
+      <span class="qn">${i + 1}</span>
+      <div>
+        <div class="qtext">${esc(q.text)}</div>
+        <div class="qans">${esc(q.options[q.answer] ?? '')}${q.category ? ` · <span class="qcat">${esc(q.category)}</span>` : ''}</div>
+      </div>
+      <div class="qacts">
+        <button class="btn" data-act="up" data-i="${i}" aria-label="Move question ${i + 1} up"${i === 0 ? ' disabled' : ''}>&uarr;</button>
+        <button class="btn" data-act="down" data-i="${i}" aria-label="Move question ${i + 1} down"${i === bank.length - 1 ? ' disabled' : ''}>&darr;</button>
+        <button class="btn" data-act="edit" data-i="${i}" aria-label="Edit question ${i + 1}">Edit</button>
+        <button class="btn" data-act="del" data-i="${i}" aria-label="Delete question ${i + 1}">Delete</button>
+      </div>
+    </div>`).join('')
+    : '<p class="hint">No questions yet. Add one below.</p>';
+
+  for (const b of $('bank').querySelectorAll('button[data-act]')) {
+    b.onclick = () => bankAction(b.dataset.act, Number(b.dataset.i), bank);
+  }
+}
+
+async function bankAction(act, i, bank) {
+  try {
+    if (act === 'up' || act === 'down') {
+      await post(`question/move`, { index: i, delta: act === 'up' ? -1 : 1 });
+    } else if (act === 'del') {
+      // One question is one line of the show; a mis-click costs the host the
+      // wording they wrote, so it asks first.
+      if (!confirm(`Delete "${bank[i].text}"?`)) return;
+      await post('question/remove', { index: i });
+      say('Question deleted.');
+    } else if (act === 'edit') {
+      editing = i;
+      const q = bank[i];
+      $('qeText').value = q.text;
+      $('qeCat').value = q.category ?? '';
+      q.options.forEach((o, n) => { $(`qeo${n}`).value = o; });
+      $(`qea${q.answer}`).checked = true;
+      $('editor').open = true;
+      $('qState').textContent = `Editing question ${i + 1}.`;
+      $('qeText').focus();
+      return;
+    }
+    await loadBank();
+  } catch (e) { say(e.message, true); }
+}
+
+function clearForm() {
+  editing = null;
+  $('qeText').value = '';
+  $('qeCat').value = '';
+  for (let n = 0; n < 4; n++) $(`qeo${n}`).value = '';
+  $('qea0').checked = true;
+  $('qState').textContent = '';
+}
+
+$('qSave').onclick = async () => {
+  const draft = {
+    text: $('qeText').value,
+    category: $('qeCat').value,
+    options: [0, 1, 2, 3].map(n => $(`qeo${n}`).value),
+    answer: Number(document.querySelector('input[name="qAnswer"]:checked')?.value ?? 0),
+  };
+  try {
+    if (editing === null) await post('question/add', draft);
+    else await post('question/edit', { ...draft, index: editing });
+    say(editing === null ? 'Question added.' : 'Question saved.');
+    clearForm();
+    $('editor').open = false;
+    await loadBank();
+  } catch (e) {
+    // Validation errors come back from the store, so the message the host
+    // sees is the actual reason rather than a generic failure.
+    $('qState').textContent = e.message;
+  }
+};
+
+$('qCancel').onclick = () => { clearForm(); $('editor').open = false; };
+
+loadBank();
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+</script>
+</body>
+</html>
