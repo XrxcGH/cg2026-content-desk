@@ -57,6 +57,116 @@ test('the hold reason tells the operator what to do about it', () => {
   assert.match(reason, /release/i);
 });
 
+/**
+ * A bus whose state describes a just-scored practice match. The times are
+ * compressed so the cut falls under the QC floor and the item enters the
+ * queue held: a held item never kicks the worker, so these tests leave no
+ * backoff timers running behind them.
+ */
+const practiceBus = (): EventBus => {
+  const startedAt = 1_000_000;
+  return {
+    emit: () => {},
+    state: {
+      lastMatchStartedAt: startedAt,
+      matchEndedAt: startedAt + 2_000,
+      scorePostedAt: startedAt + 3_000,
+      match: { id: 'p3', displayName: 'Practice 3', red: [], blue: [] },
+      score: { red: { total: 12 }, blue: { total: 9 } },
+    },
+  } as unknown as EventBus;
+};
+
+test('the automatic path respects autoQueuePractice; a manual queue always works', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pubq-'));
+  const cfg = structuredClone(DEFAULTS);
+  cfg.publish.autoQueuePractice = false;
+
+  try {
+    const q = new PublishQueue(root, cfg, practiceBus(), null);
+    await q.load();
+
+    assert.equal(await q.queueMatch(), null,
+      'with the gate off, the automatic path must skip a practice match');
+
+    const item = await q.queueMatch({ manual: true });
+    assert.ok(item, 'an operator pressing the button always wins over the gate');
+    assert.equal(item.meta.title, 'Practice 3 - CalGames');
+    assert.equal(item.matchKey, null, 'TBA has no keys for practice matches');
+
+    assert.equal(await q.queueMatch({ manual: true }), null,
+      'the dedupe still applies to manual queues');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('practice matches auto-queue by default', async () => {
+  // The gate ships open: anything that happens at the event should be able
+  // to go online without someone remembering a button.
+  assert.equal(DEFAULTS.publish.autoQueuePractice, true);
+  assert.equal(DEFAULTS.publish.autoQueueArcade, true);
+
+  const root = await mkdtemp(join(tmpdir(), 'pubq-'));
+  try {
+    const q = new PublishQueue(root, structuredClone(DEFAULTS), practiceBus(), null);
+    await q.load();
+    const item = await q.queueMatch();
+    assert.equal(item?.label, 'Practice 3');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a keyless match skips TBA entirely; a segment still links as event media', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pubq-'));
+  const cfg = structuredClone(DEFAULTS);
+  cfg.event.key = '2026cacg';
+  cfg.tba = { authId: 'id', authSecret: 'secret', readKey: '' };
+  cfg.publish.publicAfterLink = false;        // keep YouTube out of this test
+  const bus = { emit: () => {} } as unknown as EventBus;
+
+  const calls: string[] = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL) => {
+    calls.push(new URL(String(url)).pathname);
+    return new Response('{}', { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const q = new PublishQueue(root, cfg, bus, null);
+    await q.load();
+    // Added held so the worker stays out until both are staged as uploaded,
+    // which is exactly what a restart after a crash mid-publish would find.
+    const practice = await q.add({
+      kind: 'match', label: 'Practice 3', sourceId: 'program',
+      ranges: [{ fromMs: 0, toMs: 1 }], matchKey: null,
+      meta: { title: 'Practice 3 - CalGames', description: '' },
+    }, 'QC hold: test');
+    const segment = await q.add({
+      kind: 'segment', label: 'Awards Ceremony', sourceId: 'program',
+      ranges: [{ fromMs: 0, toMs: 1 }], matchKey: null,
+      meta: { title: 'Awards Ceremony - CalGames', description: '' },
+    }, 'QC hold: test');
+    for (const item of [practice, segment]) {
+      item.state = 'uploaded';
+      item.videoId = `yt-${item.kind}`;
+    }
+    q.kick();
+    await new Promise(r => setTimeout(r, 600));
+
+    assert.equal(practice.state, 'done', 'the missing TBA link must not strand the item');
+    assert.equal(segment.state, 'done');
+    // Exactly one TBA request: the segment's media/add. A keyless match must
+    // not fall through to media/add, which would file a scrimmage alongside
+    // the ceremonies.
+    assert.deepEqual(calls, ['/api/trusted/v1/event/2026cacg/media/add']);
+  } finally {
+    globalThis.fetch = orig;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('release marks items released and the flag survives a restart', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pubq-'));
   // enabled=false keeps the worker inert, so nothing touches the network.

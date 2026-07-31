@@ -26,6 +26,19 @@ export interface ObsOpts {
   onStatus?: (connected: boolean, detail: string) => void;
 }
 
+/** GetStreamStatus response, the fields the desk actually reads. */
+export interface StreamStatus {
+  outputActive: boolean;
+  outputReconnecting: boolean;
+  /** "00:14:03.222", straight from OBS. */
+  outputTimecode: string;
+  outputDuration: number;
+  outputCongestion: number;
+  outputBytes: number;
+  outputSkippedFrames: number;
+  outputTotalFrames: number;
+}
+
 export class ObsClient {
   #opts: ObsOpts;
   #ws: WebSocket | null = null;
@@ -124,6 +137,19 @@ export class ObsClient {
 
   setScene(sceneName: string): Promise<unknown> {
     return this.request('SetCurrentProgramScene', { sceneName });
+  }
+
+  /** Start the configured stream output (OBS holds the RTMP URL and key). */
+  startStream(): Promise<unknown> {
+    return this.request('StartStream');
+  }
+
+  stopStream(): Promise<unknown> {
+    return this.request('StopStream');
+  }
+
+  streamStatus(): Promise<StreamStatus> {
+    return this.request<StreamStatus>('GetStreamStatus');
   }
 
   /**

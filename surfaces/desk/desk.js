@@ -209,6 +209,14 @@ addEventListener('keydown', e => {
 // operator marks both ends by hand.
 let segFrom = null;
 
+// "Other..." reveals a title field: the API takes any unlisted string as a
+// literal title, which is how a single award gets its own video.
+$('segKind').onchange = () => {
+  const other = $('segKind').value === 'other';
+  $('segOtherRow').style.display = other ? 'flex' : 'none';
+  if (other) $('segTitle').focus();
+};
+
 $('segStart').onclick = () => {
   segFrom = Date.now();
   $('segQueue').disabled = false;
@@ -217,7 +225,14 @@ $('segStart').onclick = () => {
 
 $('segQueue').onclick = async () => {
   if (segFrom === null) return;
-  const segment = $('segKind').value;
+  const kind = $('segKind').value;
+  const segment = kind === 'other' ? $('segTitle').value.trim() : kind;
+  if (!segment) {
+    // Refuse rather than publish a video literally titled "other".
+    $('segState').textContent = 'Type a title first: it becomes the video title.';
+    $('segTitle').focus();
+    return;
+  }
   $('segQueue').disabled = true;
   try {
     const res = await fetch('/api/publish/segment', {
@@ -236,6 +251,88 @@ $('segQueue').onclick = async () => {
     $('segQueue').disabled = false;
   }
 };
+
+// ---- stream ----------------------------------------------------------------
+// OBS owns the RTMP URL and the key; these controls only ask it to go. OBS
+// liveness is not on the event bus, so status comes from a modest poll: five
+// seconds of staleness on a timecode readout costs nothing.
+
+const streamSay = (msg, isErr = false) => {
+  $('streamMsg').textContent = msg;
+  $('streamMsg').toggleAttribute('data-err', isErr);
+};
+
+function paintStream(s) {
+  // Dead integrations disable the buttons with the reason on the status
+  // line, never silently: the operator must know WHY Start is grayed out.
+  const usable = !!s?.connected;
+  $('streamStart').disabled = !usable;
+  $('streamStop').disabled = !usable;
+  let line;
+  if (!s) line = 'Stream status is unreachable. Check the link dot above.';
+  else if (!s.available) line = 'No OBS control: launch the desk with --obs to run the stream from here.';
+  else if (!s.connected) line = 'OBS is not connected. Start OBS on this machine; the desk retries on its own.';
+  else if (s.streaming === null) line = 'OBS is connected but did not answer the status probe.';
+  else if (s.streaming) {
+    // OBS timecodes carry milliseconds; nobody reads a stream uptime that closely.
+    const tc = s.timecode ? ` · ${s.timecode.split('.')[0]}` : '';
+    line = `Streaming${tc}${s.reconnecting ? ' · reconnecting to the ingest' : ''}`;
+  } else line = 'OBS connected · not streaming.';
+  $('streamState').textContent = line;
+}
+
+async function pollStream() {
+  let s = null;
+  try {
+    const res = await fetch('/api/stream');
+    if (res.ok) s = await res.json();
+  } catch { /* transient; paintStream(null) reports the miss */ }
+  paintStream(s);
+}
+
+async function streamPost(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    ...(body ? {
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    } : {}),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+  return json;
+}
+
+// Ask first, the same idiom as the trivia console's delete: a fat-fingered
+// Stop ends the broadcast for every viewer, and Start goes public just as
+// abruptly. The server is idempotent, so a re-press after a confirm is safe.
+$('streamStart').onclick = async () => {
+  if (!confirm('Start the stream? OBS goes live to the public feed.')) return;
+  try { await streamPost('/api/stream/start'); streamSay('Stream is up.'); }
+  catch (err) { streamSay(err.message, true); }
+  pollStream();
+};
+$('streamStop').onclick = async () => {
+  if (!confirm('Stop the live stream? It ends for every viewer.')) return;
+  try { await streamPost('/api/stream/stop'); streamSay('Stream stopped.'); }
+  catch (err) { streamSay(err.message, true); }
+  pollStream();
+};
+
+$('streamTitle').onclick = async () => {
+  // A blank field means day 1; the server rejects anything not a positive
+  // whole number with a sentence worth showing verbatim.
+  const day = Number($('streamDay').value) || 1;
+  try {
+    const r = await streamPost('/api/stream/title', { day });
+    streamSay(`YouTube broadcast is now "${r.title}".`);
+  } catch (err) { streamSay(err.message, true); }
+};
+
+pollStream();
+setInterval(() => { if (!document.hidden) pollStream(); }, 5000);
+// Repaint the moment the page is visible again rather than up to 5s later.
+addEventListener('visibilitychange', () => { if (!document.hidden) pollStream(); });
 
 // ---- day VOD chapters ------------------------------------------------------
 $('chapMake').onclick = async () => {

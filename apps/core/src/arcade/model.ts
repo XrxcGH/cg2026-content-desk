@@ -41,6 +41,12 @@ export interface ArcadeSet {
   game: ArcadeGame;
   /** "Winners Semifinal", "Grand Final", "Race 3 of 4". */
   round: string;
+  /**
+   * Wall clock of startSet, epoch ms. The publish auto-queue cuts the set's
+   * video from here to set_end. Optional because sets recorded before the
+   * field existed (replayed event logs) lack it; overlays never read it.
+   */
+  startedAt?: number;
   /** 2 for a versus set; 3-4 for split-screen free-for-alls (MK runs 4-up). */
   players: ArcadePlayer[];
   /** Index-aligned with `players`. */

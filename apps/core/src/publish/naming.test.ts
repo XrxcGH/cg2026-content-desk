@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { description, identify, streamTitle, videoTitle } from './naming.ts';
+import { arcadeLabel, description, identify, streamTitle, videoTitle } from './naming.ts';
 
 test('qualification naming matches the official channel', () => {
   for (const input of ['Qualification 1', 'Qual 1', 'Q1', 'qm1', 'qualification #1']) {
@@ -31,8 +31,21 @@ test('finals and the tiebreaker', () => {
   assert.deepEqual(identify('Final Two'), { name: 'Final 2', key: 'f1m2' });
 });
 
-test('practice matches are never publishable', () => {
-  assert.equal(identify('Practice 3').key, null);
+test('practice matches title normally but carry no TBA key', () => {
+  // TBA has no keys for practice matches: the null key tells the queue to
+  // skip the TBA link, not to refuse the video.
+  assert.deepEqual(identify('Practice 3'), { name: 'Practice 3', key: null });
+  assert.equal(videoTitle(identify('Practice 3').name, 'CalGames'), 'Practice 3 - CalGames');
+});
+
+test('arcade set labels read like a bracket, with the game in parentheses', () => {
+  assert.equal(arcadeLabel('Winners Semifinal', 'smash'), 'Arcade Winners Semifinal (Smash)');
+  assert.equal(arcadeLabel('Grand Final', 'mariokart'), 'Arcade Grand Final (Mario Kart)');
+  assert.equal(arcadeLabel('Party 2', 'pacman'), 'Arcade Party 2 (Pac-Man)');
+  // 'other' is whatever a team brings on Saturday: no name to print, so the
+  // round stands alone rather than showing "(other)" on a video title.
+  assert.equal(arcadeLabel('Showmatch', 'other'), 'Arcade Showmatch');
+  assert.equal(arcadeLabel('  ', 'smash'), 'Arcade Set (Smash)');
 });
 
 test('titles carry the event suffix', () => {

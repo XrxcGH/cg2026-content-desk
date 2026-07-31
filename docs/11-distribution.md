@@ -2,12 +2,40 @@
 
 Four requirements:
 
-1. Auto-record every match, upload it to YouTube, and link it on The Blue Alliance
+1. Auto-record every match, practice included, upload it to YouTube, and link it on The Blue
+   Alliance where a match key exists
 2. Matches that got strategy analysis (some, not all): record and upload separately
-3. Between-match content (trivia, video game comps, human player matches): optional record/upload
+3. Between-match content (the arcade tournament, exhibition and mentor matches, interviews):
+   record and upload, automatically wherever the desk can see the bounds itself
 4. Live-stream the whole display to YouTube **and** TBA in real time on competition days
 
 All four are the same machine with different bounds and different metadata. That's the design.
+The standing order behind all four: anything that happens during the competition gets recorded
+and can go online, manually or automatically, and automatic is the default.
+
+---
+
+## What gets covered
+
+Everything at the event maps to one of three queueing paths: fully automatic, gated-automatic,
+or two taps on the desk console. Nothing needs a video editor.
+
+| At the event | Queued | Path |
+| --- | --- | --- |
+| Qualification and playoff matches | automatically, when the score posts | YouTube + TBA `match_videos/add` |
+| Practice matches | automatically (`publish.autoQueuePractice`, default on); queueing one by hand always works | YouTube only: TBA has no practice keys |
+| The arcade tournament | automatically, each set when it ends (`publish.autoQueueArcade`, default on) | YouTube + TBA `media/add` |
+| Analysis desk sections | automatically, detected from telestrator strokes | YouTube + TBA `media/add` |
+| Team interviews, exhibition matches, mentor matches | two taps: a pre-named segment id, mark in, mark out | YouTube + TBA `media/add` |
+| Ceremonies and alliance selection | same two taps, same pre-named ids | YouTube + TBA `media/add` |
+| Anything else | same two taps with a typed literal title (`FIRST Impact Award - CalGames`) | YouTube + TBA `media/add` |
+
+Queueing is automatic or two taps; **uploading is a separate decision**. Nothing leaves the
+building until `publish.enabled` is true and the YouTube credentials are in `config.json`, and
+in the default `deferred` mode the queue additionally waits for the end-of-day release
+(`POST /api/publish/release`). An implausible cut parks in `held` either way (see QC hold
+below). So the safe posture costs nothing: everything queues all weekend, and one switch plus
+one release decides what actually goes up.
 
 ---
 
@@ -136,6 +164,7 @@ competes with an upload.**
                              (webcast list)     │
                                                 ▼
    match.start / match.score_posted ──▶  Segment Cutter
+   arcade.set_end (finished arcade sets)       │
    desk "mark analysis" / "mark in-out"        │
                                                ▼
                                      ┌──────────────────┐
@@ -160,6 +189,43 @@ built. So the recorder captures the composited program output *in addition to* t
 
 - **Program record**: archive, match videos, uploads
 - **ISO camera records**: replay source ([04](04-replay-and-telestrator.md))
+
+### The camera list: `recording.sources` in config.json
+
+What the rolling recorder captures when the desk is launched with `--record` comes from
+`recording.sources` in `config.json`. One entry per feed: `id`, `label`, a `role` of
+`program` (the composited broadcast, the only feed uploads are cut from) or `iso` (a raw
+camera, replay source only), and `input`, the raw ffmpeg input arguments as an array. Two
+worked entries, a local capture device and a network pull:
+
+```json
+"recording": {
+  "sources": [
+    { "id": "program", "label": "Program feed", "role": "program",
+      "input": ["-f", "dshow", "-rtbufsize", "256M", "-i", "video=OBS Virtual Camera"] },
+    { "id": "wide", "label": "Field wide", "role": "iso",
+      "input": ["-i", "srt://10.0.100.61:9000?mode=caller&latency=200"] }
+  ]
+}
+```
+
+The first captures a Windows DirectShow device; pointing it at OBS's virtual camera makes the
+recording the finished picture, overlay and all. The second pulls SRT from an encoder box on
+the production network; an RTMP pull is the same shape (`["-i", "rtmp://10.0.100.61/live/wide"]`).
+Because `input` is passed to ffmpeg verbatim, anything ffmpeg can open is a valid source.
+An `"enabled": false` on an entry parks it without deleting it.
+
+Two deliberate safety properties, both because `config.json` is edited by volunteers:
+
+- The list is validated entry by entry at boot. A malformed entry (a typo'd role, a string
+  where the input array belongs) is **skipped with a console warning naming the bad field**,
+  never a crash, because the show must run even when recording can't.
+- The list is absent from the API-visible, redacted config: an ffmpeg input arg can embed an
+  IP-camera credential (`rtsp://user:pass@...`), and that config object reaches browsers.
+
+`--test-sources` still exists for rehearsal: it ignores the list and records synthetic color
+bars (one program, one ISO) so the whole cut-queue-upload pipeline runs with no cameras
+plugged in.
 
 ### Cut bounds come from the event log, and a match video is two parts, not one
 
@@ -197,9 +263,9 @@ to a single continuous 187s cut, and a match whose score is never posted falls b
 
 | Content type | In | Out | Destination |
 | --- | --- | --- | --- |
-| **match** | two-part cut above | | YouTube + `match_videos/add` |
+| **match** | two-part cut above | | YouTube + `match_videos/add`; practice matches upload without the TBA step |
 | **analysis** | first `telestrator.stroke` - 20s | last stroke + 15s | YouTube + `media/add` |
-| **segment** | desk marks in | desk marks out | YouTube + `media/add`, optional |
+| **segment** | desk marks in, or `set.startedAt` for an arcade set | desk marks out, or the clock at `set_end` | YouTube + `media/add` |
 
 Analysis segments are detected automatically. The telestrator already emits one durable
 `telestrator.stroke` event per finished stroke, so "did this match get analysis?" is a query, not a
@@ -215,8 +281,9 @@ ceremony never see their team's award. `queueSegment()` in `apps/core/src/publis
 these as their own `segment` queue items: the operator marks in and out (`POST /api/publish/segment`
 with `fromMs`/`toMs`), and the clip is cut from the program recording like any other.
 
-Four segment ids come pre-named in `apps/core/src/publish/naming.ts`'s `SEGMENTS` map, so the video
-title matches the official-channel style without anyone typing it by hand:
+Nine segment ids come pre-named in `apps/core/src/publish/naming.ts`'s `SEGMENTS` map, the
+one-tap set on the desk console, so the video title matches the official-channel style without
+anyone typing it by hand:
 
 | Id | Title |
 | --- | --- |
@@ -224,10 +291,31 @@ title matches the official-channel style without anyone typing it by hand:
 | `awards` | Awards Ceremony |
 | `opening` | Opening Ceremony |
 | `closing` | Closing Ceremony |
+| `analysis` | Analysis Desk |
+| `interview` | Team Interview |
+| `exhibition` | Exhibition Match |
+| `mentors` | Mentor Match |
+| `arcade` | Arcade Tournament |
 
 Anything else passed as the segment is taken as a literal title, which is how a single award gets
 its own video (`FIRST Impact Award - CalGames`). None of these carry a TBA match key, so they link
 to the event as media (`media/add`) rather than to a match.
+
+### The arcade tournament queues itself
+
+A finished set becomes a `segment` item automatically at `arcade.set_end`, gated by
+`publish.autoQueueArcade` (default on) and, like the match auto-queue, suppressed in `--demo`
+mode so a rehearsal never queues fake uploads. The bounds are the set's own `startedAt`
+(stamped when the arcade console starts it) to the wall clock at `set_end`; a set replayed
+from a log recorded before `startedAt` existed has no honest in-point, so it is left to a
+manual segment instead.
+
+Titles come from `arcadeLabel()` in `naming.ts`: `Arcade {round} ({Game})`, so
+`Arcade Winners Semifinal (Smash) - CalGames` once the event suffix is on. The game map covers
+the planned lineup (Smash, Mario Kart, Pac-Man, Tetris); whatever a team brings as `other` has
+no name we can predict, so those sets are labeled by round alone, and a blank round falls back
+to `Set` (`Arcade Set (Smash)`). A set shorter than the 30-second segment QC floor queues
+`held` rather than publishing, which is the right answer for a double-tapped set end.
 
 ### QC hold: an implausible cut never publishes quietly
 
@@ -264,10 +352,17 @@ So CalGames content sits alongside official uploads instead of looking homemade.
 | `Match 1 (R1)` | `Match 1 (R1) - CalGames` | `sf1m1` |
 | `Final 1` | `Final 1 - CalGames` | `f1m1` |
 | `Final 3`, `Final Tiebreaker` | `Final Tiebreaker - CalGames` | `f1m3` |
-| `Practice 3` | *never published* | |
+| `Practice 3` | `Practice 3 - CalGames` | *(none: TBA has no practice keys)* |
 
 Playoff titles carry the `(Rn)` round suffix from the 13-match double-elimination bracket, and a
 third final **is** the tiebreaker however the field system spells it.
+
+Practice matches publish like anything else, just without the TBA link: TBA has no keys for
+practice, so the queue skips the TBA step entirely (no `match_videos/add`, no `media/add`
+fallthrough), logs that once, and the item completes to `done` on upload. Only the *automatic*
+path is gated, by `publish.autoQueuePractice` (default on), because Friday load-in runs dozens
+of practice matches and an event may not want every one on the channel. A manual queue from
+the desk always goes through: an operator pressing the button knows what they asked for.
 
 Descriptions follow the official layout:
 
@@ -298,10 +393,23 @@ link never leaves an orphan video with no context.
 
 - One OBS/vMix output to YouTube RTMP (`rtmp://a.rtmp.youtube.com/live2`, stream key from YouTube
   Studio).
-- On stream start, register the YouTube URL on TBA: `POST info/update` with the full `webcasts`
-  list. At end of day, send the list without it. Nothing fires this automatically on stream
-  start or stop today, so it belongs on the day-of checklist rather than in anyone's mental
-  model of "the desk handles it".
+- The desk starts and stops that output itself when launched with `--obs`:
+  `POST /api/stream/start` and `POST /api/stream/stop` (PIN-gated like every control, 409 when
+  OBS is not connected, and idempotent, so starting an already-live stream is just a 200).
+  `GET /api/stream` reports whether OBS is reachable, whether it is streaming, and the running
+  timecode; when the probe fails mid-restart it answers `streaming: null`, a "don't know"
+  rather than a guess.
+- On a successful start the desk re-registers `stream.webcastUrl` on TBA GameDay exactly as
+  boot does: `POST info/update` with the full `webcasts` list, fire-and-forget so a TBA hiccup
+  never reports the stream start itself as failed. It needs `publish.enabled` and the URL set,
+  and repeating it is harmless because the TBA list replaces itself.
+- The desk also titles the active broadcast for the day: `POST /api/stream/title` with
+  `{ "day": 2 }` (day defaults to 1) renames it `2026 CalGames - Day 2`, and answers 409 when
+  YouTube credentials are missing or nothing is live.
+- What the desk still cannot do stays on the day-of checklist: putting the stream key into OBS
+  and YouTube Studio (OBS owns the RTMP URL and key; the desk only asks it to go), the backup
+  key and fallback URL below, and pulling the webcast from the TBA list at end of day, which
+  is still a manual `info/update` send without it.
 - **Local recording never stops**, independent of the stream. This is the second reason to prefer
   rolling record over a replay buffer, and the direct lesson from the CalGames 2025 power outage
   that killed the Sunday stream and forced a restart on a new URL. If the stream dies, the archive

@@ -74,6 +74,9 @@ export class ArcadeStore {
       id: `s${Date.now().toString(36)}`,
       game: init.game,
       round: init.round,
+      // Wall clock, so the publish auto-queue can cut the set's video from
+      // start to set_end without anyone marking bounds by hand.
+      startedAt: Date.now(),
       players: init.players,
       scores: init.players.map(() => 0),
       bestOf,
@@ -109,6 +112,10 @@ export class ArcadeStore {
 
   endSet(): void {
     if (!this.#set) return;
+    // A versus set that already auto-completed at the win threshold has
+    // announced its set_end; the operator's confirming tap must not announce
+    // it again, or every set_end subscriber (the publish auto-queue) doubles.
+    if (this.#set.state === 'complete') return;
     this.#set.state = 'complete';
     this.#publish('arcade.set_end');
   }

@@ -18,6 +18,7 @@ import { cookie, needsAuth, safeEqual } from './access.ts';
 import { chapterText, chaptersFrom } from './chapters.ts';
 import { matchCut, type ClipStore, type Range } from './clips.ts';
 import { markersSince } from './markers.ts';
+import { streamTitle } from './publish/naming.ts';
 import type { PublishQueue } from './publish/queue.ts';
 import { redacted, publishReadiness, type Config } from './config.ts';
 import type { CheesyAdapter } from './ingest/cheesy/adapter.ts';
@@ -563,6 +564,82 @@ export function startServer(opts: ServerOpts) {
         return json(res, 404, { error: `Unknown cue action "${action}"` });
       }
 
+      // ---- live stream ----------------------------------------------------
+      // OBS owns the RTMP URL and key; the desk only asks it to go. All of
+      // these are PIN-gated by the access allowlist's default.
+      if (path === '/api/stream') {
+        const connected = obs?.connected ?? false;
+        let status = null;
+        // A status probe failing (OBS mid-restart) is a "don't know", not an
+        // error page: streaming stays null and the panel says so.
+        if (connected) { try { status = await obs!.streamStatus(); } catch { /* fall through */ } }
+        return json(res, 200, {
+          available: !!obs,
+          connected,
+          streaming: status?.outputActive ?? null,
+          reconnecting: status?.outputReconnecting ?? null,
+          timecode: status?.outputTimecode ?? null,
+        });
+      }
+
+      if ((path === '/api/stream/start' || path === '/api/stream/stop') && req.method === 'POST') {
+        if (!obs?.connected) {
+          return json(res, 409, { error: 'OBS is not connected. Start OBS on this machine, ' +
+            'then launch the desk with --obs (and OBS_PASSWORD if OBS has one set).' });
+        }
+        try {
+          const starting = path.endsWith('/start');
+          const status = await obs.streamStatus();
+          // Pressing Start on an already-live stream is a normal Saturday
+          // event, not an error; same for Stop on a stopped one.
+          if (starting && !status.outputActive) await obs.startStream();
+          if (!starting && status.outputActive) await obs.stopStream();
+
+          if (starting) {
+            // Re-register the webcast list on TBA GameDay, exactly as boot
+            // does: the list replaces itself on the TBA side, so repeating it
+            // is idempotent. Fire-and-forget, because a TBA hiccup must not
+            // report the stream start itself as failed.
+            if (publish && config?.publish.enabled && config.stream.webcastUrl) {
+              publish.registerWebcasts([config.stream.webcastUrl])
+                .then(r => { if (r !== null) console.log('[publish] webcast registered on TBA GameDay'); })
+                .catch(err => console.warn('[publish] webcast registration failed:', (err as Error).message));
+            }
+          }
+          return json(res, 200, { ok: true, streaming: starting });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
+      // Retitle the active YouTube broadcast for the day: "2026 CalGames - Day 2".
+      if (path === '/api/stream/title' && req.method === 'POST') {
+        if (!publish || !config) return json(res, 503, { error: 'Publishing is not available.' });
+        if (!publish.ready.youtube) {
+          return json(res, 409, { error: 'YouTube credentials are not configured (see config.json), ' +
+            'so the broadcast title cannot be changed from here.' });
+        }
+        try {
+          const raw = await readBody(req, 4 * 1024);
+          const body = raw.length
+            ? JSON.parse(raw.toString('utf8')) as { day?: number }
+            : {};
+          const day = body.day ?? 1;
+          if (!Number.isInteger(day) || day < 1) {
+            return json(res, 400, { error: 'day must be a positive whole number' });
+          }
+          const title = streamTitle(config.event.year, config.event.name, day);
+          const result = await publish.setLiveTitle(title);
+          if (!result) {
+            return json(res, 409, { error: 'No active live broadcast was found on the channel. ' +
+              'Start the stream, wait for YouTube to show it live, then try again.' });
+          }
+          return json(res, 200, { ok: true, id: result.id, title: result.title });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
       // ---- field bridge ---------------------------------------------------
       // docs/10 promises the FTA a printable list of every request we make.
       // This is that list, plus the allowlist it is constrained to.
@@ -609,7 +686,9 @@ export function startServer(opts: ServerOpts) {
         const action = path.slice('/api/publish/'.length);
         try {
           if (action === 'match') {
-            const item = await publish.queueMatch();
+            // manual: an operator pressed the button, so the practice-match
+            // auto-queue gate does not apply.
+            const item = await publish.queueMatch({ manual: true });
             return json(res, item ? 200 : 409,
               item ?? { error: 'Nothing to queue: no match has started, or it is already queued.' });
           }

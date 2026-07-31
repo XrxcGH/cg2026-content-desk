@@ -136,8 +136,9 @@ The index page at `/` lists every surface with a one-line description. Start the
 OBS, mentioned throughout, is the streaming program the broadcast runs in; a "Browser Source"
 is OBS rendering one of these pages as a video layer.
 
-Recording and replay need ffmpeg. Add `--record --test-sources` to exercise the whole pipeline
-without cameras:
+Recording and replay need ffmpeg. Real cameras are listed under `recording.sources` in
+`config.json` ([docs/11](docs/11-distribution.md)); add `--record --test-sources` to exercise
+the whole pipeline without any:
 
 ```powershell
 npm start -- --demo --record --test-sources
@@ -304,12 +305,16 @@ Note the `-Profile Private` above: don't open the port on a public profile you d
 
 Copy [config.example.json](config.example.json) to `config.json` (gitignored because it holds
 credentials) and fill it in. `npm run auth:youtube` walks through getting a YouTube refresh token.
-Nothing uploads until `publish.enabled` is true, and the default `deferred` mode queues during the
-event and uploads afterwards so nothing competes with the live stream for the venue uplink.
+Everything at the event queues itself: matches when the score posts, practice included
+(`publish.autoQueuePractice` turns just the automatic practice path off; TBA gets no link
+because it has no practice keys), arcade sets when they end, and everything else as a two-tap
+segment from the desk. Nothing uploads until `publish.enabled` is true, and the default
+`deferred` mode queues during the event and uploads afterwards so nothing competes with the
+live stream for the venue uplink.
 
 Titles follow the official FIRST channel convention: `Qualification 42 - CalGames`,
-`Match 5 (R2) - CalGames`, `Final Tiebreaker - CalGames`. Details in
-[docs/11-distribution.md](docs/11-distribution.md).
+`Practice 3 - CalGames`, `Match 5 (R2) - CalGames`, `Arcade Winners Semifinal (Smash) - CalGames`.
+Details in [docs/11-distribution.md](docs/11-distribution.md).
 
 ## Try the standalone prototype
 

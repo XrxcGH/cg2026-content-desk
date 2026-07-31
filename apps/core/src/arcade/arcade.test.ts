@@ -103,6 +103,37 @@ test('a malformed race result is refused before it can poison the standings', ()
     /id and a name/);
 });
 
+test('a set carries its start time from start through score to end', () => {
+  const store = new ArcadeStore(new EventBus());
+  const players = [{ id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }];
+  const before = Date.now();
+  const set = store.startSet({ game: 'smash', round: 'Winners Semifinal', players });
+
+  // The publish auto-queue cuts the set's video from startedAt to set_end,
+  // so a restamp anywhere along the way would cut the wrong footage.
+  assert.ok(typeof set.startedAt === 'number' && set.startedAt >= before,
+    'startSet stamps the wall clock');
+  const startedAt = set.startedAt;
+  store.score(0, 1);
+  assert.equal(store.snapshot.set?.startedAt, startedAt, 'scoring must not restamp the set');
+  store.endSet();
+  assert.equal(store.snapshot.set?.startedAt, startedAt, 'the end still carries the start');
+});
+
+test('set_end announces once, even when the operator confirms an auto-complete', () => {
+  const bus = new EventBus();
+  let ends = 0;
+  bus.subscribe(ev => { if (ev.type === 'arcade.set_end') ends++; });
+
+  const store = new ArcadeStore(bus);
+  const players = [{ id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }];
+  store.startSet({ game: 'smash', round: 'Grand Final', players });
+  store.score(0, 1);
+  store.score(0, 1);              // Bo3 decided: set_end fires here
+  store.endSet();                 // the operator's confirming tap
+  assert.equal(ends, 1, 'a doubled set_end would queue the same video twice');
+});
+
 test('a best-of-5 set completes at three wins, not two', () => {
   const store = new ArcadeStore(new EventBus());
   const players = [{ id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }];

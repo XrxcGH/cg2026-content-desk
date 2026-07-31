@@ -8,6 +8,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { SourceConfig } from './recorder.ts';
 
 export interface Config {
   event: {
@@ -60,6 +61,14 @@ export interface Config {
     mode: 'deferred' | 'trickle' | 'live';
     /** Queue a match video automatically when the score is posted. */
     autoQueueMatches: boolean;
+    /**
+     * Whether the automatic path queues practice matches too. Anything that
+     * happens at the event should be recordable and postable, so this
+     * defaults on; a manual queue from the desk ignores it entirely.
+     */
+    autoQueuePractice: boolean;
+    /** Queue each finished arcade set as its own segment video. */
+    autoQueueArcade: boolean;
     /** Which recorded source to cut from. The program feed, normally. */
     sourceId: string;
     /** Uploaded unlisted, flipped to public only once TBA linking succeeds. */
@@ -89,6 +98,17 @@ export interface Config {
     /** "tournament/calgames-2026-arcade/event/smash-singles" */
     eventSlug: string;
   };
+  /**
+   * Rolling-record inputs, used when the desk is launched with --record.
+   * Each entry mirrors recorder.ts's SourceConfig: { id, label, role, input },
+   * where role is 'program' (the composited broadcast, what uploads are cut
+   * from) or 'iso' (a raw camera, replay source only) and input is the ffmpeg
+   * input arguments as an array. --test-sources overrides this with synthetic
+   * color bars.
+   */
+  recording: {
+    sources: SourceConfig[];
+  };
   youtube: { clientId: string; clientSecret: string; refreshToken: string };
   tba: { authId: string; authSecret: string; readKey: string };
   stream: {
@@ -105,6 +125,8 @@ export const DEFAULTS: Config = {
     enabled: false,
     mode: 'deferred',
     autoQueueMatches: true,
+    autoQueuePractice: true,
+    autoQueueArcade: true,
     sourceId: 'program',
     privacy: 'unlisted',
     publicAfterLink: true,
@@ -112,6 +134,7 @@ export const DEFAULTS: Config = {
     credit: 'Uploaded by the CalGames Content Desk',
     copyright: '(c) 2026 Western Region Robotics Forum',
   },
+  recording: { sources: [] },
   startgg: { token: '', eventSlug: '' },
   youtube: { clientId: '', clientSecret: '', refreshToken: '' },
   tba: { authId: '', authSecret: '', readKey: '' },
@@ -156,6 +179,8 @@ export async function loadConfig(root: string): Promise<Config> {
 /** Safe to log, and safe to send to a browser surface. */
 export function redacted(cfg: Config): Record<string, unknown> {
   const has = (s: string): string => s ? 'set' : 'missing';
+  // recording is deliberately absent: an ffmpeg input arg can embed an IP
+  // camera credential (rtsp://user:pass@...), and this object reaches browsers.
   return {
     event: cfg.event,
     publish: cfg.publish,

@@ -52,6 +52,10 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
    fill gives them an edge; the nav strip's buttons use the same treatment. */
 .btn { font-size: 14px; padding: 9px 14px; background: var(--surface-sunken); }
 .btn kbd { font-family: var(--font-mono); font-size: 13px; opacity: .6; margin-left: 7px; }
+/* A disabled button must LOOK dead (Queue before Start, Start stream with no
+   OBS), or the operator reads a silent no-op as a broken console. */
+.btn:disabled { opacity: .45; cursor: default; }
+.btn:disabled:hover { background: var(--surface-sunken); }
 
 label { display: block; font-family: var(--font-cond); font-weight: 600; font-size: 14px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); margin: 10px 0 4px; }
@@ -79,6 +83,8 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
 #log .ty { color: var(--accent); }
 .hint { color: var(--text-dim); font-size: 13px; line-height: 1.6; }
 .hint b { color: var(--text); font-weight: 600; }
+/* A failed stream action must read at a glance: same console red as /signin. */
+#streamMsg[data-err] { color: var(--st-bad-text); }
 /* Visually hidden but announced: gives screen readers the alliance word that
    sighted operators get for free from position and the alliance color. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -249,20 +255,50 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
 
       <section>
         <h2>Publish a segment</h2>
-        <p class="hint">The parts of the day that are not matches. Press <b>Start</b> when the
-          segment begins and <b>Queue</b> when it ends. The queue cuts it from the program
-          recording and holds it if the length looks wrong.</p>
+        <p class="hint">Matches queue themselves when the score posts; this is for everything
+          else. Press <b>Start</b> when the segment begins and <b>Queue</b> when it ends. The
+          queue cuts it from the program recording and holds it if the length looks wrong.</p>
         <div class="row">
           <select id="segKind" aria-label="Segment type" style="flex:1; min-width: 190px">
             <option value="selection">Alliance selection</option>
             <option value="awards">Awards ceremony</option>
             <option value="opening">Opening ceremony</option>
             <option value="closing">Closing ceremony</option>
+            <option value="analysis">Analysis desk</option>
+            <option value="interview">Team interview</option>
+            <option value="exhibition">Exhibition match</option>
+            <option value="mentors">Mentor match</option>
+            <option value="arcade">Arcade tournament</option>
+            <option value="other">Other...</option>
           </select>
           <button class="btn" id="segStart">Start</button>
           <button class="btn" id="segQueue" disabled>Queue</button>
         </div>
+        <!-- Revealed by "Other...": the API takes any literal string as a title,
+             which is how a single award gets its own video. -->
+        <div class="row" id="segOtherRow" style="display:none">
+          <input id="segTitle" placeholder="FIRST Impact Award"
+            aria-label="Custom segment title" style="flex:1; min-width: 190px">
+        </div>
         <p class="hint" id="segState" aria-live="polite">Not marking.</p>
+      </section>
+
+      <section>
+        <h2>Stream</h2>
+        <p class="hint" id="streamState" aria-live="polite">Checking OBS...</p>
+        <div class="row">
+          <button class="btn" id="streamStart" disabled>Start stream</button>
+          <button class="btn" id="streamStop" disabled>Stop stream</button>
+        </div>
+        <label for="streamDay">Title today's stream (day 1-3)</label>
+        <div class="row">
+          <input id="streamDay" type="number" min="1" max="3" value="1" style="width:70px"
+            aria-label="Day number for the stream title">
+          <button class="btn" id="streamTitle">Set title</button>
+        </div>
+        <p class="hint">Renames the live YouTube broadcast for the day, so Sunday's
+          stream is not titled Day 1.</p>
+        <p class="hint" id="streamMsg" aria-live="polite"></p>
       </section>
 
       <section>

@@ -23,6 +23,7 @@ import { ArcadeStore } from './arcade/store.ts';
 import { TriviaStore } from './trivia/store.ts';
 import { DEFAULT_QUESTIONS } from './trivia/questions.ts';
 import { loadConfig, publishReadiness } from './config.ts';
+import { arcadeLabel } from './publish/naming.ts';
 import { PublishQueue } from './publish/queue.ts';
 import { chooseEncoder, findFfmpeg } from './ffmpeg.ts';
 import { Recorder, type SourceConfig } from './recorder.ts';
@@ -88,6 +89,10 @@ attachMarkers(bus);
 // screens can print an honest "est. start" instead of the printed fiction.
 attachPace(bus);
 
+// Loaded here rather than with the publish section it mostly serves, because
+// the recorder's camera list lives in config.json too.
+const config = await loadConfig(ROOT);
+
 // ---- recording ------------------------------------------------------------
 // Optional. Everything else runs without ffmpeg; only recording and replay
 // need it.
@@ -113,11 +118,11 @@ if (!tools) {
           { id: 'cam1', label: 'Field wide (test)', role: 'iso',
             input: ['-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30'] },
         ]
-      : [];
+      : validRecordingSources(config.recording.sources);
 
     if (!sources.length) {
       console.warn('[core] --record given with no sources. Pass --test-sources, ' +
-        'or configure real inputs in recorder config.');
+        'or configure recording.sources in config.json.');
     } else {
       recorder = new Recorder(tools, encoder, {
         root: REC_ROOT,
@@ -137,6 +142,41 @@ if (!tools) {
       }
     }
   }
+}
+
+/**
+ * config.json is edited by volunteers, so the camera list is checked entry by
+ * entry rather than trusted: a typo'd role or a string where the input array
+ * belongs skips that source with a warning naming the field. It must never
+ * take the desk down at boot, because the show runs without recording.
+ */
+function validRecordingSources(raw: unknown): SourceConfig[] {
+  if (!Array.isArray(raw)) {
+    if (raw != null) console.warn('[core] recording.sources in config.json must be an array; ignoring it.');
+    return [];
+  }
+  const out: SourceConfig[] = [];
+  raw.forEach((entry, i) => {
+    const skip = (field: string, want: string): void =>
+      console.warn(`[core] recording.sources[${i}] skipped: "${field}" ${want}.`);
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      console.warn(`[core] recording.sources[${i}] skipped: each source must be an object.`);
+      return;
+    }
+    const e = entry as Record<string, unknown>;
+    const id = e['id'], label = e['label'], role = e['role'], input = e['input'];
+    if (typeof id !== 'string' || !id.trim()) return skip('id', 'must be a non-empty string');
+    if (typeof label !== 'string' || !label.trim()) return skip('label', 'must be a non-empty string');
+    if (role !== 'program' && role !== 'iso') return skip('role', 'must be "program" or "iso"');
+    if (!Array.isArray(input) || !input.length || input.some(a => typeof a !== 'string')) {
+      return skip('input', 'must be a non-empty array of ffmpeg argument strings');
+    }
+    out.push({
+      id, label, role, input: input as string[],
+      ...(typeof e['enabled'] === 'boolean' ? { enabled: e['enabled'] } : {}),
+    });
+  });
+  return out;
 }
 
 // ---- Cheesy Arena field bridge ---------------------------------------------
@@ -265,8 +305,6 @@ console.log(`[cue] ${cues.status.length} cues loaded, autopilot ` +
   `${has('autopilot') ? 'ARMED' : 'off'}, arm per-cue from the desk`);
 
 // ---- publishing -----------------------------------------------------------
-const config = await loadConfig(ROOT);
-
 // What each bonus RP costs, straight from config. On the bus rather than read
 // directly by the reducer, so the reducer stays pure and a replayed event log
 // carries the thresholds the match was actually scored against.
@@ -327,6 +365,28 @@ if (config.publish.autoQueueMatches && !has('demo')) {
     void publish.queueMatch().then(item => {
       if (item) console.log(`[publish] queued ${item.label} (${item.ranges.length} part(s))`);
     }).catch(err => console.warn('[publish] auto-queue failed:', (err as Error).message));
+  });
+}
+
+// Arcade sets queue themselves the same way: set_end closes the video's
+// bounds, and the set has carried its own startedAt since it began. A set
+// shorter than the segment QC floor queues held, which is the right answer
+// for a 20-second bracket mistake.
+if (config.publish.autoQueueArcade && !has('demo')) {
+  bus.subscribe(ev => {
+    if (ev.type !== 'arcade.set_end') return;
+    const set = (ev.payload as {
+      set?: { round?: string; game?: string; startedAt?: number } | null;
+    } | null)?.set;
+    // A set with no startedAt predates the field (a replayed old log): there
+    // is no honest in-point to cut from, so leave it to a manual segment.
+    if (!set?.startedAt) return;
+    void publish.queueSegment({
+      segment: arcadeLabel(set.round ?? '', set.game ?? ''),
+      fromMs: set.startedAt,
+      toMs: Date.now(),
+    }).then(item => console.log(`[publish] queued ${item.label}`))
+      .catch(err => console.warn('[publish] arcade auto-queue failed:', (err as Error).message));
   });
 }
 

@@ -32,7 +32,12 @@ const ORDINAL: Record<string, number> = { one: 1, two: 2, three: 3 };
  * "Match 7 (R2)" and TBA keys them `sf7m1`. Finals are `f1m1`, `f1m2`, and the
  * tiebreaker is `f1m3`.
  */
-/** Practice matches run during load-in and pit walkthroughs; never published. */
+/**
+ * Practice matches run during load-in and pit walkthroughs. They publish like
+ * any other match ("Practice 3 - CalGames"), but TBA has no keys for them, so
+ * they never link to a match. The automatic queue path is gated separately by
+ * publish.autoQueuePractice; a manual queue always goes through.
+ */
 export const isPractice = (displayName: string): boolean => /^practice/i.test(displayName.trim());
 
 export function identify(displayName: string): MatchIdentity {
@@ -42,7 +47,8 @@ export function identify(displayName: string): MatchIdentity {
   const qual = /^(?:qualification|qual|q|qm)\s*#?\s*(\d+)$/i.exec(s);
   if (qual) return { name: `Qualification ${Number(qual[1])}`, key: `qm${Number(qual[1])}` };
 
-  // Practice matches exist but are never published.
+  // Practice matches publish under their own name; the null key tells the
+  // queue there is no TBA match to link.
   if (isPractice(s)) return { name: s, key: null };
 
   // Final Tiebreaker / Finals Tiebreaker / Final 3
@@ -156,12 +162,21 @@ export function description(d: DescriptionInput): string {
  * and is never rewatchable; families who leave before the ceremony never see
  * their team's award. They are all one video each, cut from the program
  * recording, and none of them is a match, so none of them gets a TBA match key.
+ *
+ * These ids are the one-tap set on the desk console; any other string passed
+ * as a segment becomes a literal title, which is how a single award gets its
+ * own video ("FIRST Impact Award - CalGames").
  */
 export const SEGMENTS = {
   selection: 'Alliance Selection',
   awards: 'Awards Ceremony',
   opening: 'Opening Ceremony',
   closing: 'Closing Ceremony',
+  analysis: 'Analysis Desk',
+  interview: 'Team Interview',
+  exhibition: 'Exhibition Match',
+  mentors: 'Mentor Match',
+  arcade: 'Arcade Tournament',
 } as const;
 
 export type SegmentId = keyof typeof SEGMENTS;
@@ -181,6 +196,31 @@ export interface SegmentDescriptionInput {
   resultsUrl?: string;
   credit: string;
   copyright: string;
+}
+
+/**
+ * Display names for the arcade game ids in arcade/model.ts. 'other' is
+ * deliberately absent: whatever a team brings on Saturday has no name we can
+ * predict, so those sets are labeled by round alone.
+ */
+const ARCADE_GAMES: Record<string, string> = {
+  smash: 'Smash',
+  mariokart: 'Mario Kart',
+  pacman: 'Pac-Man',
+  tetris: 'Tetris',
+};
+
+/**
+ * Title an auto-queued arcade set: "Arcade Winners Semifinal (Smash)".
+ *
+ * The round carries the bracket context ("Winners Semifinal", "Grand Final")
+ * and the game disambiguates across the lineup, so the video is findable
+ * without anyone typing a title mid-show.
+ */
+export function arcadeLabel(round: string, game: string): string {
+  const r = round.trim() || 'Set';
+  const g = ARCADE_GAMES[game];
+  return g ? `Arcade ${r} (${g})` : `Arcade ${r}`;
 }
 
 /** Same layout as a match description, minus the alliances and the score. */

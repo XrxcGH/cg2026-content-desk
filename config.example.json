@@ -33,6 +33,13 @@
     "mode": "deferred",
 
     "autoQueueMatches": true,
+
+    "//autoQueuePractice": "Practice matches queue automatically too ('Practice 3 - CalGames'). They upload but never link on TBA, which has no keys for practice. Set false to keep Friday load-in off the channel; queueing one by hand from the desk always works regardless.",
+    "autoQueuePractice": true,
+
+    "//autoQueueArcade": "Each finished arcade set queues as its own segment video, titled like 'Arcade Winners Semifinal (Smash)', from the set's start to when it ended.",
+    "autoQueueArcade": true,
+
     "sourceId": "program",
 
     "//privacy": "Videos upload unlisted and flip to public only once TBA linking succeeds, so a failed link never leaves an orphan video with no context.",
@@ -45,6 +52,12 @@
     "//credit": "Closing lines of every description, mirroring the official channel's layout. FIRST's own videos end '(c) 2026 FIRST Robotics Competition' (that is theirs to claim). CalGames is a WRRF off-season event, so these default to WRRF.",
     "credit": "Uploaded by the CalGames Content Desk",
     "copyright": "(c) 2026 Western Region Robotics Forum"
+  },
+
+  "recording": {
+    "//": "What the rolling recorder captures when the desk is launched with --record. One entry per feed: role 'program' is the composited broadcast (what uploads are cut from), role 'iso' is a raw camera (replay source only). 'input' is the ffmpeg input arguments as an array. A malformed entry is skipped with a warning at startup, never a crash. --test-sources ignores this list and records color bars instead.",
+    "//example": "{ \"id\": \"program\", \"label\": \"Program feed\", \"role\": \"program\", \"input\": [\"-f\", \"dshow\", \"-i\", \"video=OBS Virtual Camera\"] }",
+    "sources": []
   },
 
   "startgg": {

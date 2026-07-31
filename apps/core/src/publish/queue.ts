@@ -119,6 +119,15 @@ export class PublishQueue {
     return this.#tba.setWebcasts(urls);
   }
 
+  /**
+   * Retitle the active YouTube live broadcast ("2026 CalGames - Day 2").
+   * Exposed here for the same reason as registerWebcasts: the queue owns the
+   * one authenticated YouTube client. Null when no broadcast is live.
+   */
+  setLiveTitle(title: string): Promise<{ id: string; title: string } | null> {
+    return this.#yt.setLiveBroadcastTitle(title);
+  }
+
   async load(): Promise<void> {
     try {
       this.#items = JSON.parse(await readFile(this.#file, 'utf8')) as QueueItem[];
@@ -164,15 +173,19 @@ export class PublishQueue {
   }
 
   /** Queue the current or just-finished match, framed for broadcast. */
-  async queueMatch(): Promise<QueueItem | null> {
+  async queueMatch(opts: { manual?: boolean } = {}): Promise<QueueItem | null> {
     const st = this.#bus.state;
     const startedAt = st.lastMatchStartedAt;
     if (!startedAt) return null;
 
     const displayName = st.match?.displayName ?? 'Match';
-    // Practice matches are explicitly never published (docs/11-distribution.md):
-    // queueing one would cut, upload, and link a scrimmage as tournament play.
-    if (isPractice(displayName)) return null;
+    // Practice matches publish like anything else; only the AUTOMATIC path is
+    // gated, because Friday load-in runs dozens of them and an event may not
+    // want each one on the channel. An operator pressing the button knows
+    // what they asked for, so a manual queue always goes through.
+    if (isPractice(displayName) && !opts.manual && !this.#cfg.publish.autoQueuePractice) {
+      return null;
+    }
 
     // Official FIRST-channel naming: "Qualification 42 - CalGames".
     const { name, key } = identify(displayName);
@@ -407,8 +420,16 @@ export class PublishQueue {
 
       if (item.state === 'uploaded') {
         if (this.#tba.configured) {
-          if (item.kind === 'match' && item.matchKey) {
-            await this.#tba.addMatchVideo(item.matchKey, item.videoId!);
+          if (item.kind === 'match') {
+            if (item.matchKey) {
+              await this.#tba.addMatchVideo(item.matchKey, item.videoId!);
+            } else {
+              // A keyless match is a practice match: TBA has no keys for
+              // practice, and linking one as event media would misfile a
+              // scrimmage alongside the ceremonies. Skip TBA entirely.
+              console.log(`[publish] ${item.label} has no TBA match key (practice), ` +
+                'skipping the TBA link');
+            }
           } else {
             await this.#tba.addEventMedia(item.videoId!);
           }

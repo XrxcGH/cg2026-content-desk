@@ -214,6 +214,53 @@ export class YouTubeClient {
     if (!res.ok) throw new Error(`Privacy update failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
   }
 
+  /**
+   * Find the channel's active live broadcast and retitle it, for the Day 1 ->
+   * Day 2 flip without anyone opening YouTube Studio.
+   *
+   * broadcastType=all matters: the list default filters to "event" broadcasts,
+   * which hides the persistent default-stream broadcast most OBS rigs stream
+   * to, and the lookup would come back empty exactly when it is needed.
+   *
+   * The update is a read-modify-write of the snippet: liveBroadcasts.update
+   * DELETES any mutable snippet field the request omits (description,
+   * scheduledStartTime, scheduledEndTime), so the listed values are sent back
+   * alongside the new title. Only fields the broadcast actually has go out; a
+   * persistent broadcast has no scheduledStartTime to preserve.
+   *
+   * Returns null when nothing is live, so the caller can say so usefully.
+   */
+  async setLiveBroadcastTitle(title: string): Promise<{ id: string; title: string } | null> {
+    const token = await this.#accessToken();
+
+    const listRes = await fetch(
+      `${API_URL}/liveBroadcasts?part=id,snippet&broadcastStatus=active&broadcastType=all&maxResults=1`,
+      { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!listRes.ok) {
+      throw new Error(`Live broadcast lookup failed (${listRes.status}): ${(await listRes.text()).slice(0, 200)}`);
+    }
+    const list = await listRes.json() as {
+      items?: { id?: string; snippet?: Record<string, unknown> }[];
+    };
+    const active = list.items?.[0];
+    if (!active?.id || !active.snippet) return null;
+
+    const snippet: Record<string, unknown> = { title: title.slice(0, 100) };  // hard API limit
+    for (const field of ['description', 'scheduledStartTime', 'scheduledEndTime'] as const) {
+      if (active.snippet[field] != null) snippet[field] = active.snippet[field];
+    }
+
+    const res = await fetch(`${API_URL}/liveBroadcasts?part=snippet`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: active.id, snippet }),
+    });
+    if (!res.ok) {
+      throw new Error(`Live broadcast title update failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    }
+    return { id: active.id, title: snippet['title'] as string };
+  }
+
   async addToPlaylist(videoId: string, playlistId: string): Promise<void> {
     if (!playlistId) return;
     const token = await this.#accessToken();
