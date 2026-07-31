@@ -1,0 +1,95 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { reduce } from './state.ts';
+import { initialState, type DeskEvent, type DeskState } from './types.ts';
+
+const T0 = 1_700_000_000_000;
+
+const ev = (type: DeskEvent['type'], ts: number, payload: unknown = {}): DeskEvent => ({
+  id: `t${ts}`, ts, matchClock: null, source: 'manual', confidence: 'authoritative',
+  type, payload,
+});
+
+function started(): DeskState {
+  let s = initialState();
+  s = reduce(s, ev('match.loaded', T0, { id: 'q1', displayName: 'Q1', red: [], blue: [] }));
+  s = reduce(s, ev('match.start', T0));
+  return s;
+}
+
+test('shadow deltas attribute to the period the clock says', () => {
+  let s = started();
+  // 5s in: clock is -15, still auto.
+  s = reduce(s, ev('score.delta', T0 + 5_000, { alliance: 'red', field: 'fuel', amount: 5 }));
+  assert.equal(s.score.red.autoFuel, 5);
+  assert.equal(s.score.red.teleopFuel, 0);
+
+  // 40s in: clock is +20, teleop. Fuel and tower both split.
+  s = reduce(s, ev('score.delta', T0 + 40_000, { alliance: 'red', field: 'fuel', amount: 7 }));
+  s = reduce(s, ev('score.delta', T0 + 40_000, { alliance: 'red', field: 'tower', amount: 10 }));
+  assert.equal(s.score.red.autoFuel, 5);
+  assert.equal(s.score.red.teleopFuel, 7);
+  assert.equal(s.score.red.teleopTower, 10);
+
+  // The derived sums and total stay coherent with the parts.
+  assert.equal(s.score.red.fuel, 12);
+  assert.equal(s.score.red.tower, 10);
+  assert.equal(s.score.red.total, 22);
+});
+
+test('realtime part snapshots settle sums, RPs, and the foul ledger', () => {
+  let s = started();
+  s = reduce(s, ev('score.realtime', T0 + 60_000, {
+    red: { autoFuel: 4, teleopFuel: 98, autoTower: 15, teleopTower: 30, fouls: 0 },
+    blue: { autoFuel: 9, teleopFuel: 80, autoTower: 0, teleopTower: 50, fouls: 12 },
+  }));
+  assert.equal(s.score.red.fuel, 102);
+  assert.equal(s.score.red.rp.energized, true, '102 fuel crosses 100');
+  assert.equal(s.score.blue.rp.traversal, true, '50 tower crosses 50');
+  // Blue conceded 12 foul points. They belong to RED's total.
+  assert.equal(s.score.red.total, 102 + 45 + 12);
+  assert.equal(s.score.blue.total, 89 + 50);
+});
+
+test('after the buzzer the desk reads Final 0:00, never Pre-match 0:20', () => {
+  let s = started();
+  assert.equal(s.phase, 'auto');
+
+  s = reduce(s, ev('match.end', T0 + 165_000));
+  assert.equal(s.matchClock, null, 'clock stops');
+  assert.equal(s.phase, 'post');
+  assert.equal(s.clockDisplay, '0:00');
+  assert.equal(s.hubActive, 'none');
+
+  // The next match load resets the ambiguity for the new cycle.
+  s = reduce(s, ev('match.loaded', T0 + 300_000, { id: 'q2', displayName: 'Q2', red: [], blue: [] }));
+  assert.equal(s.phase, 'pre');
+  assert.equal(s.clockDisplay, '0:20');
+});
+test('bonus RPs score against configured thresholds, not the shipped defaults', () => {
+  let s = initialState();
+  // An event that decides 100 fuel is too easy and moves the bar to 150.
+  s = reduce(s, ev('game.thresholds', T0, { energizedFuel: 150 }));
+  s = reduce(s, ev('score.realtime', T0 + 1, { red: { teleopFuel: 120 } }));
+
+  assert.equal(s.score.red.fuel, 120);
+  assert.equal(s.score.red.rp.energized, false,
+    '120 clears the shipped default of 100 but not the configured 150');
+
+  s = reduce(s, ev('score.delta', T0 + 2,
+    { alliance: 'red', field: 'fuel', amount: 40 }));
+  assert.equal(s.score.red.rp.energized, true, '160 clears 150');
+});
+
+test('changing a threshold mid-event re-scores what is already on the board', () => {
+  let s = initialState();
+  s = reduce(s, ev('score.realtime', T0, { blue: { teleopTower: 60 } }));
+  assert.equal(s.score.blue.rp.traversal, true, 'clears the default 50');
+
+  // A correction arrives after the numbers are already on air.
+  s = reduce(s, ev('game.thresholds', T0 + 1, { traversalTower: 75 }));
+  assert.equal(s.score.blue.rp.traversal, false,
+    'the badge goes out at once rather than waiting for the next score packet');
+  assert.equal(s.thresholds.traversalTower, 75);
+  assert.equal(s.thresholds.energizedFuel, 100, 'a partial update leaves the rest alone');
+});

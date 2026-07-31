@@ -2,7 +2,7 @@
  * Configuration, including credentials.
  *
  * `config.json` is gitignored and never committed. `config.example.json` is
- * the template. Nothing in this file should ever be logged verbatim — see
+ * the template. Nothing in this file should ever be logged verbatim. See
  * `redacted()`.
  */
 
@@ -23,13 +23,26 @@ export interface Config {
     /** Linked in every video description. Blank to omit the line. */
     resultsUrl: string;
   };
+  /**
+   * Bonus RP thresholds.
+   *
+   * Configuration rather than constants: off-season events move these, and
+   * the 2026 REBUILT numbers were still being argued over while this was
+   * built. They travel on the state snapshot, so changing one here changes
+   * the reducer, every badge, and the talent view together.
+   */
+  game: {
+    rpEnergizedFuel: number;
+    rpSuperchargedFuel: number;
+    rpTraversalTower: number;
+  };
   publish: {
     /** Master switch. Nothing uploads while this is false. */
     enabled: boolean;
     /**
-     * deferred — queue during the event, upload after the venue closes.
-     * trickle  — upload during the event, throttled, paused during matches.
-     * live     — upload as soon as a video is cut.
+     * deferred: queue during the event, upload after the venue closes.
+     * trickle:  upload during the event, throttled, paused during matches.
+     * live:     upload as soon as a video is cut.
      * Default is deferred: the live stream must never compete with an upload.
      */
     mode: 'deferred' | 'trickle' | 'live';
@@ -43,16 +56,27 @@ export interface Config {
     playlists: { match: string; analysis: string; segment: string };
     /**
      * Closing lines of every description. FIRST's own videos end
-     * "(c) 2026 FIRST Robotics Competition" — theirs to claim. CalGames is a
+     * "(c) 2026 FIRST Robotics Competition", theirs to claim. CalGames is a
      * WRRF off-season event, so the default credits WRRF instead.
      */
     credit: string;
     copyright: string;
   };
-  // The Cheesy Arena bridge is deliberately NOT configured here — it is a
+  // The Cheesy Arena bridge is deliberately NOT configured here. It is a
   // launch flag (`--cheesy`). It needs FTA sign-off, so switching it on should
   // be an explicit act at the point of use rather than something inherited
   // from a file copied between machines. See docs/10-field-bridge.md.
+  /**
+   * start.gg side-tournament bracket. Metadata only: round labels and
+   * entrants for the arcade console's pre-fill; live scores stay
+   * operator-authoritative (docs/05-arcade.md). Starts when both fields are
+   * set; there is no field-safety concern here, so no launch flag.
+   */
+  startgg: {
+    token: string;
+    /** "tournament/calgames-2026-arcade/event/smash-singles" */
+    eventSlug: string;
+  };
   youtube: { clientId: string; clientSecret: string; refreshToken: string };
   tba: { authId: string; authSecret: string; readKey: string };
   stream: {
@@ -63,6 +87,7 @@ export interface Config {
 
 export const DEFAULTS: Config = {
   event: { key: '', name: 'CalGames', year: 2026, resultsUrl: '' },
+  game: { rpEnergizedFuel: 100, rpSuperchargedFuel: 360, rpTraversalTower: 50 },
   publish: {
     enabled: false,
     mode: 'deferred',
@@ -74,6 +99,7 @@ export const DEFAULTS: Config = {
     credit: 'Uploaded by the CalGames Content Desk',
     copyright: '(c) 2026 Western Region Robotics Forum',
   },
+  startgg: { token: '', eventSlug: '' },
   youtube: { clientId: '', clientSecret: '', refreshToken: '' },
   tba: { authId: '', authSecret: '', readKey: '' },
   stream: { webcastUrl: '' },
@@ -104,7 +130,7 @@ export async function loadConfig(root: string): Promise<Config> {
     return merge(DEFAULTS, JSON.parse(raw)) as Config;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-      console.warn(`[config] config.json could not be read (${(err as Error).message}) — using defaults.`);
+      console.warn(`[config] config.json could not be read (${(err as Error).message}), using defaults.`);
     }
     return structuredClone(DEFAULTS);
   }
@@ -119,6 +145,7 @@ export function redacted(cfg: Config): Record<string, unknown> {
     stream: cfg.stream,
     youtube: { clientId: has(cfg.youtube.clientId), clientSecret: has(cfg.youtube.clientSecret), refreshToken: has(cfg.youtube.refreshToken) },
     tba: { authId: has(cfg.tba.authId), authSecret: has(cfg.tba.authSecret), readKey: has(cfg.tba.readKey) },
+    startgg: { token: has(cfg.startgg.token), eventSlug: cfg.startgg.eventSlug },
   };
 }
 
