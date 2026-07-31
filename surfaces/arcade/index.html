@@ -21,50 +21,50 @@
   background-image: var(--tex-perf);
   background-size: var(--tex-perf-size);
   border-bottom: var(--rule);
-  min-height: calc(var(--bar-h, 156px) * 0.72);
+  min-height: 76px;
 }
 
-.ar-side { display: flex; align-items: center; gap: var(--gap); padding: 10px 26px; }
+.ar-side { display: flex; align-items: center; gap: 16px; padding: 6px 20px; }
 .ar-side--p2 { flex-direction: row-reverse; text-align: right; }
 .ar-side--p1 { background: var(--cg-purple); border-right: var(--rule); }
 .ar-side--p2 { background: var(--cg-green-lo); border-left: var(--rule); }
 
 .ar-name {
-  font-family: var(--font-display); font-weight: 800; font-size: calc(var(--t-title) * .74);
+  font-family: var(--font-display); font-weight: 800; font-size: 26px;
   font-variation-settings: "wdth" var(--wdth-display); line-height: 1.02;
   overflow-wrap: break-word;
 }
 .ar-team {
   margin-top: 4px;
-  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-label);
+  font-family: var(--font-cond); font-weight: 600; font-size: 16px;
   letter-spacing: .1em; text-transform: uppercase; color: var(--cg-gold);
   overflow-wrap: break-word;
 }
 .ar-score {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 900; font-size: calc(var(--t-hero) * .62); line-height: 1;
+  font-weight: 900; font-size: 46px; line-height: 1;
   color: var(--cg-white); letter-spacing: -.04em; margin-left: auto;
 }
 .ar-side--p2 .ar-score { margin-left: 0; margin-right: auto; }
 /* Unconfirmed scores render outlined, exactly like an estimated match score. */
 .ar-score[data-est="true"] { color: transparent; -webkit-text-stroke: 3px var(--cg-white); }
 
-.ar-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; }
+.ar-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px; }
 .ar-round {
-  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  font-family: var(--font-cond); font-weight: 700; font-size: 15px;
   letter-spacing: .16em; text-indent: .16em; text-transform: uppercase; color: var(--cg-gold); text-align: center;
 }
-.ar-game { font-size: calc(var(--t-label) * .8); }
+.ar-game { font-size: 13px; padding: 3px 10px; }
 
 /* ---- Mario Kart standings ---- */
 .gp {
   /* Hangs below the top strip, clear of the round tab. Right edge, where it
      covers the least of the racing line, never the bottom HUD text. */
-  position: absolute; right: var(--safe-x); top: calc(var(--bar-h, 156px) * 0.72 + 74px); width: 430px;
+  position: absolute; right: 24px; top: 92px; width: 330px;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
   clip-path: var(--chamfer);
-  padding: 12px 18px;
+  padding: 8px 12px;
 }
 /* Real filled edge, not box-shadow: shadows die under the luma key. */
 .gp::before {
@@ -73,23 +73,23 @@
 }
 .gp[hidden] { display: none; }
 .gp h2 {
-  margin: 0 0 8px; font-family: var(--font-cond); font-weight: 700;
-  font-size: calc(var(--t-label) * .78); letter-spacing: .18em; text-transform: uppercase; color: var(--cg-gold);
+  margin: 0 0 5px; font-family: var(--font-cond); font-weight: 700;
+  font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: var(--cg-gold);
 }
 .gp-row {
-  display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: baseline;
-  padding: 4px 0; border-bottom: 1px solid var(--cg-purple-hi);
+  display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: baseline;
+  padding: 2px 0; border-bottom: 1px solid var(--cg-purple-hi);
 }
 .gp-row:last-child { border-bottom: 0; }
-.gp-pos { font-family: var(--font-num); font-weight: 900; font-size: calc(var(--t-body) * .72); color: var(--cg-gold); }
+.gp-pos { font-family: var(--font-num); font-weight: 900; font-size: 17px; color: var(--cg-gold); }
 .gp-name {
-  font-family: var(--font-cond); font-weight: 600; font-size: calc(var(--t-body) * .72); text-transform: uppercase; letter-spacing: .04em;
+  font-family: var(--font-cond); font-weight: 600; font-size: 17px; text-transform: uppercase; letter-spacing: .04em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.gp-pts { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 900; font-size: calc(var(--t-body) * .72); }
+.gp-pts { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 900; font-size: 17px; }
 
 #upNext {
-  position: absolute; left: var(--safe-x); top: calc(var(--bar-h, 156px) * 0.72 + 74px);
+  position: absolute; left: 24px; top: 92px; font-size: 14px; padding: 5px 12px;
   display: none;
 }
 #upNext[data-show] { display: inline-flex; }
@@ -106,12 +106,12 @@
   background-image: var(--tex-perf);
   background-size: var(--tex-perf-size);
   border-bottom: var(--rule);
-  min-height: var(--bar-h, 156px);
+  min-height: 76px;
 }
 .ffa-cell {
   position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; padding: 14px 20px;
+  gap: 2px; padding: 6px 14px;
   border-left: var(--rule-thin);
 }
 .ffa-cell:first-child { border-left: 0; }
@@ -123,12 +123,12 @@
 /* Each FFA cell sits over that player's split-screen quadrant, top edge. */
 .ffa-score {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 900; font-size: var(--t-score); line-height: 1;
+  font-weight: 900; font-size: 38px; line-height: 1;
   color: var(--cg-white); letter-spacing: -.03em;
 }
 .ffa-score[data-est="true"] { color: transparent; -webkit-text-stroke: 3px var(--cg-white); }
 .ffa-name {
-  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-label);
+  font-family: var(--font-cond); font-weight: 600; font-size: 15px;
   letter-spacing: .06em; text-indent: .06em; text-transform: uppercase; color: var(--cg-white);
   text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
@@ -139,13 +139,13 @@
    hub tab, flipped. +3px keeps the strip's gold border unbroken above it. */
 .ffa-tab {
   position: absolute; left: 50%; transform: translateX(-50%);
-  top: calc(var(--bar-h, 156px) + 3px); z-index: 5;
-  padding: 10px 36px 16px;
+  top: 76px; z-index: 5;
+  padding: 5px 22px 9px;
   background: var(--cg-gold);
   --ch: 14px;
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--ch)),
                      calc(100% - var(--ch)) 100%, var(--ch) 100%, 0 calc(100% - var(--ch)));
-  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  font-family: var(--font-cond); font-weight: 700; font-size: 15px;
   letter-spacing: .14em; text-transform: uppercase; color: var(--cg-white);
   white-space: nowrap;
 }
