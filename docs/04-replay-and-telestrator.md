@@ -1,4 +1,4 @@
-# 04 — Match replay + analyst drawing overlay
+# 04: Match replay + analyst drawing overlay
 
 The two things that turn a livestream into a broadcast.
 
@@ -34,7 +34,7 @@ Benefits that matter on the day:
 - **Nothing is ever lost.** A crash costs at most 6 seconds of one camera.
 - Doubles as the event archive and the source for TBA match-video uploads.
 
-### Encoder selection — check this in August, not October
+### Encoder selection: check this in August, not October
 
 Measured on the dev laptop (RTX 4050, ffmpeg 8.1.2 full build), 1080p60:
 
@@ -45,7 +45,7 @@ Measured on the dev laptop (RTX 4050, ffmpeg 8.1.2 full build), 1080p60:
 
 **The NVENC trap:** ffmpeg builds track the NVENC API aggressively. ffmpeg 8.1.2 wants NVENC API
 13.1, i.e. NVIDIA driver **610.00 or newer**; the laptop was on 596.49 and NVENC simply refused to
-open. The failure is loud and immediate, which is the good news — but if you only ever test
+open. The failure is loud and immediate, which is the good news, but if you only ever test
 capability lists (`ffmpeg -encoders | findstr nvenc` cheerfully lists `h264_nvenc`) you will not
 find out until you try to record. **Always do an actual encode test, not a capability check.**
 
@@ -53,7 +53,7 @@ Fix either way: update the NVIDIA driver, or pin an ffmpeg build that matches th
 
 **The libx264 headroom maths matters.** 2.88× realtime for *one* 1080p60 stream means a single
 stream consumes roughly a third of the machine's encoding throughput. Four cameras would need
-~139% — **CPU encoding four angles is not feasible on hardware like this.** So the recorder either
+~139%. **CPU encoding four angles is not feasible on hardware like this.** So the recorder either
 gets working NVENC (RTX 40-series allows 8 concurrent sessions on current drivers), or fewer
 cameras, or lower resolution on the secondary angles.
 
@@ -61,7 +61,7 @@ This is the strongest practical argument yet for the **ATEM Mini Extreme ISO** i
 [06-hardware-and-network.md](06-hardware-and-network.md): it ISO-records all inputs in hardware and
 makes the encoder question disappear entirely.
 
-**Cheaper hardware path:** a **Blackmagic ATEM Mini Extreme ISO** does this in the box — it ISO
+**Cheaper hardware path:** a **Blackmagic ATEM Mini Extreme ISO** does this in the box: it ISO
 records all 8 inputs to separate files while switching. If the budget allows one purchase, it's
 this one. See [06-hardware-and-network.md](06-hardware-and-network.md).
 
@@ -81,7 +81,7 @@ The replay operator should never hunt. Markers land on the timeline automaticall
 | **Hub flip** | hub active state changes | medium |
 | **Endgame** | `matchClock` = 110 | always |
 | **Card / foul** | `card.issued`, `foul.called` | high |
-| **Robot dropped** | `arena.status` station goes unhealthy | medium — the "what happened to 254?" replay |
+| **Robot dropped** | `arena.status` station goes unhealthy | medium (the "what happened to 254?" replay) |
 | **Manual** | operator hits a key / Stream Deck button | highest |
 
 The manual marker is the important one. Automation catches the scoring; a human catches the
@@ -92,7 +92,7 @@ time is real.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Q42  ·  RED 148 – 132 BLUE                       [ARMED ●]  │
+│  Q42  ·  RED 148 - 132 BLUE                       [ARMED ●]  │
 ├──────────────────────────────────────────────────────────────┤
 │  AUTO │ T │ SHIFT 1 │ SHIFT 2 │ SHIFT 3 │ SHIFT 4 │ ENDGAME  │
 │  ──●──┼───┼──▲──●───┼─────────┼───●─────┼─────────┼──▲▲──    │
@@ -105,17 +105,17 @@ time is real.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- Timeline is the **match clock**, phase-segmented — not a raw video scrubber. The operator thinks
+- Timeline is the **match clock**, phase-segmented, not a raw video scrubber. The operator thinks
   in "endgame," not "18:42:07."
 - **SEND TO DESK** pushes the clip to the telestrator with the first frame frozen. **TAKE** puts it
   straight to program with the gold replay wipe.
-- Pre-render 0.5x and 0.25x versions of any clip flagged for telestration — smooth slow-mo needs
+- Pre-render 0.5x and 0.25x versions of any clip flagged for telestration: smooth slow-mo needs
   frame interpolation (`minterpolate`) which is too slow to do live, but fine on a 12-second clip
   during the ~90 seconds between matches.
 
 ### Timing budget
 
-Between-match gap at CalGames is roughly 4–6 minutes on a single field. That's luxurious. Target:
+Between-match gap at CalGames is roughly 4-6 minutes on a single field. That's luxurious. Target:
 **clip selectable within 10s of match end, on air within 45s.** The constraint isn't the software,
 it's the operator, which is why the timeline is pre-marked.
 
@@ -143,17 +143,17 @@ converge on this and they're right.
 { type: 'telestrator.stroke',
   payload: { strokeId, tool: 'pen'|'arrow'|'ellipse'|'spotlight'|'tag',
              ink: 'default'|'good'|'note'|'red'|'blue',
-             pts: [[0.412, 0.688], [0.418, 0.690], ...],   // normalized 0–1
+             pts: [[0.412, 0.688], [0.418, 0.690], ...],   // normalized 0-1
              width: 7, seq: 12 } }
 ```
 
 Normalized coordinates mean the tablet's aspect ratio doesn't have to match the program feed, and
 a 60Hz stroke is a few hundred bytes. **Latency budget: <80ms tablet → program**, which is easy on
-a LAN and impossible over the venue Wi-Fi shared with 40 teams — hence the dedicated production AP.
+a LAN and impossible over the venue Wi-Fi shared with 40 teams, hence the dedicated production AP.
 
 ### Two transport paths, deliberately
 
-Strokes arrive at pointer rate — a Pencil reports at 120Hz. Putting that on the event bus would
+Strokes arrive at pointer rate: a Pencil reports at 120Hz. Putting that on the event bus would
 bloat a three-day NDJSON archive with hundreds of thousands of coordinate pairs and add a
 reduce-and-serialise step to every frame of every stroke.
 
@@ -192,7 +192,7 @@ frame (or the live/looping clip) in OBS.
 | **Arrow** | drag start→end, arrowhead at end | `A` |
 | **Ellipse** | drag to circle a robot; snaps to a nice aspect | `E` |
 | **Spotlight** | dims everything outside a lassoed region to 55% purple-black | `S` |
-| **Path** | dashed line with an animated dash-offset — shows intended route | `R` |
+| **Path** | dashed line with an animated dash-offset (shows intended route) | `R` |
 | **Team tag** | drag a team-number puck onto a robot; pulls avatar + number from the team list | `T` |
 | **Undo / Clear** | `Z` / `C` | |
 | **Hide** | instantly clears program without clearing the pad | `H` |
@@ -207,7 +207,7 @@ avatar. No other telestrator can do that because no other telestrator knows what
 ### Ink rules
 
 Gold default, with a 2px black halo on every stroke. The field is red, blue, and grey carpet under
-mixed gym lighting — gold with a black outline is the only ink that survives on all of it. Strokes
+mixed gym lighting. Gold with a black outline is the only ink that survives on all of it. Strokes
 auto-fade after 6s unless pinned, so the analyst never has to remember to clear.
 
 ### On-air chrome

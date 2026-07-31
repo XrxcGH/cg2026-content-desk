@@ -1,7 +1,7 @@
 node_modules/
 dist/
 
-# Event logs — one NDJSON per session. Keep the ones worth replaying.
+# Event logs, one NDJSON per session. Keep the ones worth replaying.
 data/events/*.ndjson
 !data/events/sample.ndjson
 
@@ -14,7 +14,7 @@ data/publish-queue.json.tmp
 media/teams/*/
 media/manifest.json
 
-# Rolling record scratch — 4 cams x 1080p60 is ~22GB/hour. Never commit.
+# Rolling record scratch. 4 cams x 1080p60 is ~22GB/hour, so never commit it.
 rec/
 
 # Credentials. config.example.json is the committed template.

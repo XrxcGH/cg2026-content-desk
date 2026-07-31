@@ -1,4 +1,4 @@
-# 01 — Research: how the FRC broadcast/field ecosystem actually works
+# 01. Research: how the FRC broadcast/field ecosystem actually works
 
 Everything below is what the design in [02-architecture.md](02-architecture.md) is built on.
 Sources are linked inline and collected at the bottom.
@@ -25,7 +25,7 @@ FIRST distributes an off-season build of FMS to registered off-season events. Re
 modest (Win10 x64, a laptop, an AP, a few unmanaged switches). It provides schedule generation,
 real-time scoring, field control, and drives the **Audience Display**.
 
-### Audience Display — the important part
+### Audience Display: the important part
 
 Audience Display is a **separate Windows app on a separate machine**, wired to FMS at 10.0.100.5.
 It owns all audience-facing graphics *and all the game audio* (the match-start charge, the endgame
@@ -47,8 +47,8 @@ the event progresses:
 | `FMS_HIDDEN` | Between triggers (required) |
 
 **(b) BitFocus Companion integration.** Audience Display POSTs to a Companion HTTP endpoint
-(default `http://127.0.0.1:8000`) on **state change only** — it tracks state internally and
-de-dupes. Documented states:
+(default `http://127.0.0.1:8000`) on **state change only** (it tracks state internally and
+de-dupes). Documented states:
 
 `Prestart` · `Match Preview` · `Set Audience` · `Match Start` · `Teleop Start` ·
 `Endgame Start` · `Match End` · `Post Result` · `Alliance Selection` · `Award Ceremony`
@@ -56,8 +56,8 @@ de-dupes. Documented states:
 Each maps to a Companion page/row/column button press (down + up).
 
 > **The key insight for this project.** Companion's trigger API is plain HTTP. If we point
-> Audience Display's Companion URL at *our own* service — or run Companion and mirror its
-> presses — we get **frame-accurate, official-FMS match state with zero field-network
+> Audience Display's Companion URL at *our own* service (or run Companion and mirror its
+> presses), we get **frame-accurate, official-FMS match state with zero field-network
 > intrusion**. `Match Start` and `Endgame Start` alone are enough to drive automatic replay
 > markers and every scene cue. This is the single highest-leverage integration available when
 > the event runs official FMS.
@@ -69,7 +69,7 @@ Each maps to a Companion page/row/column button press (down + up).
 **What FMS does *not* give you:** a public local match-data API. Post-match data goes to a FIRST
 Azure database and comes back out through the public FRC Events API (internet required, and
 delayed). So live *numbers* must come from either Cheesy Arena, screen-scraping, or our own
-manual scoring — while live *state* comes from the Companion/OBS hooks above.
+manual scoring, while live *state* comes from the Companion/OBS hooks above.
 
 ---
 
@@ -80,7 +80,7 @@ Open-source alternative FMS, free for off-season events, scrimmages, and practic
 (`-dev` flag for a laptop). Supports real FRC-style networking (per-team SSIDs/WPA keys, VLANs),
 Allen-Bradley PLC field sensors, Advatek LEDs, DMX, and direct publishing to The Blue Alliance.
 
-**The main branch is already on 2026 REBUILT** — `game/hub.go`, fuel/tower scoring, and the
+**The main branch is already on 2026 REBUILT**: `game/hub.go`, fuel/tower scoring, and the
 audience display reads `EnergizedBonus` / `Supercharged` / `Traversal` bonus RPs.
 
 ### Cheesy Arena is a far better data source than FMS
@@ -101,7 +101,7 @@ Plus ~19 display pages, each with its own WebSocket
 (`/displays/audience/websocket`, `/displays/announcer/websocket`, `/displays/queueing/websocket`,
 `/displays/rankings/websocket`, `/displays/bracket/websocket`, `/displays/field_monitor/websocket`, …).
 
-The **arena notifier set** is the real prize — this is the full live event vocabulary:
+The **arena notifier set** is the real prize. This is the full live event vocabulary:
 
 | Notifier | Payload highlights |
 | --- | --- |
@@ -123,12 +123,12 @@ Audience display modes: `blank`, `intro`, `match`, `score`, `logo`, `logoLuma`, 
 
 - Audience Display runs in **Chrome fullscreen** on a Mac Mini at
   `http://10.0.100.1:8080/displays/audience`, out to a secondary monitor.
-- That output goes into a **Blackmagic 4K switcher as a downstream key — using LUMA keying, not
-  chroma**, because chroma key isn't available on the DSK. **Black = transparent.**
+- That output goes into a **Blackmagic 4K switcher as a downstream key (using LUMA keying, not
+  chroma)**, because chroma key isn't available on the DSK. **Black = transparent.**
 - Overlay audio goes to the venue mixer over RCA.
 
 > **Hard design constraint:** if any of our graphics pass through a Blackmagic DSK, they must be
-> designed to be luma-keyed — pure `#000` background, and no dark-on-dark detail that will key
+> designed to be luma-keyed, with a pure `#000` background and no dark-on-dark detail that will key
 > out. If they're an OBS Browser Source, true alpha is fine. **Every overlay we build must
 > support both**, hence the `?key=luma|alpha` switch in the prototype.
 
@@ -136,13 +136,13 @@ Audience display modes: `blank`, `intro`, `match`, `score`, `logo`, `logoLuma`, 
 
 ## 3. RoboSports Network (RSN)
 
-Community broadcast org. Partnered with FIRST for **PLAYxPLAY** and runs **FIRST Champs Live** —
+Community broadcast org. Partnered with FIRST for **PLAYxPLAY** and runs **FIRST Champs Live**:
 "RedZone-style" whip-around coverage of all Championship fields on one stream, with live
 commentary between matches, **instant replay and analysis**, and live alliance-selection coverage.
 Their **GameSense** tooling pulls from the FRC API to drive on-air data.
 
 **What we're borrowing:**
-1. The whip-around/"desk" format — a studio position that owns the gaps between matches. At a
+1. The whip-around/"desk" format is a studio position that owns the gaps between matches. At a
    one-field event like CalGames, the gaps *are* the product.
 2. Instant replay + analysis as a named, staffed segment, not an accident.
 3. Data-driven graphics fed by an API rather than typed by an operator.
@@ -151,13 +151,13 @@ Their **GameSense** tooling pulls from the FRC API to drive on-air data.
 
 ## 4. FRC event A/V, as actually practiced
 
-- **Audience Display machine** — separate box, wired to FMS, owns graphics + game audio. Often
+- **Audience Display machine**: separate box, wired to FMS, owns graphics + game audio. Often
   A/V's responsibility.
-- **Switcher** — Blackmagic ATEM class. Field wide, alliance-side cameras, pit/desk cam, plus the
+- **Switcher**: Blackmagic ATEM class. Field wide, alliance-side cameras, pit/desk cam, plus the
   overlay on a downstream key.
-- **Stream** — CalGames has historically streamed on YouTube (2025 ran three separate day-long
+- **Stream**: CalGames has historically streamed on YouTube (2025 ran three separate day-long
   streams). Sound from the venue mixer, graphics from the display machine.
-- **Automation** — FMS-driven via OBS scenes or Companion, as above. The community norm is
+- **Automation**: FMS-driven via OBS scenes or Companion, as above. The community norm is
   Companion + Stream Deck for the operator surface.
 - **Reality check from CalGames 2025:** a venue power outage killed the Sunday stream mid-event
   and forced a restart on a new URL. Any design that doesn't survive a power blip is a fiction.
@@ -171,8 +171,8 @@ Their **GameSense** tooling pulls from the FRC API to drive on-air data.
 | --- | --- | --- | --- |
 | **FRC Events API v3** | `https://frc-api.firstinspires.org/` | username + token (free, self-serve; non-commercial) | official schedule/results/rankings when the event runs FMS |
 | **The Blue Alliance v3** | `https://www.thebluealliance.com/api/v3` | `X-TBA-Auth-Key` header | team metadata, avatars, historical data, match videos |
-| **TBA Trusted API v1** | write API | event-specific auth id/secret | **publishing CalGames results live to TBA** — this is how off-season events get real-time results out. Cheesy Arena does this natively. |
-| **Statbotics** | `https://api.statbotics.io` | none | EPA ratings incl. component EPAs (auto/teleop/endgame) and ranking-point EPAs — pre-match prediction graphics |
+| **TBA Trusted API v1** | write API | event-specific auth id/secret | **publishing CalGames results live to TBA**. This is how off-season events get real-time results out. Cheesy Arena does this natively. |
+| **Statbotics** | `https://api.statbotics.io` | none | EPA ratings incl. component EPAs (auto/teleop/endgame) and ranking-point EPAs, for pre-match prediction graphics |
 | **start.gg** | `https://api.start.gg/gql/alpha` | bearer token, GraphQL | Smash bracket data (see [05-arcade.md](05-arcade.md)) |
 
 TBA also runs **GameDay**, a multi-stream FRC viewing page, and the **Event Wizard** for
@@ -184,7 +184,7 @@ off-season data entry (schedules, rankings, results, match videos, awards).
 
 Needed so the scoreboard graphics are correct.
 
-**Timing.** AUTO 0:20 → TELEOP 2:20 (Transition Shift 0:10, Shifts 1–4 at 0:25 each, End Game 0:30).
+**Timing.** AUTO 0:20 → TELEOP 2:20 (Transition Shift 0:10, Shifts 1-4 at 0:25 each, End Game 0:30).
 Total 2:40.
 
 **Scoring.**
@@ -194,21 +194,21 @@ Total 2:40.
 | FUEL into an **active** HUB | 1 | 1 |
 | FUEL into an **inactive** HUB | 0 | 0 |
 | TOWER Level 1 | 15 | 10 |
-| TOWER Level 2 | — | 20 |
-| TOWER Level 3 | — | 30 |
+| TOWER Level 2 | N/A | 20 |
+| TOWER Level 3 | N/A | 30 |
 
 Max 2 robots earn Level 1 in AUTO; one level per robot in TELEOP.
 
 **Ranking points.** Win 3 / Tie 1. Bonus RPs (regional thresholds):
 `ENERGIZED` = 100 fuel · `SUPERCHARGED` = 360 fuel · `TRAVERSAL` = 50 tower points.
 
-**Hub state.** Both hubs active in AUTO, Transition Shift, and End Game. During Shifts 1–4 the
+**Hub state.** Both hubs active in AUTO, Transition Shift, and End Game. During Shifts 1-4 the
 hubs **alternate active/inactive** based on AUTO performance.
 
 > **Broadcast implication.** The alternating hub state is the most confusing thing on the field
 > for a viewer, and it's the thing our overlay can fix. A persistent "which hub is live right now"
 > indicator plus a shift-clock is probably the single most valuable graphic we ship. Cheesy
-> Arena's audience display already tracks a hub indicator — we mirror that.
+> Arena's audience display already tracks a hub indicator, and we mirror that.
 
 **Field volume.** 504 FUEL total, depots and outpost chutes at 24 each, up to 8 preloads per robot.
 
