@@ -208,7 +208,8 @@ Drawing colors have to survive on top of a field that is itself red, blue, and g
 | Red / Blue | alliance tokens | **only** when marking a specific alliance's robot |
 
 Every stroke gets a 2px `--cg-black` outline so gold stays legible over the gold-ish field
-elements and lighting. Strokes carry a 6-second auto-fade unless pinned.
+elements and lighting. Strokes carry a 6-second auto-fade, with no pin to hold one past that:
+pinning is a lower-third concept only (rule 6 above).
 
 ## Logo lockup
 

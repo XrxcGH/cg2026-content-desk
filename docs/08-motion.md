@@ -108,7 +108,8 @@ exactly the emotional information you want during a fuel burst.
 
 ### 4. Pip Pop: ranking points
 
-Radial wipe fill + scale to 1.25 and back. **340ms**, `cubic-bezier(.34,1.56,.64,1)` (back-out).
+Color-block swap to the earned state + scale to 1.3 and back. **340ms**,
+`cubic-bezier(.34,1.56,.64,1)` (back-out).
 The overshoot is what makes an 18px element register at distance. It's the only case where we
 animate something small, and the pop is how it gets away with it.
 
@@ -166,7 +167,9 @@ The score climbing during endgame is the most important motion on the screen all
 it to "reduce distraction" would be exactly backwards. What we suppress is *competing* motion.
 
 `prefers-reduced-motion` collapses every transition to an instant state change, never to a
-half-speed version.
+half-speed version, with one deliberate exception: the Alert Pulse keeps blinking. It is the
+endgame / E-stop alert, live state rather than decoration, and at 0.83 Hz it stays well inside
+WCAG 2.3.1 (see the flash-rate note above).
 
 ---
 

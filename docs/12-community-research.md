@@ -3,8 +3,12 @@
 What the FRC community actually complains about: webcast/AV quality, between-match
 pacing, spectator experience, and volunteer tooling. Researched across Chief Delphi,
 Reddit, FIRST official blogs, and ecosystem project pages (July 2026), then deduplicated
-and judged against what this desk already implements. 43 findings from
+and judged against what the desk implemented at the time of the audit. 42 findings from
 66 raw citations across six research angles.
+
+**Statuses are the audit's, kept as the record of why each piece was built.** The P2.5 build
+([09-roadmap-and-risks.md](09-roadmap-and-risks.md)) has since closed most of the gap list;
+findings that are now shipped carry a *Built since this audit* note.
 
 Statuses: **not-implemented** (a real gap), **partial** (we cover half),
 **already-implemented** (community validation of a shipped feature),
@@ -20,6 +24,10 @@ Statuses: **not-implemented** (a real gap), **partial** (we cover half),
 Merged from four raw findings. Announcers mispronounce team names, mis-explain penalties, and lack ranks/RP thresholds in front of them; the community ships gatool.org and a yearly Game Announcer Cheat Sheet because the alternative is '60 sheets of paper', and gatool now works with Cheesy Arena at offseasons (announcer must be on the Cheesy network, mixed-content browser caveat, not Safari). The best GAs do heavy manual prep (per-team history spreadsheets, pronunciation checks). The desk's architecture diagram (docs/02) lists an 'Announcer / analyst tablet' surface but nothing exists in surfaces/ and the docs never mention gatool.
 
 **Recommendation:** Two-track fix. (1) Zero-code: add gatool to the ops runbook (GA device on the production LAN reachable to the Cheesy host, note the unencrypted-content browser caveat, confirm on the FTA sign-off sheet). (2) Cheap build: a read-only /s/talent page off the existing event bus with next-match team cards (name, rank, W-L, pronunciation note, one editable fact line seedable from TBA/Statbotics), live RP-threshold progress (same data driving the badges), and a producer-pushed storyline note; link the REBUILT cheat-sheet PDF. Ensures what the PA says matches what the overlay shows.
+
+**Built since this audit:** `/s/talent` covers track (2): next-match team cards, ranks, RP
+progress in words, and pronunciation notes that persist on the device. It links gatool.org as
+the zero-code companion.
 
 - <https://www.chiefdelphi.com/t/what-makes-a-good-emcee-and-ga/364583>
 - <https://www.chiefdelphi.com/t/first-game-announcer-tool-is-now-available-for-everyone/501909>
@@ -52,6 +60,9 @@ Selection is a long on-stage segment where spectators watch students walk across
 
 **Recommendation:** Build an alliance-selection board overlay: live alliance grid, remaining ranked teams (from the rankings poll the hub already does), accepted/declined states, and an optional pick-clock countdown graphic so CalGames can run an IRI-style timed selection.
 
+**Built since this audit:** the program's `selection` screen draws captains in seed order, the
+ranked pool greying out as teams are taken, and Cheesy Arena's own pick clock.
+
 - <https://www.chiefdelphi.com/t/split-thread-alliance-selection-time-limits-iri/438736>
 - <https://www.chiefdelphi.com/t/2024-iri-alliance-selection/468464>
 - <https://www.chiefdelphi.com/t/time-limits-on-alliance-selection/463464>
@@ -63,6 +74,9 @@ Selection is a long on-stage segment where spectators watch students walk across
 Chezy Champs 2025 adopted a full VAR addendum (credited to Sunset Showdown): Head Ref or dedicated VAR reviews any call using only official field cameras, one playoff challenge coupon per alliance captain, 120-second review cap. Community pressure for video review is long-running and loud: official rules bar it, so score disputes stall events while refs deliberate from memory and the call stands even when wrong; offseasons are explicitly the pilot ground. The desk's rolling multi-cam record + markers + clip-seek is exactly the hardware/software a VAR seat needs, but there is no ref-facing workflow.
 
 **Recommendation:** If CalGames adopts VAR (or even informal head-ref replay-on-request), give the head ref a dedicated read-only replay view (timeline + frame-step, no cut/publish controls) fed from desk recordings, kept entirely outside the Cheesy field bridge. Pair with the 'Match Under Review' broadcast state (see review-states finding) so the 120-second window isn't dead air.
+
+**Built since this audit:** `/s/var` gives the head referee a frame-step view of the recording,
+read-only by construction: no cut, no send to air, no publish, no route to the field.
 
 - <https://media.team254.com/2025/09/978607e3-CC2025-RuleChanges-v2.pdf>
 - <https://www.chiefdelphi.com/t/chezy-champs-2025/500661?page=3>
@@ -88,6 +102,9 @@ Raised in the DMCA/stream-audio thread as a cheap accessibility win ('even the p
 Since 2025 FIRST's own audience displays put a QR code on every match-results screen linking to the detailed breakdown on FRC Events, and parents' guides lean on QR/app links as the answer to 'what just happened?'. No QR codes exist anywhere in the desk's surfaces.
 
 **Recommendation:** Add a small QR to the final-score screen (venue projector path), a rotating QR on side screens (TBA event page, live stream URL, phone-facing next-match view), and a TBA-match-page QR on the 1080x1080 social cards. Cheap canvas render; matches what spectators now expect from official events.
+
+**Built since this audit:** the side screens carry a vendored-QR corner card pointing at
+`/s/next`, no third-party QR service, so it works on a LAN with no internet.
 
 - <https://www.chiefdelphi.com/t/frc-blog-2025-scoreboard-and-live-stream-graphics/491037>
 - <https://www.chiefdelphi.com/t/2026-scoreboard-graphics/513120>
@@ -172,6 +189,9 @@ TBA built predicted match times because published schedules are meaningless: eve
 
 **Recommendation:** The desk polls schedule/rankings but computes no drift. Add a rolling actual-cycle-time estimator (TBA-style: median of recent cycles, excluding breaks/outliers) and surface 'running X min behind / est. start HH:MM' on side screens, the on-deck queue, the phone-facing schedule view, and optionally a broadcast lower third.
 
+**Built since this audit:** `apps/core/src/pace.ts` implements the median-cycle estimator, and
+drift-adjusted start estimates now appear everywhere a schedule does.
+
 - <https://blog.thebluealliance.com/2017/05/11/tech-talk-how-tba-predicts-match-times/>
 - <https://www.chiefdelphi.com/t/time-to-overhaul-match-schedules/461557>
 - <https://www.chiefdelphi.com/t/match-scheduler-criteria/386813>
@@ -183,6 +203,10 @@ TBA built predicted match times because published schedules are meaningless: eve
 Merged from three raw findings. Robot/radio connection problems (not field reset) are the dominant slow-cycle cause (VH-109 heat/link threads, CA offseasons piloting revised match-start processes), and spectators experience these as unexplained idle time; long stoppages 'suck the energy out of the crowd' (Einstein primetime thread, Israel DCMP Q62's marathon field fault). For families who came to see one team, an unexplained 40-minute hold with no on-screen status is the worst part of the day. The desk detects robot-dropped-connection (as replay markers) and arms screens before countdown, but nothing tells the room or stream why the field is waiting.
 
 **Recommendation:** Add an audience-facing field-status card ('Waiting on robot connection', 'Field reset in progress', 'Field delay, back at HH:MM') derived from allowlisted Cheesy Arena state, auto-shown on program and side screens when the gap exceeds a threshold, plus a single 'unplanned delay' macro on the desk console that flips to the trivia/arcade rotation with a 'back shortly' bug in one keystroke.
+
+**Built since this audit:** one desk button raises a status card (Field delay / Score review /
+Arena fault / Match replay, with an estimated return time) on program, side screens, and phones
+at once.
 
 - <https://www.chiefdelphi.com/t/time-to-overhaul-match-schedules/461557>
 - <https://www.chiefdelphi.com/t/frc-vividhosting-vh109-radio-heat-and-delay-problem/484792>
@@ -197,6 +221,10 @@ Merged from three raw findings. Robot/radio connection problems (not field reset
 Merged from four raw findings; the most tool-solved spectator/team pain in the community. PitRadar (4+ pages of traction) exists because most people at an event can't see the field or a schedule reflecting reality; Nexus sends queuing notifications at 140+ events; parent guides tell families to install TBA just for match alerts; at 2026 Champs LTE was so bad the Nexus website wouldn't load and the top ask was physical displays in the pits; a small team reported 'no one was coming by to tell us to get to queue.' A pit-display ecosystem (Nexus pit display, PitFUSION, PitRadar) fuses queue + rankings + stats onto one glanceable screen.
 
 **Recommendation:** The room-scale side screens (on-deck queue + rankings) cover the main venue but are not per-team and not reachable from a phone or pit TV. Serve the side-screen data as a lightweight LAN page any phone or pit TV can open (the trivia phone stack and REST-polling surface architecture already prove the pattern), showing current match, next 3 queue calls, 'when does team X play next', and drift-adjusted estimated times; put its QR on side screens and social cards.
+
+**Built since this audit:** `/s/next` answers "when do we play?" on any phone, reached by the
+side screens' QR card, and `/s/watch` wraps any open screen for a pit TV that has nothing but a
+browser.
 
 - <https://www.chiefdelphi.com/t/introducing-pitradar-a-free-live-competition-dashboard-for-pit-displays-spectators/517920>
 - <https://pitradar.app/>
@@ -228,6 +256,9 @@ Team 2363 prints tri-fold spectator brochures because 'I had no idea what was ha
 
 **Recommendation:** RP badges with icons, hub-state text, and scorebug-education trivia questions help, but there is no dedicated explainer. Add a 30-60s 'how to watch REBUILT' graphics loop for pre-session and gap time (auto → teleop → endgame, what hub shifts mean, what an RP is) plus a printable/QR one-pager modeled on the Triple Helix tri-fold that side screens can point to.
 
+**Built since this audit:** the program's `explain` screen loops six cards, twelve seconds each,
+in the gaps: what fuel is, why only one hub scores, why a losing alliance is celebrating.
+
 - <https://www.chiefdelphi.com/t/2019-spectators-guide/348609>
 - <https://www.chiefdelphi.com/t/frc-doesnt-need-to-be-a-spectator-sport-to-change-culture/386829>
 - <https://www.frczero.org/competition/parents-guide-to-competition/>
@@ -245,10 +276,6 @@ Merged from three raw findings. The desk is ahead of official graphics on the bi
 - <https://www.chiefdelphi.com/t/2026-scoreboard-graphics/513120>
 - <https://www.chiefdelphi.com/t/fuel-is-counted-until-t-0-03-but-not-on-the-audience-display/515863>
 - <https://www.chiefdelphi.com/t/2023-iri-stream-is-actually-really-good/438732>
-
-- <https://www.chiefdelphi.com/t/opinions-on-twitch-as-an-frc-streaming-platform/458993>
-- <https://www.chiefdelphi.com/t/missing-event-videos/458269>
-- <https://www.chiefdelphi.com/t/recorded-award-ceremony/516458>
 
 ### Secondary angles miss the human element: human players, stack lights, consistent layouts
 
@@ -404,7 +431,7 @@ Merged from three raw findings. Same-day HD match videos on YouTube linked to TB
 
 FIRST's auto splitter/uploader has repeatedly produced 11-15 second 'match videos', uploaded the wrong match, or dropped whole mornings (Kettering Q55-Q80, several FMA events); fixes depend on one volunteer's spare time. Scouts call timely, correct match video essential for picklists.
 
-**Recommendation:** Covered: every publish-queue item kind carries a plausible duration range (`QC_BOUNDS` in `apps/core/src/publish/queue.ts`, e.g. 60-900s for a match), and a cut outside its range is parked `held` with a reason rather than moving on to upload. An operator releases it from the desk console after a look, the same action that lets a `deferred`-mode queue go at end of day. See [11-distribution.md](11-distribution.md).
+**Recommendation:** Covered: every publish-queue item kind carries a plausible duration range (`QC_BOUNDS` in `apps/core/src/publish/queue.ts`, e.g. 60-900s for a match), and a cut outside its range is parked `held` with a reason rather than moving on to upload. An operator releases it with `POST /api/publish/release` after a look, the same action that lets a `deferred`-mode queue go at end of day; there is no desk-console panel over the queue yet, so the look means `GET /api/publish`. See [11-distribution.md](11-distribution.md).
 
 - <https://www.chiefdelphi.com/t/missing-event-videos/458269>
 - <https://www.chiefdelphi.com/t/first-webcast-unit-video-issues/352827>
@@ -464,9 +491,9 @@ The 2026 field was called 'time consuming to reset for volunteers'; reset length
 
 *recurring*
 
-TBA GameDay is the community's multi-stream viewing hub; events get on it via the Trusted API 'Add webcast' flow, and viewers complain when a stream isn't listed. The desk implements webcasts/update add/remove for the YouTube URL and documents webcastUrl as registered on TBA.
+TBA GameDay is the community's multi-stream viewing hub; events get on it via the Trusted API webcast flow, and viewers complain when a stream isn't listed. In the Trusted API v1 the webcast list is a field on `POST info/update` that overwrites the whole list; there is no dedicated webcast endpoint (docs/11 covers this).
 
-**Recommendation:** Nothing beyond executing it. The remaining blocker per README is obtaining the TBA Trusted API credentials for the event.
+**Recommendation:** Execute it: obtain the TBA Trusted API credentials for the event (the remaining blocker per README), and put the register-on-stream-start step on the day-of checklist, since nothing fires it automatically yet.
 
 - <https://www.thebluealliance.com/gameday>
 - <https://www.chiefdelphi.com/t/tba-week-7-stream-issues/518792>
@@ -476,7 +503,7 @@ TBA GameDay is the community's multi-stream viewing hub; events get on it via th
 
 *recurring*
 
-District upload volunteers hit YouTube's daily per-channel upload limits (PNW rate-limited early each season; Ontario spread videos across channels as a workaround); new channels have low caps that grow with history. The desk's docs/11 and roadmap risk table already distinguish channel caps from API quota, plan to use WRRF's established channel, stage uploads across the weekend, and pause/resume the queue on quota exhaustion.
+District upload volunteers hit YouTube's daily per-channel upload limits (PNW rate-limited early each season; Ontario spread videos across channels as a workaround); new channels have low caps that grow with history. The desk's docs/11 and roadmap risk table already distinguish channel caps from API quota, plan to use WRRF's established channel, and stage uploads across the weekend via the `deferred` default. A quota-exhausted item is not paused-and-resumed automatically: it goes `failed` after its retries and needs a per-item `POST /api/publish/retry/{id}` (docs/11, Failure handling).
 
 **Recommendation:** Keep the existing plan, including the config note about enabling live streaming 24h in advance on the channel.
 

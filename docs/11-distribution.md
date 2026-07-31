@@ -21,8 +21,14 @@ So "live-stream to YouTube and TBA" is **one stream to YouTube**, plus a small A
 where it is:
 
 ```
-PATCH /api/trusted/v1/event/2026cacg/webcasts/update
+POST /api/trusted/v1/event/2026cacg/info/update
+{ "webcasts": [{ "url": "https://youtube.com/watch?v=..." }] }
 ```
+
+There is no dedicated webcast endpoint in the Trusted API: the webcast list rides as a field on
+the event-info update, and that field **overwrites the existing list** every time. Registering a
+stream means sending the full set of webcasts the event should have; pulling one at end of day
+means sending the list without it.
 
 That's the whole TBA side of live streaming. It simplifies the rig considerably: one encoder, one
 destination, no bonded uplink, no second bitrate budget.
@@ -33,15 +39,20 @@ Same story for video-on-demand: we upload to YouTube, then hand TBA the **YouTub
 
 ## The Trusted API surface we use
 
-Verified against [TBA Trusted APIv1](https://www.thebluealliance.com/apidocs/trusted/v1).
+Checked against the Trusted API v1 swagger spec in the TBA repository, July 2026. The spec has
+exactly ten paths; every write is a `POST` and `GET /event/{key}/info` is the only read. An
+earlier revision of this document listed `PATCH`/`DELETE` webcast endpoints and a
+`match_videos/delete`; none of those exist, so nothing operational may depend on them.
 
 | Endpoint | Method | We use it for |
 | --- | --- | --- |
-| `/event/{key}/webcasts/update` | `PATCH` | register the live stream so it appears on TBA/GameDay |
-| `/event/{key}/webcasts/update` | `DELETE` | pull the webcast down at end of day |
+| `/event/{key}/info/update` | `POST` | its `webcasts` field registers the live stream on TBA/GameDay. Overwrites the whole webcast list, so always send the full desired set, and send *only* the `webcasts` key |
 | `/event/{key}/match_videos/add` | `POST` | link an uploaded match video to its match key |
 | `/event/{key}/media/add` | `POST` | event-level video (analysis segments, fun content) |
-| `/event/{key}/match_videos/delete` | `DELETE` | fix a mislinked video |
+
+There is no way to *remove* a match video: per the spec, the endpoint allows addition only. A
+mislinked video is fixed by adding the right one and asking a TBA admin to pull the wrong link
+(see Failure handling).
 
 **Auth** is not a bearer token. Two headers:
 
@@ -59,14 +70,14 @@ credentials problem and aren't.
 > **Cheesy Arena owns match data on TBA. We own video only.**
 
 Cheesy Arena publishes teams, matches, rankings, alliances, and awards natively. We must **never**
-call `matches/update`, `rankings/update`, `alliance_selections/update`, `awards/update`, or
-`team_list/update`. Those endpoints require the *full* dataset, so a partial write **deletes
-everything not included** rather than merely conflicting.
+call `matches/update`, `matches/delete`, `rankings/update`, `alliance_selections/update`,
+`awards/update`, or `team_list/update`. Those endpoints require the *full* dataset, so a partial
+write **deletes everything not included** rather than merely conflicting.
 
-Our allowlist is exactly four paths: `webcasts/update`, `match_videos/add`, `media/add`, and
-`match_videos/delete`. Same enforcement pattern as the field bridge in
-[10-field-bridge.md](10-field-bridge.md): a constant, with a test that fails if anything else
-appears.
+Our allowlist is exactly three paths: `info/update` (sent with the `webcasts` key alone, since
+the same endpoint could rewrite event metadata), `match_videos/add`, and `media/add`. Same
+enforcement pattern as the field bridge in [10-field-bridge.md](10-field-bridge.md): a constant,
+with a test that fails if anything else appears.
 
 ---
 
@@ -101,7 +112,7 @@ the broadcast.
 
 Policy, configurable, defaulting to safe:
 
-| Mode | Behaviour |
+| Mode | Behavior |
 | --- | --- |
 | `deferred` **(default)** | Record and queue during the event. Upload after the venue closes, or after the event entirely. |
 | `trickle` | Upload during the event, hard-capped well under the live stream's headroom, paused automatically during matches. |
@@ -121,7 +132,8 @@ competes with an upload.**
      │                                          │
      └──────▶ RTMP ──▶ YouTube Live             │
                          │                      │
-                         └─▶ TBA webcasts/update│
+                         └─▶ TBA info/update    │
+                             (webcast list)     │
                                                 ▼
    match.start / match.score_posted ──▶  Segment Cutter
    desk "mark analysis" / "mark in-out"        │
@@ -214,8 +226,8 @@ title matches the official-channel style without anyone typing it by hand:
 | `closing` | Closing Ceremony |
 
 Anything else passed as the segment is taken as a literal title, which is how a single award gets
-its own video (`Chairman's Award - CalGames`). None of these carry a TBA match key, so they link to
-the event as media (`media/add`) rather than to a match.
+its own video (`FIRST Impact Award - CalGames`). None of these carry a TBA match key, so they link
+to the event as media (`media/add`) rather than to a match.
 
 ### QC hold: an implausible cut never publishes quietly
 
@@ -286,7 +298,10 @@ link never leaves an orphan video with no context.
 
 - One OBS/vMix output → YouTube RTMP (`rtmp://a.rtmp.youtube.com/live2`, stream key from YouTube
   Studio).
-- On stream start, `PATCH /webcasts/update` with the YouTube URL. On end of day, `DELETE`.
+- On stream start, register the YouTube URL on TBA: `POST info/update` with the full `webcasts`
+  list. At end of day, send the list without it. Nothing fires this automatically on stream
+  start or stop today, so it belongs on the day-of checklist rather than in anyone's mental
+  model of "the desk handles it".
 - **Local recording never stops**, independent of the stream. This is the second reason to prefer
   rolling record over a replay buffer, and the direct lesson from the CalGames 2025 power outage
   that killed the Sunday stream and forced a restart on a new URL. If the stream dies, the archive
@@ -330,15 +345,15 @@ Venue uplink trouble is a "when". Decide the moves now, not on Saturday:
 
 Every one of these is a "when", not an "if":
 
-| Failure | Behaviour |
+| Failure | Behavior |
 | --- | --- |
 | Venue internet drops | Queue keeps cutting and queueing. Nothing is lost. Uploads resume on reconnect. |
 | Upload fails mid-file | Resumable upload, restarting from the last committed byte, not byte zero. |
-| YouTube quota exhausted | Queue pauses, logs plainly, resumes next day. |
-| Channel upload cap hit | Same. This is why `deferred` staging exists. |
+| YouTube quota exhausted | Each item retries with backoff, then goes `failed` after 6 attempts, which a quota outage burns through in about two minutes. The queue does not park itself or resume on its own: recovery is per-item, `POST /api/publish/retry/{id}`, after the quota resets. `deferred` staging is the real protection. |
+| Channel upload cap hit | Same failure path, same per-item retry. This is why `deferred` staging and an established channel matter. |
 | TBA link fails | Video stays unlisted, item stays `uploaded`, retried. Never silently public-and-unlinked. |
 | Core restarts | Queue is on disk. It reloads and carries on. |
-| Wrong match linked | `match_videos/delete`, fix, re-add. |
+| Wrong match linked | The Trusted API cannot remove a video. Add the correct video to the correct key, then ask a TBA admin (contact@thebluealliance.com) to pull the wrong link. |
 
 The queue is deliberately boring: a JSON file, a state machine, and exponential backoff. Every
 item's state, including anything `held`, is readable at `GET /api/publish` (gated, so an operator

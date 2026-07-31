@@ -48,12 +48,19 @@ type DeskEvent = {
   id: string;              // ULID, sortable and unique
   ts: number;              // wall clock, epoch ms, from the desk's clock
   matchClock: number|null; // signed seconds vs. match start. -20 = auto start, 0 = teleop... see below
-  source: 'cheesy'|'fms'|'frcapi'|'tba'|'statbotics'|'startgg'|'manual'|'cue';
+  source: 'cheesy'|'frcapi'|'tba'|'statbotics'|'startgg'|'manual'|'cue'|'clock'|'demo'|'replay';
+  // 'clock' is the 10Hz ticker's time-driven phase boundaries; 'demo' is the
+  // simulated match driver, tagged honestly so it can never pass for field data.
   confidence: 'authoritative'|'derived'|'estimated';
   type: string;            // see vocabulary
   payload: unknown;
 };
 ```
+
+There is no `'fms'` source: that adapter is reference-only (see below) and the type in
+`types.ts` never grew one. `'replay'` covers events the replay and telestrator services emit
+themselves (`replay.clip_ready`, `telestrator.frame`), and the cue engine treats it as
+operator-driven when applying the wide-shot lock.
 
 `confidence` matters more than it looks. FMS-via-Companion gives `authoritative` state but no
 numbers. A scene-change inferred from OBS is `derived`. An operator's guess is `estimated`.
@@ -260,7 +267,8 @@ during show.
 ### Why the event log matters
 
 Because it makes the whole thing **replayable in development**. Record Friday's practice matches
-to NDJSON, then `core --replay friday.ndjson --speed 4` and you can build and test every graphic
+to NDJSON, then `npm run replay -- data/events/friday.ndjson 4` (the speed is positional, after
+the file; there is no `--speed` flag) and you can build and test every graphic
 on Sunday night in October, or in March, on a laptop, with no field. Volunteer-run systems live
 or die on whether people can practice without hardware.
 
@@ -290,12 +298,13 @@ All surfaces are browser pages that consume the same WS stream and the same
 | Talent view | `/s/talent` | announcer tablet, RP progress in words, pronunciation notes |
 | When do we play? | `/s/next` | any phone, per-team schedule with drift-adjusted estimates |
 | Head referee review | `/s/var` | operator laptop, frame-step review only: no cut, no publish |
+| Pit monitor kiosk | `/s/watch` | venue pit TVs, a full-screen wrapper around any open screen |
 | Phone remote | `/s/remote` | operator's phone, runs the show over the venue Wi-Fi |
 
-Access is gated by [`access.ts`](../apps/core/src/access.ts): the overlays, the venue TVs, and the
-two audience phone pages (`program`, `side`, `tele`, `arcade`, `trivia`, `quiz`, `next`) are open by
-allowlist; every operator console and every write requires the shared PIN. See
-[the README](../README.md#who-can-drive-it).
+Access is gated by [`access.ts`](../apps/core/src/access.ts): the overlays, the venue TVs, the
+two audience phone pages, and the pit monitor kiosk (`program`, `side`, `tele`, `arcade`,
+`trivia`, `quiz`, `next`, `watch`) are open by allowlist; every operator console and every write
+requires the shared PIN. See [the README](../README.md#who-can-drive-it).
 
 ---
 

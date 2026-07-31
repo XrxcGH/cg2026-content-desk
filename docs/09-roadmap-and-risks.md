@@ -23,7 +23,8 @@ no network approval needed.
 - ✅ Desk console: keyboard-first, drives the whole show including shadow scoring at `estimated`
   confidence and back-dated replay markers
 - ✅ Team media library: drag-drop upload, alpha/perimeter validation, trim, multi-width output,
-  three-tier fallback in the overview
+  two-tier fallback in the overview (cutout, else the gold-number plinth; the tier-2 TBA avatar
+  is designed but not wired, see [07-team-media.md](07-team-media.md))
 - ✅ Telestrator: `/s/draw` pad + `/s/tele` render surface, shared renderer, six tools
   (pen, arrow, circle, spotlight, path, team tag), five inks, frozen-frame backdrop,
   6s auto-fade, ANALYSIS chip. Strokes relay off-bus at pointer rate; one durable
@@ -143,7 +144,7 @@ desk. The high-leverage items are built:
   answer exists on the server either. It resolves from the posted score
 
 - ✅ **Alliance size is data, not a constant**: every surface that lists teams sizes itself off
-  the array it is given. The overview grid takes its column count from the alliance, the score
+  the array it is given. The overview grid takes its row count from the alliance, the score
   bar tightens its leading for a fourth line, the deck blocks on the venue TVs follow suit, and
   the social card recomputes its vertical rhythm. Team numerals scale against their own column
   with container queries, so a 5-digit rookie number in a four-up playoff alliance stops short
@@ -153,10 +154,10 @@ desk. The high-leverage items are built:
 
 Still open, and each for a reason. **Statbotics prediction** stays blocked upstream (`/v3` was
 returning 500s again on 2026-07-30). **frc-colors accents** were considered and dropped: the WRRF
-palette is mandated and alliance colours are reserved as semantic-only ([03](03-brand.md)), so
-per-team colours on broadcast graphics would break the rule the rest of the system follows.
-A full **colourblind pass** is a Friday task with the graphics on the actual projector, not a
-code change, since every colour-carrying element already has a non-colour cue.
+palette is mandated and alliance colors are reserved as semantic-only ([03](03-brand.md)), so
+per-team colors on broadcast graphics would break the rule the rest of the system follows.
+A full **colorblind pass** is a Friday task with the graphics on the actual projector, not a
+code change, since every color-carrying element already has a non-color cue.
 
 ### P3: Nice to have, cut without regret
 
@@ -167,7 +168,9 @@ code change, since every colour-carrying element already has a non-colour cue.
 
 ### The week of
 
-Freeze code the **Monday before**. Friday is for cable-labeling, the photo session, a full
+Freeze code the **Monday before**, then build the launcher exe from the frozen tree and hand out
+copies: getting the desk onto the AV machines is a double-click, not a git clone
+([13-deployment.md](13-deployment.md)). Friday is for cable-labeling, the photo session, a full
 end-to-end rehearsal during practice matches, and **30 minutes looking at every graphic from the
 back row of the gym**. Nothing new ships Friday.
 
@@ -205,7 +208,7 @@ process that also runs the arena loop and PLC I/O, so nothing of ours ever runs 
 | Risk | Likelihood | Impact | Mitigation |
 | --- | --- | --- | --- |
 | **Venue power outage** | **High** (it happened in 2025 and killed the Sunday stream) | High | UPS on every production box; rolling record never stops; backup stream key pre-created and the fallback URL posted before the event |
-| **Our software interferes with field control**, a stray connection to `/match_play` or `/panels/scoring`, or resource starvation on the FMS host | Low | **Severe** (the one way this project can damage the event and our standing with WRRF) | Endpoint allowlist as a constant with a failing unit test; `GET`-only HTTP client; nothing of ours ever runs on the FMS machine; backoff + circuit breaker; rehearsed kill switch. See [10-field-bridge.md](10-field-bridge.md) |
+| **Our software interferes with field control**, a stray connection to `/match_play` or `/panels/scoring`, or resource starvation on the FMS host | Low | **Severe** (the one way this project can damage the event and our standing with WRRF) | Endpoint allowlist as a constant with a failing unit test; `GET`-only HTTP client; nothing of ours ever runs on the FMS machine; exponential backoff with jitter; rehearsed kill switch. See [10-field-bridge.md](10-field-bridge.md) |
 | `displayId` collision reconfigures a real audience display | Low | Medium | Reserved ID agreed with the scorekeeper in writing, always passed explicitly |
 | Venue internet is poor or absent | Medium | Low to Medium | Cache team lists, avatars, and Statbotics data locally on Friday. Nothing on the critical path needs internet except the stream itself |
 | Too few robot photos | **High** | Low | Tier-3 fallback (gold team number on a purple plinth) must look deliberate. Ship the screen with zero photos and improve it live |

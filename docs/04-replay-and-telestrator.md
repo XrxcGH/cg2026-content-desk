@@ -58,12 +58,9 @@ gets working NVENC (RTX 40-series allows 8 concurrent sessions on current driver
 cameras, or lower resolution on the secondary angles.
 
 This is the strongest practical argument yet for the **ATEM Mini Extreme ISO** in
-[06-hardware-and-network.md](06-hardware-and-network.md): it ISO-records all inputs in hardware and
-makes the encoder question disappear entirely.
-
-**Cheaper hardware path:** a **Blackmagic ATEM Mini Extreme ISO** does this in the box: it ISO
-records all 8 inputs to separate files while switching. If the budget allows one purchase, it's
-this one. See [06-hardware-and-network.md](06-hardware-and-network.md).
+[06-hardware-and-network.md](06-hardware-and-network.md): it ISO-records all 8 inputs to separate
+files in hardware while switching, and makes the encoder question disappear entirely. If the
+budget allows one purchase, it's this one.
 
 Keep the OBS replay buffer configured anyway as a 30-second panic button. Belt and suspenders.
 
@@ -137,14 +134,15 @@ converge on this and they're right.
   └──────────────┘                  └──────┘               └────────────┘
 ```
 
-**Send strokes, not pixels.** Each pointer event is:
+**Send strokes, not pixels.** Each finished stroke becomes one durable event (per-sample points
+travel on the relay path below, not the bus):
 
 ```ts
 { type: 'telestrator.stroke',
-  payload: { strokeId, tool: 'pen'|'arrow'|'ellipse'|'spotlight'|'path'|'tag',
+  payload: { id: 'smcqk3v40', tool: 'pen'|'arrow'|'ellipse'|'spotlight'|'path'|'tag',
              ink: 'gold'|'good'|'note'|'red'|'blue',
-             pts: [[0.412, 0.688], [0.418, 0.690], ...],   // normalized 0-1
-             width: 7, seq: 12 } }
+             width: 7, meta: { team: 846 },                 // tag pucks; null otherwise
+             pts: [[0.412, 0.688], [0.418, 0.690], ...] } } // normalized 0-1
 ```
 
 Normalized coordinates mean the tablet's aspect ratio doesn't have to match the program feed, and
@@ -193,7 +191,7 @@ frame (or the live/looping clip) in OBS.
 | **Ellipse** | drag to circle a robot; snaps to a nice aspect | `E` |
 | **Spotlight** | dims everything outside a lassoed region to 55% purple-black | `S` |
 | **Path** | dashed line with an animated dash-offset (shows intended route) | `R` |
-| **Team tag** | tap a team number, then drop its puck onto a robot | `T` |
+| **Team tag** | tap a team puck, then drop it onto a robot. No key: the puck picks the team, so a bare shortcut would have nothing to tag | |
 | **Undo / Clear** | `Z` / `C` | |
 | **Hide** | instantly clears program without clearing the pad | `H` |
 
@@ -215,11 +213,17 @@ pin to hold one past that.
 ### On-air chrome
 
 While strokes are live, program shows a small `ANALYSIS` chip with the analyst's name (bottom-left,
-inside title-safe). It comes up with the first stroke and retires 1s after the last one fades. The
-audience should always know they're looking at opinion, not officiating.
+inside title-safe). It comes up with the first stroke and retires the moment the last one fades.
+The audience should always know they're looking at opinion, not officiating.
 
 ### Failure mode
 
-If the tablet drops off Wi-Fi mid-stroke, `/s/tele` holds the last complete stroke and fades it on
-schedule. It never freezes a half-drawn line on air. The draw pad reconnects and resyncs from the
-last `seq`.
+If the tablet drops off Wi-Fi *between* strokes, nothing is on air to go wrong: finished strokes
+fade on their own schedule, and the pad's status dot shows the reconnect.
+
+A drop *mid-stroke* is uglier, and worth being honest about: the render surface never receives
+that stroke's `end`, so the partial line stays on air at full opacity until the analyst hits
+Clear or Hide, or until the render surface itself reconnects (its reconnect handler closes out
+any stroke still open). The relay protocol has no sync cursor, so nothing is re-sent when the
+pad's socket comes back. If a resync is ever built, it belongs in the pad's reconnect handler
+(re-send `end` for its open strokes); until then, Clear is the recovery.

@@ -77,10 +77,13 @@ whole safety argument.
    registering with an ID a genuine audience display uses could reconfigure that display. Agree
    `contentdesk1`…`contentdesk4` (or whatever they prefer) in advance, and always pass it
    explicitly. Connecting without one makes Cheesy allocate an ID and redirect.
-5. **Connection budget:** one WS per allowed endpoint, one concurrent HTTP request. Polling floors
-   of 60s (3s only in the post-match window).
-6. **Exponential backoff with jitter, 1s → 60s, plus a circuit breaker.** A reconnect storm during
-   a field reset is now the most plausible way this project causes a problem.
+5. **Connection budget:** one WS per allowed endpoint, one concurrent HTTP request. The schedule
+   and rankings poll every 60s, plus one deferred refresh about 1.5s after a posted score so the
+   side screens are not a minute behind the room. There is no faster polling mode.
+6. **Exponential backoff with jitter, 1s → 60s.** A reconnect storm during a field reset is now
+   the most plausible way this project causes a problem. There is no circuit breaker beyond the
+   60s cap: the bridge keeps retrying at that ceiling until the kill switch or the operator stops
+   it.
 
 ## The one remaining way we could actually interfere
 
@@ -143,8 +146,8 @@ whatever fits. The only line is the allowlist above.
 > **Display registration:** we register as display ID `________` (agreed with the scorekeeper) so
 > we can't collide with a real audience display. Listener only.
 >
-> **Load:** one websocket per endpoint, one HTTP request at a time, 60s polling (3s post-match),
-> exponential backoff and a circuit breaker on failure.
+> **Load:** one websocket per endpoint, one HTTP request at a time, 60s polling plus one extra
+> refresh ~1.5s after a score posts, exponential backoff capped at 60s on failure.
 >
 > **Isolation:** nothing of ours runs on the FMS machine. Separate host, separate UPS, separate
 > switch. No default gateway or DNS on the field NIC; Windows discovery protocols disabled.
@@ -205,8 +208,9 @@ Good for catching a regression in September without waiting on the next chance a
       exercises the same client, allowlist, and adapter without needing a live Cheesy Arena build
 - [ ] Re-run `harness.mjs` against the actual off-season build being used at the event, in case it
       differs from `main`
-- [ ] Unit test asserting the endpoint allowlist. It should fail if anyone adds a `/panels/` or
-      `/match_play/` path.
+- [x] Unit test asserting the endpoint allowlist (`cheesy.test.ts`: refuses control sockets,
+      permits only the listener sockets, refuses REST paths outside the read allowlist). It fails
+      if anyone adds a `/panels/` or `/match_play/` path.
 - [ ] Unit test asserting the HTTP client rejects every method except `GET`.
 - [x] Kill Cheesy Arena mid-match; confirm we back off cleanly instead of hammering.
 - [ ] Wireshark the field NIC for five minutes; confirm nothing but allowlisted traffic. Bring the

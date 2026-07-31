@@ -9,6 +9,30 @@ photos, live data-driven graphics, and something worth watching in the gaps. Tha
 side-tournament Smash Bros. and Mario Kart on the same overlay system, plus crowd trivia the
 whole gym plays from their phones. All CalGames-branded, all runnable by volunteers.
 
+## Run it in two minutes
+
+You do not need a terminal, and you do not need to install anything. You need one file,
+`CalGamesContentDesk.exe`, which the content desk lead builds and hands out
+(how: [docs/13-deployment.md](docs/13-deployment.md)).
+
+1. Copy the exe onto the machine. Anywhere is fine.
+2. Double-click it. A window opens and prints four numbered steps as it works.
+3. Wait for the yellow **READY**. The first run takes about a minute; after that, seconds.
+4. The window prints an address like `http://10.0.100.23:8720/` and opens it in a browser.
+   That page lists every screen, and the window shows the PIN (a four-digit door code) that
+   the control screens ask for.
+
+Just trying it out at a kitchen table, with no field to connect to? The launcher notices there
+is no field and asks; press **D** and every screen plays a pretend match. After the first run
+the desk lives in `Downloads\CalGames2026-ContentDesk`, and two files there run it by
+double-click: **START-PRACTICE.cmd** for the pretend match, **START-DESK.cmd** for the real
+thing.
+
+Leave the launcher window open; closing it stops the desk. Pit monitors, updating, and what to
+do when something goes wrong are all in [docs/13-deployment.md](docs/13-deployment.md).
+
+The rest of this README is for people building or changing the desk.
+
 ## Design principle
 
 > **One event bus, many surfaces.**
@@ -36,6 +60,7 @@ That's the whole architecture. Everything else is adapters and CSS.
 | [docs/10-field-bridge.md](docs/10-field-bridge.md) | Cheesy Arena field bridge: endpoint allowlist + FTA sign-off sheet |
 | [docs/11-distribution.md](docs/11-distribution.md) | Recording, YouTube live + upload, TBA video/webcast publishing |
 | [docs/12-community-research.md](docs/12-community-research.md) | What the FRC community complains about, mapped against this desk: the sourced gap list |
+| [docs/13-deployment.md](docs/13-deployment.md) | The volunteer launcher: one exe that unpacks the desk, installs a private Node, finds the field, and starts everything |
 | [packages/theme/tokens.css](packages/theme/tokens.css) | Design tokens + motion system, shared by every surface |
 | [prototypes/overlay.html](prototypes/overlay.html) | Runnable proof-of-concept |
 
@@ -56,21 +81,34 @@ Official **WRRF** palette, with **official FIRST** alliance colors reserved as s
 | Black `#000000` / White `#FFFFFF` | text, and black is the luma-key background |
 | Red `#ED1C24` / Blue `#0066B3` | **alliance only**, never decorative |
 
-## Run it
+## Run it from the source
 
-Needs Node 22.6+ (uses native TypeScript type stripping, no build step) and **ffmpeg** for
-recording and replay (`winget install Gyan.FFmpeg` and take the full build, which carries the
-`segment` muxer and `minterpolate`). Everything except recording runs without ffmpeg.
+This is the developer path. Volunteers should use the launcher above instead.
 
-```bash
+<a id="where-commands-go"></a>
+**Where these commands go.** Press the Windows key, type `powershell`, press Enter. A window
+opens with a prompt line ending in `>`. Type `cd ` followed by the folder this repo is in (for
+example `cd C:\Users\you\cg2026-content-desk`) and press Enter. Then paste each command below
+into that window and press Enter. Every command block in this README goes into that same
+window, except the one firewall rule that says otherwise.
+
+Needs Node 22.6+ (the JavaScript runtime; uses native TypeScript type stripping, no build step)
+and **ffmpeg** (a command-line video tool) for recording and replay
+(`winget install Gyan.FFmpeg` and take the full build, which carries the `segment` muxer and
+`minterpolate`). Everything except recording runs without ffmpeg.
+
+```powershell
 npm install
 ```
 
-```bash
+It prints a summary of what it added and returns to the `>` prompt. A warning or two is normal.
+
+```powershell
 npm start -- --demo
 ```
 
-Then open <http://localhost:8720>. `--demo` runs a simulated match loop so graphics can be
+The window prints a banner and stays running; leave it open. Then open
+<http://localhost:8720>. `--demo` runs a simulated match loop so graphics can be
 built without a field. Drop it to run on desk input alone.
 
 | Surface | URL | Runs on |
@@ -91,13 +129,17 @@ built without a field. Drop it to run on desk input alone.
 | Talent view | `/s/talent` | Announcer tablet: teams, ranks, RP progress in words, pronunciation notes |
 | When do we play? | `/s/next` | Per-team schedule on any phone, drift-adjusted start estimates |
 | Head referee review | `/s/var` | Frame-step the recording. Read-only: no cut, no air, no publish |
+| Pit monitor kiosk | `/s/watch` | Venue pit TVs: a full-screen browser wrapping any of the open screens (`?screen=side`, `?screen=program`, ...) |
 
 The index page at `/` lists every surface with a one-line description. Start there.
+
+OBS, mentioned throughout, is the streaming program the broadcast runs in; a "Browser Source"
+is OBS rendering one of these pages as a video layer.
 
 Recording and replay need ffmpeg. Add `--record --test-sources` to exercise the whole pipeline
 without cameras:
 
-```bash
+```powershell
 npm start -- --demo --record --test-sources
 ```
 
@@ -122,11 +164,11 @@ celebrating. Both are in the screen dropdown on the desk.
 
 Replay a recorded event log instead of running live:
 
-```bash
+```powershell
 npm run replay -- data/events/2026-10-17-09-14-02.ndjson 4
 ```
 
-```bash
+```powershell
 npm test
 ```
 
@@ -136,7 +178,7 @@ The Cheesy Arena bridge is a **launch flag, never a config setting**: it needs F
 switching it on should be an explicit act at the point of use rather than something inherited from
 a file copied between machines.
 
-```bash
+```powershell
 npm start -- --cheesy --cheesy-host 10.0.100.5:8080 --display-id contentdesk1
 ```
 
@@ -149,14 +191,14 @@ automation by having it happen to them mid-match) and are armed individually fro
 The OBS password comes from the environment, never a CLI argument, because `argv` is visible in
 `ps` and in shell history.
 
-```bash
-OBS_PASSWORD=… npm start -- --cheesy --obs --obs-host 127.0.0.1:4455
+```powershell
+$env:OBS_PASSWORD = "…"; npm start -- --cheesy --obs --obs-host 127.0.0.1:4455
 ```
 
 To rehearse without a field, build [Cheesy Arena](https://github.com/Team254/cheesy-arena), run it
 with `-dev`, and drive a real scored match through it:
 
-```bash
+```powershell
 node harness.mjs
 ```
 
@@ -166,18 +208,18 @@ robots linking one by one (the desk arms before the countdown), auto decided on 
 hub shifts, endgame climbs, bonus RPs, score posting. The desk connects with the same hardened
 client and allowlists it uses at the venue; nothing is stubbed.
 
-```bash
+```powershell
 npm run validate:offline
 ```
 
 runs the whole thing headless and prints a PASS/FAIL checkpoint table. To watch it drive the
 surfaces instead, run the fake arena and a bridged core side by side:
 
-```bash
+```powershell
 npm run fake-arena -- --port 8091 --speed 2
 ```
 
-```bash
+```powershell
 npm start -- --cheesy --cheesy-host 127.0.0.1:8091 --display-id simdesk
 ```
 
@@ -191,28 +233,41 @@ it. The trivia QR code puts the desk's address on a projector in front of the wh
 
 | | Surfaces | Needs the PIN |
 | --- | --- | --- |
-| **Open** | `/s/program` `/s/side` `/s/tele` `/s/arcade` `/s/trivia` `/s/quiz` `/s/next` | no |
+| **Open** | `/s/program` `/s/side` `/s/tele` `/s/arcade` `/s/trivia` `/s/quiz` `/s/next` `/s/watch` | no |
 | **Gated** | `/s/desk` `/s/replay` `/s/draw` `/s/media` `/s/arcadedesk` `/s/triviadesk` `/s/talent` `/s/var` `/s/cards` `/s/remote` | yes |
 
 An OBS Browser Source cannot type a PIN and a spectator should not have to, so the overlays,
-the venue TVs and the two audience phone pages stay open, along with exactly the reads they
-need. Joining and answering trivia stay open too: that is the game. Everything else that
-*changes* something requires the PIN, over HTTP and over the websocket alike.
+the venue TVs, the two audience phone pages, and the pit monitor kiosk (`/s/watch`, which only
+wraps screens that are already open) stay open, along with exactly the reads they need. Joining
+and answering trivia stay open too: that is the game. Everything else that *changes* something
+requires the PIN, over HTTP and over the websocket alike.
 
 The rule is an allowlist in both directions, so an endpoint added later is private until
 somebody opens it deliberately. That is the safe direction for a mistake to fall.
 
-```bash
+**The gate is on by default.** Out of the box the PIN is `0864`. That default is printed in
+this repo, so treat it as public and set your own before the event:
+
+```powershell
 $env:REMOTE_PIN = "4726"; npm start -- --demo
 ```
 
+(The launcher takes `/pin:4726` instead, and has no way to turn the gate off at all. See
+[docs/13-deployment.md](docs/13-deployment.md).)
+
 Sign in once at `/signin` and the session lasts the day. The PIN is only ever read from a POST
 body, never a query string, because a query string ends up in the server log and the browser
-history of a machine several volunteers share. Startup says which mode it is in, and warns
-loudly when no PIN is set.
+history of a machine several volunteers share.
 
-Unset it for a laptop on a kitchen table in March. Set it before the desk touches the venue
-network.
+For a laptop on a kitchen table in March, the escape hatch is setting the PIN to an explicit
+empty string, which turns the gate off:
+
+```powershell
+$env:REMOTE_PIN = ""; npm start -- --demo
+```
+
+Never do that on a venue network. Startup says which mode it is in, and warns loudly when the
+gate is off.
 
 ## Phone remote
 
@@ -220,21 +275,20 @@ network.
 telestrator kill, and per-cue arming. Big thumb targets, haptic confirmation, and it
 re-authenticates itself after a reconnect so it can't quietly stop working mid-show.
 
-**Set a PIN before exposing it to any network.** See below: the same PIN now gates every
-control surface, not just this one.
+It sits behind the same PIN as every other control surface, `0864` until you change it. See
+"Who can drive it" above for setting the event's own.
 
-```bash
-$env:REMOTE_PIN = "4726"; npm start
-```
-
-The desk prints its reachable addresses, and `GET /api/remote` returns them. On the phone, open
-`http://<desk-ip>:8720/s/remote`.
+The desk prints its reachable addresses at startup, and the launcher's READY message shows the
+same one. On the phone, open `http://<desk-ip>:8720/s/remote`.
 
 Two things have to be true for the phone to reach it:
 
-1. **Windows Firewall must allow inbound TCP 8720.** This needs an elevated shell:
+1. **Windows Firewall must allow inbound TCP 8720** (the port is the number after the colon in
+   the desk's address). This one command needs an administrator window, once per machine: press
+   the Windows key, type `powershell`, right-click **Windows PowerShell**, choose **Run as
+   administrator**, paste the line, press Enter. It prints a short table describing the new rule.
 
-```bash
+```powershell
 New-NetFirewallRule -DisplayName "CalGames Content Desk 8720" -Direction Inbound -Protocol TCP -LocalPort 8720 -Action Allow -Profile Private
 ```
 

@@ -27,7 +27,7 @@ weekend.
 Each team is a row, not a column: the cutout sits beside the number and name rather than above
 them. **Blue mirrors red.** The two alliances face each other across the center logo the way they
 face each other across the field, so blue's plates sit on the outside edge and its text runs back
-toward the centre. **Red left, blue right, always.** This matches the field as seen from the
+toward the center. **Red left, blue right, always.** This matches the field as seen from the
 scoring table, and the rule in [03-brand.md](03-brand.md) that alliance is never encoded by color
 alone. The gold rule separates each alliance block from the purple chrome.
 
@@ -133,11 +133,13 @@ On upload, `core` automatically:
    image (warns).
 3. **Trims to the alpha bounding box** and records the original dimensions, so height
    normalization works without re-measuring at render time.
-4. **Generates 400 / 800 / 1600px** widths in PNG and WebP.
-5. **Samples the edge pixels** for white fringing and flags anything above threshold for a human
-   look. Fringing is invisible on white and glaring on purple.
-6. **Writes a preview against `--cg-purple`** in the admin UI, so the operator sees it as the
+4. **Generates 400 / 800 / 1600px WebP renditions** (skipping widths larger than the source).
+   The trimmed full-size PNG is the source of truth; there are no PNG width renditions.
+5. **Writes a preview against `--cg-purple`** in the admin UI, so the operator sees it as the
    audience will, immediately.
+
+There is no automated fringing check: nothing reads color channels, only alpha. The manual
+100%-against-a-dark-background pass above is the fringing defense, so don't skip it.
 
 ### Storage
 
@@ -145,17 +147,21 @@ On upload, `core` automatically:
 media/
   teams/
     846/
-      robot.v2.png          # source of truth
+      robot.v2.png          # source of truth, trimmed
       robot.v2@400.webp
       robot.v2@800.webp
       robot.v2@1600.webp
-      meta.json             # bbox, dims, uploaded, photographer, event
-  manifest.json             # teamNumber -> current version + dims
+      meta.json             # team, version, src, w, h, uploadedAt, warnings
 ```
 
+The manifest (team number to current version and dimensions) is in-memory, rebuilt from the
+per-team `meta.json` files on scan and served at `/api/media/manifest`. Nothing named
+`manifest.json` exists on disk, deliberately: the files are the truth.
+
 Versioned because robots change. A team that swaps an intake Saturday morning can re-upload, and
-every surface picks it up on next load. Event-scoped (`2026cacg`) so the library carries forward
-to CalGames 2027 without stale robots.
+every surface picks it up on next load. The library is not event-scoped: paths are flat
+`media/teams/{team}/`, so carrying it forward to CalGames 2027 means clearing out stale robots
+by hand (or building the event key into the path then).
 
 Preload the whole library on surface start: 42 teams × ~200KB ≈ **8MB**. Cache it Friday night and
 the alliance overview never waits on the network mid-show.

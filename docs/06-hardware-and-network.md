@@ -43,17 +43,23 @@ network, and at an event that network has a few hundred phones on it; the trivia
 core's address on a projector in front of the whole gym, so being on the content desk's own LAN is
 not the same as being hard to reach. `apps/core/src/access.ts` gates every operator console and
 every request that changes something (starting a match segment, cutting a clip, arming a cue)
-behind one shared PIN, while leaving the overlays, the venue TVs, and the two audience phone pages
-(`/s/quiz`, `/s/next`) open, since an OBS Browser Source cannot type a PIN and a spectator should
-not have to.
+behind one shared PIN, while leaving the overlays, the venue TVs, the two audience phone pages
+(`/s/quiz`, `/s/next`), and the pit monitor kiosk (`/s/watch`, which only wraps screens that are
+already open) open, since an OBS Browser Source cannot type a PIN and a spectator should not
+have to.
 
-Set it before the desk goes anywhere near the venue network, not after:
+The gate is on by default with the PIN `0864`, which is printed in this repo and therefore
+public. Set the event's own before the desk goes anywhere near the venue network, not after.
+With the launcher ([13-deployment.md](13-deployment.md)) that is `/pin:4726`; from the source it
+is one line in the PowerShell window you start the desk from (the README's
+"[Where these commands go](../README.md#where-commands-go)" note says how to open one):
 
-```bash
+```powershell
 $env:REMOTE_PIN = "4726"; npm start -- --cheesy --cheesy-host 10.0.100.5:8080 --display-id contentdesk1
 ```
 
-Startup logs which mode it's in and warns loudly if a venue-facing box comes up with no PIN set.
+Startup logs which mode it's in and warns loudly if a venue-facing box comes up with the gate
+off (an explicit empty `REMOTE_PIN`, the kitchen-table escape hatch).
 It's one PIN, not per-volunteer accounts: the crew is a handful of people who arrive on the day, and
 a password reset at 8am on a Saturday gets worked around by propping the door open. Hand it out to
 crew the way you would a radio channel, not somewhere a phone camera in the stands could catch it.
@@ -70,6 +76,10 @@ Sign in once at `/signin` and the session lasts the day. Full open/gated surface
 | **replay** | rolling record + clip extraction | **separate box.** Recording is I/O-heavy and a crash here must not take program down. Big fast NVMe: 4 cams × 1080p60 at 12Mbps ≈ 22GB/hour total. |
 | **arcade** | console capture | can be the program box if it has the USB bandwidth; separate is safer |
 | **tablet** | telestrator draw pad | iPad + Apple Pencil. Pressure sensitivity is a genuine upgrade over a finger. |
+
+Getting the desk software onto the core box (or any borrowed laptop) is one exe and a
+double-click: the launcher in [13-deployment.md](13-deployment.md) installs nothing system-wide
+and needs no admin rights, which matters on AV loaner machines that arrive locked down.
 
 ## Video
 
@@ -167,15 +177,16 @@ because that is who will be operating it.
 
 | Cue | Trigger | Action |
 | --- | --- | --- |
-| **On deck** | `match.loaded` | queueing graphic on side screens, intro card armed |
-| **Intro** | `match.preview` | 6-team intro card, EPA form line, PxP reads teams |
+| **On deck** | `match.loaded` | queueing graphic on side screens, alliance overview up |
+| **Intro** | `match.preview` | *planned, not built:* the 6-team intro card with the EPA form line is blocked behind the Statbotics feed ([03-brand.md](03-brand.md)), and no cue fires on `match.preview` yet. PxP reads teams off the overview instead |
 | **Armed** | `match.armed` (every robot linked, before the announcer's countdown) | switch to field wide, score bar in, lockdown motion |
 | **Live** | `match.start` | score bar live, hub indicator on, replay markers arm |
-| **Endgame** | `matchClock` 110 | endgame chip, tight camera on the towers |
+| **Endgame** | `matchClock` 110 | endgame chip. The camera stays wherever the switcher has it: the wide-shot lock stops autopilot from cutting away from the field mid-match, so a tight tower shot is the switcher op's call |
 | **End** | `match.end` | hold field wide 4s for the celebration. Don't cut early |
 | **Result** | `match.score_posted` | score reveal, RP pips, ranking movement |
 | **Replay** | operator | gold wipe → clip → telestrate → back to desk |
-| **Gap** | no match for >3 min | auto-cut to arcade or sponsor loop |
+| **Gap** | 3 min after a posted score, no match running | auto-cut to arcade |
 
-Every one of these has a manual override. The autopilot toggle is per-cue, not global, so the
-producer can trust the parts that work and drive the parts that don't.
+Every row except Intro maps to a cue in the engine, each with a manual override. The autopilot
+toggle is per-cue, not global, so the producer can trust the parts that work and drive the parts
+that don't.
