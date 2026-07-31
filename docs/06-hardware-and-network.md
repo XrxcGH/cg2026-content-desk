@@ -1,4 +1,4 @@
-# 06 — Hardware, network, and show flow
+# 06. Hardware, network, and show flow
 
 ## Network: the field is sacred
 
@@ -34,16 +34,16 @@ Rules:
    from the venue/team Wi-Fi. The telestrator tablet lives on it and nothing else does. 40 teams
    on a shared SSID will destroy your <80ms latency budget.
 5. If the FTA says no to the bridge: the whole system still runs on manual desk input. Degraded,
-   not dead. Design for this — it's a realistic Friday-morning outcome.
+   not dead. Design for this: it's a realistic Friday-morning outcome.
 
 ## Machines
 
 | Box | Job | Spec notes |
 | --- | --- | --- |
-| **bridge** | field-side ingest | anything with 2 NICs — an Intel NUC or a mini PC. Low stakes. |
+| **bridge** | field-side ingest | anything with 2 NICs, like an Intel NUC or a mini PC. Low stakes. |
 | **core** | event bus, surfaces, cue engine | modest; SSD for the NDJSON log. Can co-locate with bridge if budget is tight. |
 | **program** | OBS, stream encode, all browser sources | the expensive one. NVENC-capable GPU (RTX 3060+), 32GB, NVMe. |
-| **replay** | rolling record + clip extraction | **separate box.** Recording is I/O-heavy and a crash here must not take program down. Big fast NVMe — 4 cams × 1080p60 at 12Mbps ≈ 22GB/hour total. |
+| **replay** | rolling record + clip extraction | **separate box.** Recording is I/O-heavy and a crash here must not take program down. Big fast NVMe: 4 cams × 1080p60 at 12Mbps ≈ 22GB/hour total. |
 | **arcade** | console capture | can be the program box if it has the USB bandwidth; separate is safer |
 | **tablet** | telestrator draw pad | iPad + Apple Pencil. Pressure sensitivity is a genuine upgrade over a finger. |
 
@@ -51,28 +51,65 @@ Rules:
 
 | Item | Recommendation | Why |
 | --- | --- | --- |
-| **Switcher** | Blackmagic **ATEM Mini Extreme ISO** | 8 HDMI in, multiview out, and it **ISO-records every input separately** — which is exactly the replay ingest described in [04](04-replay-and-telestrator.md), in hardware, for free. If you buy one thing, buy this. |
+| **Switcher** | Blackmagic **ATEM Mini Extreme ISO** | 8 HDMI in, multiview out, and it **ISO-records every input separately**, which is exactly the replay ingest described in [04](04-replay-and-telestrator.md), in hardware, for free. If you buy one thing, buy this. |
 | **Field cameras** | 2× PTZ, HDMI or NDI | one wide (whole field, from the scoring table side), one tight/tracking |
-| **Alliance cameras** | 2× fixed | one per alliance station — these are the angles that answer "did they actually climb?" |
+| **Alliance cameras** | 2× fixed | one per alliance station: these are the angles that answer "did they actually climb?" |
 | **Desk camera** | 1× on the analyst desk | needed the moment you have a telestrator; the audience should see who's talking |
 | **Handheld** | 1× roaming | pits, celebrations, awards. Highest-value B-roll per dollar. |
 | **Overlay path** | OBS Browser Source (alpha) **and** a keyed feed into the ATEM DSK (luma) | see the dual-key rule in [03-brand.md](03-brand.md) |
+
+**One overlay system on air.** When the content desk's program overlay is live, Cheesy Arena's own
+overlay pages must never composite with it. Two scorebugs clip and contradict each other. Three
+rules enforce this:
+
+1. **In OBS it's automatic.** Name any source that shows a Cheesy Arena page with `cheesy` in the
+   source name (e.g. `Cheesy audience display`). The desk sweeps every scene at connect and once a
+   minute, and switches those sources off. This is deliberate: keep the naming convention.
+2. **On the ATEM DSK**, only one fill is ever keyed: ours. The Cheesy audience display machine
+   feeds the *venue projector* (the field's own screen), never the stream chain.
+3. **The scorekeeper keeps the audience display in "Blank" mode** on any machine that IS in the
+   stream chain. Put it on the FTA checklist ([10-field-bridge.md](10-field-bridge.md)).
 
 **Cable discipline:** HDMI over 25ft is unreliable. Use HDMI-over-Cat6 extenders or SDI converters
 for the field camera runs. Label every cable at both ends on Friday. This advice is boring and it
 is the difference between a good Saturday and a bad one.
 
-## Audio
+## Audio: two buses, and music never leaves the room
 
-- Venue mixer feed → program (field sound, announcer, music)
-- 2× desk mics (commentary/analysis) on their own channel, so they can be ducked under the
-  announcer
-- **Game audio from consoles routed to venue only, never to the stream** — see the Content ID note
-  in [05-arcade.md](05-arcade.md)
-- Match sounds (charge, endgame warning, buzzer) come from the Audience Display machine and go to
-  the venue mixer; the stream gets them via the venue feed, not duplicated
+Copyrighted music on the stream bus is the single most common way FRC event streams die:
+muted mid-match, VODs unpublished, channels struck, and it would Content-ID-flag every
+match video this desk uploads. The fix is structural rather than a matter of vigilance. The
+venue console runs **two mixes**, and the music source is physically absent from one of them.
 
-## Power — learn from 2025
+| Source | HOUSE bus (PA) | STREAM bus (OBS / recordings) |
+| --- | --- | --- |
+| **Event Spotify playlist** (the DJ machine) | ✅ | ❌ **never** |
+| MC / GA / emcee mics | ✅ | ✅ |
+| Desk mics (commentary/analysis), ducked under the announcer | ✅ optional | ✅ |
+| Match sounds from the Audience Display machine (charge, endgame, buzzer) | ✅ | ✅ |
+| Field ambience mic (crowd + robots) | n/a | ✅ |
+| Console game audio (arcade) | ✅ | ❌ **never** (see [05-arcade.md](05-arcade.md)) |
+
+Rules that make it hold up all weekend:
+
+1. **The stream bus is a mix-minus**: an aux send on the venue console that simply has no
+   music or console channels routed to it. Nobody has to remember to mute anything: the
+   fader that could ruin the stream doesn't exist on that bus.
+2. **The event playlist plays through Spotify in-house only.** That keeps the PA energy
+   without putting a single licensed track on YouTube. Nothing from that machine patches
+   anywhere near the OBS input.
+3. **Duck music under the announcer on the HOUSE bus** so the room can hear explanations
+   (the perennial "announcer buried under music" complaint).
+4. **No aggressive gating/compression on the stream bus.** Over-processed event recordings
+   that chop crowd noise in and out are a documented community complaint; light leveling only.
+5. **Rehearse both mixes Friday** and listen to the stream return feed from a phone.
+   Echo and balance problems get called out by chat within minutes on show day.
+
+**Closed captions** ride on this for free: enable YouTube Live automatic captions. With a
+clean mic bus (no music bleed) auto-captioning is respectable, it's an accessibility win the
+community has explicitly asked for, and it makes the archived VOD searchable.
+
+## Power: learn from 2025
 
 The CalGames 2025 Sunday stream died to a **venue power outage** and had to restart on a new
 YouTube URL mid-event. That's the single most likely failure mode at a high school gym.
@@ -96,7 +133,7 @@ YouTube URL mid-event. That's the single most likely failure mode at a high scho
 | **Analyst** | on camera, drives the telestrator |
 | **Play-by-play** | the other voice |
 | **Arcade op** | brackets, station resets, arcade overlay |
-| **Graphics/data op** | lower thirds, team facts, corrections — merge into producer if short-staffed |
+| **Graphics/data op** | lower thirds, team facts, corrections (merge into producer if short-staffed) |
 
 Minimum viable crew is **three**: producer, switcher, analyst. Everything else is upside. Design
 every surface so it's operable by someone who has been trained for 20 minutes on Friday night,
@@ -108,10 +145,10 @@ because that is who will be operating it.
 | --- | --- | --- |
 | **On deck** | `match.loaded` | queueing graphic on side screens, intro card armed |
 | **Intro** | `match.preview` | 6-team intro card, EPA form line, PxP reads teams |
-| **Armed** | `match.prestart` | switch to field wide, score bar in, lockdown motion |
+| **Armed** | `match.armed` (every robot linked, before the announcer's countdown) | switch to field wide, score bar in, lockdown motion |
 | **Live** | `match.start` | score bar live, hub indicator on, replay markers arm |
 | **Endgame** | `matchClock` 110 | endgame chip, tight camera on the towers |
-| **End** | `match.end` | hold field wide 4s for the celebration — do not cut early |
+| **End** | `match.end` | hold field wide 4s for the celebration. Don't cut early |
 | **Result** | `match.score_posted` | score reveal, RP pips, ranking movement |
 | **Replay** | operator | gold wipe → clip → telestrate → back to desk |
 | **Gap** | no match for >3 min | auto-cut to arcade or sponsor loop |

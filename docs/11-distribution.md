@@ -1,4 +1,4 @@
-# 11 — Recording, streaming, and publishing
+# 11: Recording, streaming, and publishing
 
 Four requirements:
 
@@ -14,7 +14,7 @@ All four are the same machine with different bounds and different metadata. That
 ## One correction up front: TBA does not ingest video
 
 **The Blue Alliance has no video ingest.** There is no RTMP endpoint, no second encoder, no
-simulcast. TBA *embeds* a stream that lives somewhere else — its GameDay page shows YouTube and
+simulcast. TBA *embeds* a stream that lives somewhere else. Its GameDay page shows YouTube and
 Twitch players.
 
 So "live-stream to YouTube and TBA" is **one stream to YouTube**, plus a small API call telling TBA
@@ -24,7 +24,7 @@ where it is:
 PATCH /api/trusted/v1/event/2026cacg/webcasts/update
 ```
 
-That's the whole TBA side of live streaming. It simplifies the rig considerably — one encoder, one
+That's the whole TBA side of live streaming. It simplifies the rig considerably: one encoder, one
 destination, no bonded uplink, no second bitrate budget.
 
 Same story for video-on-demand: we upload to YouTube, then hand TBA the **YouTube video id**.
@@ -40,7 +40,7 @@ Verified against [TBA Trusted APIv1](https://www.thebluealliance.com/apidocs/tru
 | `/event/{key}/webcasts/update` | `PATCH` | register the live stream so it appears on TBA/GameDay |
 | `/event/{key}/webcasts/update` | `DELETE` | pull the webcast down at end of day |
 | `/event/{key}/match_videos/add` | `POST` | link an uploaded match video to its match key |
-| `/event/{key}/media/add` | `POST` | event-level video — analysis segments, fun content |
+| `/event/{key}/media/add` | `POST` | event-level video (analysis segments, fun content) |
 | `/event/{key}/match_videos/delete` | `DELETE` | fix a mislinked video |
 
 **Auth** is not a bearer token. Two headers:
@@ -51,7 +51,7 @@ X-TBA-Auth-Sig: md5_hexdigest(auth_secret + request_path + request_body)
 ```
 
 The signature covers the path *and* the exact body bytes, so the body must be serialised once and
-both signed and sent — serialise twice and you'll get intermittent 401s that look like a
+both signed and sent. Serialise twice and you'll get intermittent 401s that look like a
 credentials problem and aren't.
 
 ### The rule that keeps us out of trouble
@@ -60,8 +60,8 @@ credentials problem and aren't.
 
 Cheesy Arena publishes teams, matches, rankings, alliances, and awards natively. We must **never**
 call `matches/update`, `rankings/update`, `alliance_selections/update`, `awards/update`, or
-`team_list/update` — and note those endpoints require the *full* dataset, so a partial write
-doesn't just conflict, it **deletes everything not included**.
+`team_list/update`. Those endpoints require the *full* dataset, so a partial write **deletes
+everything not included** rather than merely conflicting.
 
 Our allowlist is exactly four paths: `webcasts/update`, `match_videos/add`, `media/add`, and
 `match_videos/delete`. Same enforcement pattern as the field bridge in
@@ -73,12 +73,12 @@ appears.
 ## YouTube: the two limits that actually bite
 
 **Quota is no longer the problem.** `videos.insert` used to cost ~1600 units against a default
-10,000/day — six uploads a day, which would have killed this outright. Google cut it to roughly
+10,000/day (six uploads a day, which would have killed this outright). Google cut it to roughly
 **100 units** in December 2025, so the default project quota now supports on the order of 100
 uploads/day. That's enough for a CalGames weekend (~80 quals + playoffs).
 
-*Verify this in your own Cloud console before October rather than trusting this document —
-it's a recent change and the number is the whole feasibility argument.*
+*Verify this in your own Cloud console before October rather than trusting this document.
+It's a recent change and the number is the whole feasibility argument.*
 
 **Channel upload limits are the real problem.** Separately from API quota, YouTube caps how many
 videos a *channel* can upload per day, and the cap is low for channels without verification and
@@ -105,7 +105,7 @@ Policy, configurable, defaulting to safe:
 | --- | --- |
 | `deferred` **(default)** | Record and queue during the event. Upload after the venue closes, or after the event entirely. |
 | `trickle` | Upload during the event, hard-capped well under the live stream's headroom, paused automatically during matches. |
-| `live` | Upload as soon as a video is cut. Only if the venue has real bandwidth — test it on Friday. |
+| `live` | Upload as soon as a video is cut. Only if the venue has real bandwidth. Test it on Friday. |
 
 The queue is durable either way, so `deferred` costs nothing but patience. **The stream never
 competes with an upload.**
@@ -142,20 +142,20 @@ competes with an upload.**
 
 ### Cut from the program feed, not a camera
 
-Match videos on TBA and YouTube should be **the broadcast** — overlay, score bar, replays and all.
+Match videos on TBA and YouTube should be **the broadcast**: overlay, score bar, replays and all.
 That's what people actually want to watch, and it's what makes the CalGames graphics worth having
 built. So the recorder captures the composited program output *in addition to* the ISO cameras.
 
 - **Program record** → archive, match videos, uploads
 - **ISO camera records** → replay source ([04](04-replay-and-telestrator.md))
 
-### Cut bounds come from the event log — and a match video is two parts, not one
+### Cut bounds come from the event log, and a match video is two parts, not one
 
 The dual-clocked event log ([02](02-architecture.md)) has exact wall-clock timestamps for
 `match.start`, `match.end`, and `match.score_posted`, so a cut is a lookup rather than a guess.
 
 **A match video must not run straight through**, because the gap between the buzzer and the score
-being posted is unbounded — referees deliberating fouls and cards routinely take minutes, and
+being posted is unbounded. Referees deliberating fouls and cards routinely take minutes, and
 nobody wants to watch an empty field while that happens. So the cut is two ranges with the dead
 air removed:
 
@@ -174,7 +174,7 @@ air removed:
 | **post-match 6s** after `match.end` | the horn, robots coasting, the first celebration |
 | **lead-in 2s** before `match.score_posted` | a beat before the score screen animates on |
 | **reveal 15s** | the reveal, RP pips, ranking movement |
-| **merge threshold 8s** | if scoring came through fast, run it straight through — a jump cut over four seconds reads as a glitch, not an edit |
+| **merge threshold 8s** | if scoring came through fast, run it straight through, since a jump cut over four seconds reads as a glitch, not an edit |
 
 Tune these against the real venue on Friday; announcer cadence and field-light timing vary. They
 live in `CUT` in `apps/core/src/clips.ts`.
@@ -189,14 +189,14 @@ to a single continuous 187s cut, and a match whose score is never posted falls b
 | **analysis** | first `telestrator.stroke` − 20s | last stroke + 15s | YouTube + `media/add` |
 | **segment** | desk marks in | desk marks out | YouTube + `media/add`, optional |
 
-Analysis segments are detected automatically — the telestrator already emits one durable
+Analysis segments are detected automatically. The telestrator already emits one durable
 `telestrator.stroke` event per finished stroke, so "did this match get analysis?" is a query, not a
 checkbox somebody has to remember to tick. The desk can still force one on or off.
 
 Extraction is the same ffmpeg concat-and-trim the replay service uses, at different bounds. One
 implementation.
 
-### Naming — matches the official FIRST channel
+### Naming: matches the official FIRST channel
 
 So CalGames content sits alongside official uploads instead of looking homemade. Titles are
 `{match} - {event}`; livestreams are `{year} {event} - Day {n}`.
@@ -208,7 +208,7 @@ So CalGames content sits alongside official uploads instead of looking homemade.
 | `Match 1 (R1)` | `Match 1 (R1) - CalGames` | `sf1m1` |
 | `Final 1` | `Final 1 - CalGames` | `f1m1` |
 | `Final 3`, `Final Tiebreaker` | `Final Tiebreaker - CalGames` | `f1m3` |
-| `Practice 3` | *never published* | — |
+| `Practice 3` | *never published* | |
 
 Playoff titles carry the `(Rn)` round suffix from the 13-match double-elimination bracket, and a
 third final **is** the tiebreaker however the field system spells it.
@@ -226,7 +226,7 @@ Uploaded by the CalGames Content Desk
 ```
 
 > **One deliberate difference.** FIRST's own descriptions close with
-> *"(c) 2026 FIRST Robotics Competition"* — theirs to claim. CalGames is a WRRF off-season event,
+> *"(c) 2026 FIRST Robotics Competition"*, which is theirs to claim. CalGames is a WRRF off-season event,
 > so copying that line verbatim would be inaccurate. The credit and copyright lines are
 > configurable and default to WRRF.
 
@@ -243,13 +243,42 @@ link never leaves an orphan video with no context.
 - One OBS/vMix output → YouTube RTMP (`rtmp://a.rtmp.youtube.com/live2`, stream key from YouTube
   Studio).
 - On stream start, `PATCH /webcasts/update` with the YouTube URL. On end of day, `DELETE`.
-- **Local recording never stops**, independent of the stream — this is the second reason to prefer
+- **Local recording never stops**, independent of the stream. This is the second reason to prefer
   rolling record over a replay buffer, and the direct lesson from the CalGames 2025 power outage
   that killed the Sunday stream and forced a restart on a new URL. If the stream dies, the archive
   and every match video survive untouched.
 - Pre-create the backup stream key and post the fallback URL **before** the event.
-- Game audio from the arcade stays out of the stream mix ([05-arcade.md](05-arcade.md)) — a Content
-  ID claim can mute or block the archive, and the archive is what teams watch afterward.
+- Game audio from the arcade stays out of the stream mix ([05-arcade.md](05-arcade.md)), and the
+  event's Spotify playlist exists on the HOUSE bus only ([06](06-hardware-and-network.md)). A
+  Content ID claim can mute or block the archive, and the archive is what teams watch afterward.
+- **Enable YouTube automatic captions** on the live stream. It's near-zero effort, a real
+  accessibility win, and the clean mic bus from [06](06-hardware-and-network.md) is what makes them legible.
+
+### The second stream: a clean static full-field feed
+
+The community's most repeated production demand is a full-field view that never cuts away.
+Remote scouts and picklist meetings depend on it, and every produced show eventually takes a
+tight shot at the wrong moment. Where events run two streams, one is always a clean wide.
+
+- Second OBS output (or a second cheap encoder box): the **static field-wide camera** plus the
+  minimal score bar only. That is what `/s/program?mode=clean&key=alpha` renders. Score bar and
+  clock, no screen switching, no lower thirds, no status cards, locked to the match layout.
+- Second YouTube stream key on the same channel, listed on TBA as an additional webcast.
+- **Shed it first** when the uplink degrades. The produced show is the product; the clean feed
+  is a courtesy.
+
+### Degraded-uplink runbook
+
+Venue uplink trouble is a "when". Decide the moves now, not on Saturday:
+
+1. **Watch the encoder, not chat**: OBS dropped-frames percentage is the early warning. Check it
+   at every match break.
+2. First move: **stop the clean feed** (frees its full bitrate).
+3. Second move: switch the main stream to the pre-built **low-bitrate OBS profile**
+   (720p30 @ ~2.5 Mbps). Make this profile before the event so the switch is two clicks.
+4. `deferred` upload mode already keeps match uploads off the uplink during show hours.
+5. **Local recording never stops** regardless: replays, match videos, and the archive do not
+   depend on the internet at all.
 
 ---
 
@@ -260,7 +289,7 @@ Every one of these is a "when", not an "if":
 | Failure | Behaviour |
 | --- | --- |
 | Venue internet drops | Queue keeps cutting and queueing. Nothing is lost. Uploads resume on reconnect. |
-| Upload fails mid-file | Resumable upload — restart from the last committed byte, not byte zero. |
+| Upload fails mid-file | Resumable upload, restarting from the last committed byte, not byte zero. |
 | YouTube quota exhausted | Queue pauses, logs plainly, resumes next day. |
 | Channel upload cap hit | Same. This is why `deferred` staging exists. |
 | TBA link fails | Video stays unlisted, item stays `uploaded`, retried. Never silently public-and-unlinked. |
@@ -274,8 +303,8 @@ panel showing what's stuck. Nobody should have to SSH into anything on Sunday.
 
 ## Open items before October
 
-- [ ] Which YouTube channel — WRRF's existing one is strongly preferred over a new one
-- [ ] Verify the channel and enable live streaming (24h activation) — **do this in July**
+- [ ] Which YouTube channel: WRRF's existing one is strongly preferred over a new one
+- [ ] Verify the channel and enable live streaming (24h activation). **Do this in July**
 - [ ] Confirm `videos.insert` quota cost in the Cloud console; request an increase if it's still 1600
 - [ ] Get the TBA event key (`2026cacg`) and Trusted API auth id/secret from TBA
 - [ ] Confirm with the CalGames committee that Cheesy Arena's TBA credentials and ours are scoped so
