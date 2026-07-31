@@ -46,7 +46,7 @@ function chamfer(ctx, x, y, w, h, ch) {
   ctx.closePath();
 }
 
-/** Perforated-aluminium dots, same motif as the overlays. */
+/** Perforated-aluminum dots, same motif as the overlays. */
 function perf(ctx, x, y, w, h, step = 18) {
   ctx.save();
   chamfer(ctx, x, y, w, h, 0);
@@ -197,10 +197,14 @@ export function drawCard(ctx, card) {
       ctx.fillText(String(t.number ?? ''), x + blockW / 2, y);
 
       ctx.fillStyle = p.dim;
-      const nameSize = fitText(ctx, t.name ?? '', blockW - 40, 26, cond(600));
-      ctx.font = cond(600)(nameSize);
+      // Fit the exact string that gets drawn. Measuring the raw name at zero
+      // tracking undersold the width, and a long name drawn uppercase with
+      // 2px tracking ran into the other alliance's column.
+      const name = (t.name ?? '').toUpperCase();
       ctx.letterSpacing = '2px';
-      ctx.fillText((t.name ?? '').toUpperCase(), x + blockW / 2, y + 28);
+      const nameSize = fitText(ctx, name, blockW - 40, 26, cond(600));
+      ctx.font = cond(600)(nameSize);
+      ctx.fillText(name, x + blockW / 2, y + 28);
       ctx.letterSpacing = '0px';
     });
   };

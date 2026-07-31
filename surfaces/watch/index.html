@@ -34,10 +34,16 @@ html, body {
   background: #000;
 }
 
-#bg, #fg {
+/* Every feed element by its real id. An earlier #bg selector matched
+   nothing, so the feed elements sat unpositioned in flow, the absolutely
+   positioned backdrop painted over them, and a configured feed looked
+   exactly like no feed at all. */
+#bgImg, #bgFrame, #bgVideo, #fg {
   position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
 }
-#bg { object-fit: cover; background: #000; }
+/* object-fit only applies to replaced media. The YouTube iframe ignores it
+   and just fills the stage; the player letterboxes inside itself. */
+#bgImg, #bgVideo { object-fit: cover; background: #000; }
 /* The overlay sits above the feed and must never eat clicks: a pit TV with a
    touch screen should not be able to drive anything. */
 #fg { pointer-events: none; background: transparent; }
@@ -187,10 +193,12 @@ async function showKiosk(screen) {
 /**
  * Attach whatever kind of source this is.
  *
- * Three shapes cover everything a venue realistically has: a YouTube or Twitch
- * page to embed, an MJPEG stream straight off a capture box or IP camera, and
- * a plain video file or stream a browser can play natively. No streaming
- * library: one more dependency is one more thing to fail on a pit TV.
+ * Three shapes cover everything a venue realistically has: a YouTube page to
+ * embed, an MJPEG stream straight off a capture box or IP camera, and a
+ * plain video file or stream a browser can play natively. No streaming
+ * library: one more dependency is one more thing to fail on a pit TV. No
+ * Twitch: player.twitch.tv refuses plain-HTTP embeds, and a pit monitor
+ * reaches the desk over plain HTTP on the venue LAN.
  */
 function mountFeed(url) {
   const yt = url.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/live\/)([\w-]{6,})/);
@@ -207,7 +215,6 @@ function mountFeed(url) {
   if (/\.(mjpe?g|cgi)(\?|$)/i.test(url) || /mjpg/i.test(url)) {
     const el = $('bgImg');
     el.src = url;
-    el.style.objectFit = 'cover';
     el.hidden = false;
     // An MJPEG stream that drops leaves a frozen frame, which looks live and
     // is not. Reconnect rather than sit on a stale picture.
@@ -230,13 +237,16 @@ setInterval(async () => {
   try {
     const res = await fetch('/api/state', { cache: 'no-store' });
     if (!res.ok) throw new Error(String(res.status));
+    if (document.documentElement.dataset.online === 'false') {
+      // Reload on the recovery edge, never while the desk is down: this
+      // once fired inside the catch, which navigated the iframe to a
+      // connection-refused page it could never come back from.
+      const fg = $('fg');
+      if (fg?.src) fg.src = fg.src;
+    }
     document.documentElement.dataset.online = 'true';
   } catch {
-    if (document.documentElement.dataset.online === 'true') {
-      document.documentElement.dataset.online = 'false';
-      const fg = $('fg');
-      if (fg?.src) fg.src = fg.src;           // reload once the desk is back
-    }
+    document.documentElement.dataset.online = 'false';
   }
 }, 15_000);
 </script>

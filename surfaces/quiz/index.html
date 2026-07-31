@@ -93,16 +93,16 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
     <div class="tick" aria-hidden="true"></div>
   </div>
 
-  <!-- join -->
-  <div class="card" id="join">
+  <!-- join. A real form, so the phone keyboard's go/return key joins too. -->
+  <form class="card" id="join">
     <div class="sub">Play from your seat · fastest right answer wins</div>
     <label for="name">Your name</label>
     <input id="name" maxlength="24" autocomplete="nickname" placeholder="Ana">
     <label for="team">FRC team · optional</label>
     <input id="team" inputmode="numeric" pattern="[0-9]*" placeholder="846">
-    <button class="btn-go" id="go">Join the game</button>
+    <button class="btn-go" id="go" type="submit">Join the game</button>
     <p class="status" id="joinErr" role="alert"></p>
-  </div>
+  </form>
 
   <!-- play -->
   <div id="play" hidden>
@@ -131,8 +131,11 @@ let playerId = sessionStorage.getItem('trivia.player');
 let myName = sessionStorage.getItem('trivia.name') ?? '';
 let view = null;
 let pendingChoice = null;
+let lastOpensAt = null;
+let lastOptsHTML = '';
 
-$('go').onclick = async () => {
+$('join').addEventListener('submit', async e => {
+  e.preventDefault();
   try {
     const res = await fetch('/api/trivia/join', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -144,8 +147,8 @@ $('go').onclick = async () => {
     sessionStorage.setItem('trivia.player', playerId);
     sessionStorage.setItem('trivia.name', myName);
     swap();
-  } catch (e) { $('joinErr').textContent = e.message; }
-};
+  } catch (err) { $('joinErr').textContent = err.message; }
+});
 
 function swap() {
   $('join').hidden = !!playerId;
@@ -167,6 +170,14 @@ async function answer(i) {
 function paint(v) {
   view = v;
   const q = v.question;
+  // A new question is what invalidates the optimistic pick. Clearing it on
+  // every open-phase paint (as this once did) let a poll snapshot taken
+  // before the answer POST landed wipe the highlight and re-enable buttons
+  // the server had already locked.
+  if ((q?.opensAt ?? null) !== lastOpensAt) {
+    lastOpensAt = q?.opensAt ?? null;
+    pendingChoice = null;
+  }
   const mine = v.me?.choice ?? pendingChoice;
 
   setText($('cat'), q ? `${q.category ?? 'Question'} · ${v.questionIndex + 1} of ${v.questionCount}` : '');
@@ -174,15 +185,23 @@ function paint(v) {
     : (v.phase === 'idle' ? 'Waiting for the next question…' : ''));
   $('fuse').hidden = v.phase !== 'open';
 
-  $('opts').innerHTML = q ? q.options.map((text, i) => `
+  // Rebuild the buttons only when their markup actually changes. The
+  // innerHTML setter replaces the children even for an identical string,
+  // which drops keyboard focus every poll and can swallow a tap that lands
+  // mid-repaint. Same reason setText guards the live regions above.
+  const opts = q ? q.options.map((text, i) => `
     <button class="opt" data-i="${i}"
       ${mine === i ? 'data-mine="true"' : ''}
       ${v.phase === 'revealed' ? `data-right="${i === v.answer}"` : ''}
       ${v.phase !== 'open' || mine !== null ? 'disabled' : ''}>
       <b>${LETTERS[i]}</b><span>${esc(text)}</span>
     </button>`).join('') : '';
-  for (const b of document.querySelectorAll('.opt')) {
-    b.onclick = () => answer(Number(b.dataset.i));
+  if (opts !== lastOptsHTML) {
+    lastOptsHTML = opts;
+    $('opts').innerHTML = opts;
+    for (const b of document.querySelectorAll('.opt')) {
+      b.onclick = () => answer(Number(b.dataset.i));
+    }
   }
 
   const verdict = $('verdict');
@@ -193,7 +212,6 @@ function paint(v) {
     else { verdict.dataset.ok = 'false'; setText(verdict, 'No answer in time'); }
   } else {
     verdict.hidden = true;
-    if (v.phase !== 'revealed') pendingChoice = null;
   }
 
   setText($('score'), String(v.me?.score ?? 0));

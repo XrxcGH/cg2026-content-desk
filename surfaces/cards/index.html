@@ -23,7 +23,7 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
   letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 12px; }
 
 /* The card is 1080x1080; show it responsively but download at full size. */
-.preview { width: 100%; aspect-ratio: 1/1; background: #000; clip-path: var(--chamfer); --ch: 10px; }
+.preview { width: 100%; aspect-ratio: 1/1; background: var(--cg-black); clip-path: var(--chamfer); --ch: 10px; }
 .preview canvas { width: 100%; height: 100%; display: block; }
 
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -41,7 +41,10 @@ input.wide { flex: 1; min-width: 160px; }
 #history b { font-family: var(--font-cond); font-weight: 600; letter-spacing: .04em; }
 #history a { color: var(--accent); text-decoration: none; font-weight: 600; cursor: pointer; }
 #status { font-size: 14px; min-height: 18px; }
-#status[data-err] { color: var(--st-bad); }
+/* --st-bad (#C13030) is only 3.17:1 on this raised panel. Errors must be
+   readable at a glance, so this uses the lightened console red the rest of
+   the dark surfaces use. */
+#status[data-err] { color: var(--st-bad-text); }
 </style>
 </head>
 <body>
@@ -98,11 +101,14 @@ const $ = id => document.getElementById(id);
 const desk = connect('cards');
 const cv = $('cv');
 const ctx = cv.getContext('2d');
+// drawCard paints at CARD_SIZE. Pin the canvas to it here so a size change
+// in card.js cannot silently clip or shrink the exported PNG.
+cv.width = cv.height = CARD_SIZE;
 
 let eventName = 'CalGames 2026';
 let footer = 'calgames.org';
 let current = null;              // the card model currently on the canvas
-const history = [];             // { name, blobUrl }
+const history = [];             // { name, url }
 
 const say = (m, err = false) => { $('status').textContent = m; $('status').toggleAttribute('data-err', err); };
 

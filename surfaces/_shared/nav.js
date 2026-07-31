@@ -59,7 +59,7 @@ const CSS = `
 .opnav .lbl { font-family: var(--font-cond); font-size: 13px; letter-spacing: .12em;
   text-transform: uppercase; color: var(--text-dim); }
 .opnav .take { background: var(--accent); color: var(--text-on-accent); }
-.opnav .live { background: var(--st-ok); color: #04120D; }
+.opnav .live { background: var(--st-ok); color: var(--cg-black); }
 @media (max-width: 900px) { .opnav .lbl { display: none; } }
 `;
 

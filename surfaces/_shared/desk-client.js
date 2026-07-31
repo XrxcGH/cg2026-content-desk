@@ -214,7 +214,13 @@ export function roll(el, to, ms = 600) {
   if (from === to) return;
   el.dataset.v = String(to);
 
-  if (document.hidden) { el.textContent = String(to); return; }
+  // Reduced motion gets the final value instantly too. The roll is JS-driven,
+  // so the reduced-motion CSS block in tokens.css cannot reach it, and docs/08
+  // promises every transition collapses to a state change.
+  if (document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = String(to);
+    return;
+  }
 
   const t0 = performance.now();
   const step = now => {
@@ -245,16 +251,23 @@ export function startTicker(fn) {
   const frame = () => { paint(); raf = requestAnimationFrame(frame); };
   const backstop = setInterval(() => { if (document.hidden) paint(); }, 250);
 
-  document.addEventListener('visibilitychange', () => {
+  const onVis = () => {
     cancelAnimationFrame(raf);
     paint();
     if (!document.hidden) raf = requestAnimationFrame(frame);
-  });
+  };
+  document.addEventListener('visibilitychange', onVis);
 
   paint();
   if (!document.hidden) raf = requestAnimationFrame(frame);
 
-  return () => { cancelAnimationFrame(raf); clearInterval(backstop); };
+  // The listener must be removed too: while it lived on, one visibility flip
+  // restarted a disposed ticker permanently.
+  return () => {
+    document.removeEventListener('visibilitychange', onVis);
+    cancelAnimationFrame(raf);
+    clearInterval(backstop);
+  };
 }
 
 /**

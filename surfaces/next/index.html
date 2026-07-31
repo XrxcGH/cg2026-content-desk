@@ -93,13 +93,14 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
   </div>
   <div class="sub" id="now" aria-live="polite">connecting…</div>
 
-  <div class="card">
+  <!-- A real form, so Enter and the phone keyboard's go key follow too. -->
+  <form class="card" id="follow">
     <label for="team">Your team number</label>
     <div class="row">
       <input id="team" inputmode="numeric" pattern="[0-9]*" placeholder="846">
-      <button class="btn-go" id="go">Follow</button>
+      <button class="btn-go" id="go" type="submit">Follow</button>
     </div>
-  </div>
+  </form>
 
   <div class="rankline" id="rank" hidden aria-live="polite"></div>
   <div id="list"></div>
@@ -116,12 +117,13 @@ const setHTML = (el, html) => { if (el.innerHTML !== html) el.innerHTML = html; 
 let team = Number(localStorage.getItem('next.team')) || null;
 if (team) $('team').value = team;
 
-$('go').onclick = () => {
+$('follow').addEventListener('submit', e => {
+  e.preventDefault();
   team = Number($('team').value) || null;
   if (team) localStorage.setItem('next.team', String(team));
   else localStorage.removeItem('next.team');
   poll();
-};
+});
 
 const clock = ts => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
@@ -178,6 +180,9 @@ function paint(s) {
   if (team === null) trimToFit();
 }
 
+const esc = x => String(x ?? '').replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
 /**
  * Drop matches off the bottom until the page stops scrolling.
  *
@@ -185,9 +190,6 @@ function paint(s) {
  * all of their matches, however many that is; someone who just opened the
  * page wants a glance, and a glance should not scroll.
  */
-const esc = x => String(x ?? '').replace(/[&<>"']/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-
 function trimToFit() {
   const cards = () => [...document.querySelectorAll('#list .m')];
   let guard = 40;

@@ -6,7 +6,7 @@
  * air. Two renderers would drift, and the drift would only show up live.
  *
  * Coordinates are normalised 0-1, so the tablet's aspect ratio doesn't have to
- * match the programme feed and a 60Hz stroke costs a few hundred bytes.
+ * match the program feed and a 60Hz stroke costs a few hundred bytes.
  */
 
 export const TOOLS = ['pen', 'arrow', 'ellipse', 'spotlight', 'path', 'tag'];
@@ -30,6 +30,7 @@ function inkPalette() {
     note: css('--cg-white') || '#FFFFFF',
     red:  css('--alliance-red') || '#ED1C24',
     blue: css('--alliance-blue') || '#0066B3',
+    outline: css('--ink-outline') || '#000000',
   };
 }
 
@@ -44,7 +45,7 @@ export class StrokeBook {
   begin({ id, tool, ink, width }) {
     const s = {
       id, tool, ink,
-      width: width ?? 7,
+      width: width ?? (parseFloat(css('--ink-width')) || 7),
       pts: [],
       done: false,
       born: performance.now(),
@@ -153,7 +154,7 @@ export function render(ctx, book, opts = {}) {
     // carpet under mixed gym lighting, so gold with a black outline is the only
     // ink that survives on all of it.
     const colour = palette[s.ink] ?? palette.gold;
-    for (const pass of [{ c: '#000', w: s.width + 4 }, { c: colour, w: s.width }]) {
+    for (const pass of [{ c: palette.outline, w: s.width + 4 }, { c: colour, w: s.width }]) {
       ctx.strokeStyle = pass.c;
       ctx.fillStyle = pass.c;
       ctx.lineWidth = pass.w;
@@ -241,10 +242,10 @@ function drawTag(ctx, s, W, H, palette) {
   ctx.fillStyle = palette[s.ink] ?? palette.gold;
   ctx.fill();
   ctx.lineWidth = 3;
-  ctx.strokeStyle = '#000';
+  ctx.strokeStyle = palette.outline;
   ctx.stroke();
 
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = palette.outline;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, px, py + fontSize * 0.06);
