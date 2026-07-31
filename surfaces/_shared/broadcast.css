@@ -244,6 +244,15 @@
 }
 .phase { font-size: var(--t-label); }   /* 28px floor applies on air */
 
+/* Alert Pulse (docs/08, transition 6): the endgame warning. A filled gold
+   band, not a shadow or glow, because the luma key strips both. It sits at
+   the very top of the frame where the wide shot has sky, never over play. */
+.endgame-bar {
+  position: absolute; top: 0; left: 0; right: 0; height: 14px;
+  background: var(--cg-gold);
+}
+.endgame-bar[hidden] { display: none; }
+
 /* The 2026-specific graphic: which hub is live right now. The alternating hub
    is the most confusing thing on the field for a viewer; this is the fix.
    A tab growing out of the bar's center column, flush, so it reads as part
@@ -590,11 +599,12 @@
   font-family: var(--font-num); font-weight: 900; font-size: 32px; color: var(--cg-white);
 }
 /* Taken teams stay on the board rather than vanishing, so the audience can
-   see the pool being emptied from the top. */
+   see the pool being emptied from the top. Dimmed with --cg-white-mute, not
+   purple-hi: purple on the purple-lo pool was 2:1 and vanished on a projector. */
 .sel-pool-team[data-picked] .sel-pool-num,
-.sel-pool-team[data-picked] .sel-pool-rank { color: var(--cg-purple-hi); }
+.sel-pool-team[data-picked] .sel-pool-rank { color: var(--cg-white-mute); }
 .sel-pool-team[data-picked] { text-decoration: line-through;
-  text-decoration-color: var(--cg-purple-hi); text-decoration-thickness: 3px; }
+  text-decoration-color: var(--cg-white-mute); text-decoration-thickness: 3px; }
 
 #scr-selection {
   background-color: var(--cg-purple-void);

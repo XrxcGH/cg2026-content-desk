@@ -54,8 +54,17 @@
   font-variation-settings: "wdth" var(--wdth-display); line-height: 1.12;
   color: var(--cg-white);
 }
-/* Countdown: a shrinking gold bar, a block of color readable from the room. */
-#fuse { width: 1100px; height: 16px; margin: 40px 0 8px; background: var(--cg-purple-lo);
+/* fitQuestion() steps these on: at 84px every shipped question wraps to two
+   or three lines, a third line eats the bottom safe margin, and a host-typed
+   fourth runs up through the header (the host console caps nothing). */
+.q-text[data-fit="1"] { font-size: 68px; }
+.q-text[data-fit="2"] { font-size: 56px; }
+/* Countdown: a shrinking gold bar, a block of color readable from the room.
+   flex: none is load-bearing: the fill's percentage height gives the bar a
+   min-content height of 0, making it the ONE item in this column able to
+   shrink, so any question long enough to overflow the pane crushed the
+   timer to 0px before anything else gave a pixel. */
+#fuse { flex: none; width: 1100px; height: 16px; margin: 40px 0 8px; background: var(--cg-purple-lo);
   clip-path: var(--chamfer); --ch: 7px; }
 #fuseFill { height: 100%; width: 100%; background: var(--cg-gold); }
 
@@ -63,6 +72,10 @@
   width: 100%; max-width: 1680px; margin-top: 36px; }
 .opt {
   position: relative; display: flex; align-items: center; gap: 28px;
+  /* border-box: with content-box the 40px of padding stacked ON TOP of the
+     148px minimum, and the two option rows alone outgrew the pane under
+     every two-line question. */
+  box-sizing: border-box;
   min-height: 148px; padding: 20px 36px;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
@@ -89,7 +102,9 @@
 .opt[data-right="true"] .opt-text, .opt[data-right="true"] .opt-count { color: var(--cg-white); }
 .opt[data-right="false"] { opacity: .45; }
 
-#answersIn { margin-top: 34px; font-size: 36px; }
+/* flex: none, same reason as the fuse: never let the chip be the item that
+   pays for an overflowing question. */
+#answersIn { flex: none; margin-top: 34px; font-size: 36px; }
 
 /* ---- leaderboard ---- */
 .lb { width: 100%; max-width: 1520px; margin-top: 44px; display: flex; flex-direction: column; gap: 16px; }
@@ -114,8 +129,6 @@
 .lb-name b { font-family: var(--font-num); font-weight: 900; margin-right: 14px; color: var(--cg-gold); }
 .lb-pts { font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-weight: 900; font-size: 64px; line-height: 1; color: var(--cg-white); }
-.lb-empty { margin-top: 120px; font-family: var(--font-cond); font-size: 56px; line-height: 1.1;
-  letter-spacing: .1em; text-indent: .1em; text-align: center; text-transform: uppercase; color: var(--cg-white-dim); }
 </style>
 </head>
 <body>
@@ -143,10 +156,10 @@
     <span class="chip" id="answersIn">0 answers in</span>
   </section>
 
-  <!-- Leaderboard: idle between questions -->
+  <!-- Leaderboard: idle between questions. No empty state: with zero
+       standings there are zero players, and the join card is the answer. -->
   <section class="pane" id="pane-lb">
     <div class="lb" id="lb"></div>
-    <div class="lb-empty" id="lbEmpty" hidden>Scores land after the first question</div>
   </section>
 
   <div id="sweep"></div>
@@ -176,7 +189,22 @@ function showPane(id) {
     for (const p of document.querySelectorAll('.pane')) {
       p.toggleAttribute('data-active', p.id === id);
     }
+    // The paint-time fit ran while this pane was display:none, where every
+    // measurement reads 0, so re-fit now that it has layout.
+    if (id === 'pane-q') fitQuestion();
   }, half);
+}
+
+// Step the question down until it holds two line boxes again. Two is the
+// budget: the third line at 84px pushes the answers chip into the bottom
+// safe margin, and a host-typed fourth runs the text up through the header.
+function fitQuestion() {
+  const el = $('qText');
+  delete el.dataset.fit;
+  const over = () =>
+    el.scrollHeight > parseFloat(getComputedStyle(el).lineHeight) * 2 + 1;
+  if (over()) el.dataset.fit = '1';
+  if (over()) el.dataset.fit = '2';
 }
 
 function paint(s) {
@@ -197,8 +225,8 @@ function paint(s) {
       $('lb').innerHTML = s.standings.slice(0, 6).map(row =>
         `<div class="lb-row">
           <span class="lb-rank num">${row.rank}</span>
-          <span class="lb-name">${row.player.team ? `<b>${row.player.team}</b>` : ''}${esc(row.player.name)}</span>
-          <span class="lb-pts num">${row.player.score}</span>
+          <span class="lb-name">${row.team ? `<b>${row.team}</b>` : ''}${esc(row.name)}</span>
+          <span class="lb-pts num">${row.score}</span>
         </div>`).join('');
       showPane('pane-lb');
     } else {
@@ -222,6 +250,7 @@ function paint(s) {
     ? `${q.answers} answered · points to the fastest`
     : `${q.answers} answer${q.answers === 1 ? '' : 's'} in`;
   $('fuse').style.visibility = revealed ? 'hidden' : 'visible';
+  fitQuestion();
   showPane('pane-q');
 }
 

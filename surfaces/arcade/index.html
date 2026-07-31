@@ -11,17 +11,27 @@
    Player sides use purple and green, NOT alliance red/blue: those mean FRC
    alliance on this broadcast and nowhere else, and borrowing them here would
    quietly poison the association we spend all weekend building. */
+/* Strip height, shared: the round tab and the hanging panels key off it, so
+   the four stay in step if it ever changes. 120px because this surface is on
+   air and its type holds the 28px broadcast floor (tokens.css): the old
+   76px strip predates the floor, and the tallest stack (round line over the
+   game chip, measured 116px) has to clear it or the strip grows out from
+   under everything anchored below. */
+:root { --strip-h: 120px; }
 /* The set card runs across the TOP of the frame, not the bottom: Mario Kart
    and Smash both draw their own HUD (coins, lap, position, damage) along the
    bottom of the capture, and covering it referees the game blind. */
 .ar-card {
   position: absolute; left: 0; right: 0; top: 0;
-  display: grid; grid-template-columns: 1fr 300px 1fr;
+  /* 420px center: at the 28px floor the game chip ("Super Smash Bros.") and
+     a real round name both wrapped inside the old 300, doubling the strip's
+     height and driving it into the GP panel hanging below. */
+  display: grid; grid-template-columns: 1fr 420px 1fr;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf);
   background-size: var(--tex-perf-size);
   border-bottom: var(--rule);
-  min-height: 76px;
+  min-height: var(--strip-h);
 }
 
 .ar-side { display: flex; align-items: center; gap: 16px; padding: 6px 20px; }
@@ -30,13 +40,13 @@
 .ar-side--p2 { background: var(--cg-green-lo); border-left: var(--rule); }
 
 .ar-name {
-  font-family: var(--font-display); font-weight: 800; font-size: 26px;
+  font-family: var(--font-display); font-weight: 800; font-size: 28px;
   font-variation-settings: "wdth" var(--wdth-display); line-height: 1.02;
   overflow-wrap: break-word;
 }
 .ar-team {
   margin-top: 4px;
-  font-family: var(--font-cond); font-weight: 600; font-size: 16px;
+  font-family: var(--font-cond); font-weight: 600; font-size: 28px;
   letter-spacing: .1em; text-transform: uppercase; color: var(--cg-gold);
   overflow-wrap: break-word;
 }
@@ -49,24 +59,32 @@
 /* Unconfirmed scores render outlined, exactly like an estimated match score. */
 .ar-score[data-est="true"] { color: transparent; -webkit-text-stroke: 3px var(--cg-white); }
 
-.ar-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px; }
+.ar-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px; min-width: 0; }
 .ar-round {
-  font-family: var(--font-cond); font-weight: 700; font-size: 15px;
+  font-family: var(--font-cond); font-weight: 700; font-size: 28px;
   letter-spacing: .16em; text-indent: .16em; text-transform: uppercase; color: var(--cg-gold); text-align: center;
+  /* One line, always: the GP panel and the round tab hang off --strip-h, so
+     a wrapped round would grow the strip out from under them. An extreme
+     round name ends on the ellipsis instead. */
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.ar-game { font-size: 13px; padding: 3px 10px; }
+/* .ar-game keeps the chip defaults: 28px is the floor, and the chip already
+   sits there. */
 
 /* ---- Mario Kart standings ---- */
 .gp {
   /* Hangs below the top strip, clear of the round tab. Right edge, where it
-     covers the least of the racing line, never the bottom HUD text. */
-  position: absolute; right: 24px; top: 92px; width: 330px;
+     covers the least of the racing line, never the bottom HUD text. 520px
+     wide: the rows run at the 28px broadcast floor (this overlay is on air,
+     and 17px rendered at ~11px on a 720p stream), so names plus points no
+     longer fit the old 330. */
+  position: absolute; right: 24px; top: calc(var(--strip-h) + 16px); width: 520px;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
   clip-path: var(--chamfer); --ch: 12px;
   /* Inline padding clears the chamfer: at --ch 12 a 12px inset would put
      the first and last glyph inside the corner cut. */
-  padding: 10px 20px 12px;
+  padding: 12px 20px 14px;
 }
 /* Real filled edge, not box-shadow: shadows die under the luma key. */
 .gp::before {
@@ -75,23 +93,23 @@
 }
 .gp[hidden] { display: none; }
 .gp h2 {
-  margin: 0 0 5px; font-family: var(--font-cond); font-weight: 700;
-  font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: var(--cg-gold);
+  margin: 0 0 8px; font-family: var(--font-cond); font-weight: 700;
+  font-size: 28px; letter-spacing: .16em; text-transform: uppercase; color: var(--cg-gold);
 }
 .gp-row {
-  display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: baseline;
-  padding: 3px 0; border-bottom: 1px solid var(--cg-purple-hi);
+  display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: baseline;
+  padding: 5px 0; border-bottom: 1px solid var(--cg-purple-hi);
 }
 .gp-row:last-child { border-bottom: 0; }
-.gp-pos { font-family: var(--font-num); font-weight: 900; font-size: 17px; color: var(--cg-gold); }
+.gp-pos { font-family: var(--font-num); font-weight: 900; font-size: 28px; color: var(--cg-gold); }
 .gp-name {
-  font-family: var(--font-cond); font-weight: 600; font-size: 17px; text-transform: uppercase; letter-spacing: .04em;
+  font-family: var(--font-cond); font-weight: 600; font-size: 28px; text-transform: uppercase; letter-spacing: .04em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.gp-pts { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 900; font-size: 17px; }
+.gp-pts { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 900; font-size: 28px; }
 
 #upNext {
-  position: absolute; left: 24px; top: 96px; font-size: 14px; padding: 6px 18px;
+  position: absolute; left: 24px; top: calc(var(--strip-h) + 20px);
   display: none;
 }
 #upNext[data-show] { display: inline-flex; }
@@ -108,7 +126,7 @@
   background-image: var(--tex-perf);
   background-size: var(--tex-perf-size);
   border-bottom: var(--rule);
-  min-height: 76px;
+  min-height: var(--strip-h);
 }
 .ffa-cell {
   position: relative;
@@ -130,7 +148,7 @@
 }
 .ffa-score[data-est="true"] { color: transparent; -webkit-text-stroke: 3px var(--cg-white); }
 .ffa-name {
-  font-family: var(--font-cond); font-weight: 600; font-size: 15px;
+  font-family: var(--font-cond); font-weight: 600; font-size: 28px;
   letter-spacing: .06em; text-indent: .06em; text-transform: uppercase; color: var(--cg-white);
   text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
@@ -141,16 +159,16 @@
    hub tab, flipped. +3px keeps the strip's gold border unbroken above it. */
 .ffa-tab {
   position: absolute; left: 50%; transform: translateX(-50%);
-  /* Starts exactly on the strip's outer edge: 76px of strip plus its 3px gold
+  /* Starts exactly on the strip's outer edge: the strip plus its 3px gold
      border. The tab is itself a gold shell, so meeting the band flush reads as
      one continuous edge. Guessing 6px for that border left a 3px white seam. */
-  top: calc(76px + 3px); z-index: 4;
+  top: calc(var(--strip-h) + 3px); z-index: 4;
   padding: 6px 24px 10px;
   background: var(--cg-gold);
   --ch: 14px;
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--ch)),
                      calc(100% - var(--ch)) 100%, var(--ch) 100%, 0 calc(100% - var(--ch)));
-  font-family: var(--font-cond); font-weight: 700; font-size: 15px;
+  font-family: var(--font-cond); font-weight: 700; font-size: 28px;
   letter-spacing: .14em; text-transform: uppercase; color: var(--cg-white);
   white-space: nowrap;
 }
@@ -275,7 +293,9 @@ function paint(s) {
   $('gp').hidden = !gp;
   if (gp) {
     $('gpName').textContent = `${gp.name} · race ${Math.min(gp.races.length + 1, gp.raceCount)} of ${gp.raceCount}`;
-    $('gpRows').innerHTML = s.standings.map((row, i) => `
+    // Eight rows is as far as the panel can hang at broadcast type before it
+    // reaches the game's own HUD along the bottom of the capture.
+    $('gpRows').innerHTML = s.standings.slice(0, 8).map((row, i) => `
       <div class="gp-row">
         <span class="gp-pos num">${i + 1}</span>
         <span class="gp-name">${escapeHtml(row.player.name)}${

@@ -35,6 +35,11 @@
 
   <!-- Live match -->
   <section class="screen" id="scr-match">
+    <!-- Alert Pulse (docs/08, transition 6): a full-width gold bar that pulses
+         three times at endgame. data-motion="essential" because lockdown mode
+         suppresses decorative animation, and this is the one alert that is
+         not decoration. -->
+    <div class="endgame-bar" id="endgameBar" data-motion="essential" hidden></div>
     <div class="hub" id="hub" data-on="none">
       <span class="hub-dot"></span><span id="hubText"></span>
     </div>

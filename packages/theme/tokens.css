@@ -45,6 +45,7 @@
   --cg-black:         #000000;
   --cg-white:         #FFFFFF;
   --cg-white-dim:     #C9BCD0;  /* white tinted toward purple, not grey */
+  --cg-white-mute:    #8E7F97;  /* dimmest legible ink on purple-lo: 4.5:1 where purple-hi reads 2:1 */
 
   /* ---- Alliance: official FIRST red/blue. --------------------------------
      RESERVED: semantic only, never decorative. Fixed by FIRST; the only
@@ -223,6 +224,9 @@
   --tex-perf:       radial-gradient(circle at center, rgba(255,255,255,.03) 1.4px, transparent 1.5px);
   --btn-hover:      #3A1349;
   --focus-ring:     var(--cg-gold-hi);
+  /* Error text on console purples. Lightened past the official alliance red
+     because #ED1C24 reads 2.9:1 on --surface-raised; this reads 6.4:1. */
+  --st-bad-text:    #FF6B6B;
 }
 :root[data-surface="console"] body { background: var(--page-bg); }
 /* One shared field treatment so every console input matches. */
@@ -262,9 +266,10 @@
 /* --------------------------------------------------------------------------
    OPERATOR FOCUS RING: any keyboard-focusable control on an operator surface
    gets a visible ring, even ones that predate this rule (plain buttons,
-   links, custom rows). Inputs/selects/textareas above and .btn below keep
-   their own more specific :focus treatment; this is the catch-all, not a
-   replacement for it.
+   links, custom rows). Inputs/selects/textareas above outspecify this and
+   keep their own :focus treatment. .btn does not: three simple selectors
+   here beat .btn:focus-visible's two, so the .btn rule below matches this
+   2px offset rather than pretending to override it.
    -------------------------------------------------------------------------- */
 :root[data-surface="console"] :focus-visible,
 :root[data-surface="light"] :focus-visible {
@@ -358,7 +363,6 @@ html, body {
 }
 .chip--accent { background: var(--accent); color: var(--text-on-accent); }
 .chip--live   { background: var(--st-live); color: var(--cg-black); }
-.chip--est    { background: transparent; color: var(--st-warn); box-shadow: inset 0 0 0 2px var(--st-warn); }
 
 /* Alliance blocks. The gold rule is structural, not decorative. */
 .alliance { padding: 0 var(--pad); }
@@ -474,7 +478,7 @@ html, body {
 }
 .btn:hover  { background: var(--btn-hover); }
 .btn:active { transform: scale(.96); background: var(--cg-gold-lo); }
-.btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 .btn[aria-pressed="true"] { background: var(--accent); color: var(--text-on-accent); }
 
 /* --------------------------------------------------------------------------

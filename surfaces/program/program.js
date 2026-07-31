@@ -178,16 +178,24 @@ function paintSelection(sel) {
  * Only for a couple of seconds, though. If updates stop, the timer was paused
  * or selection moved on, and running our own clock down to a triumphant 0:00
  * would be inventing a deadline the field never called. Past the grace window
- * it freezes on the last thing the field actually said.
+ * it freezes exactly where the interpolation stood.
  */
 const SELECTION_GRACE_MS = 2500;
 
+// Frames are aged from LOCAL receipt time, never against sel.updatedAt: that
+// stamp is the desk server's clock, and an OBS box or pit monitor a minute
+// off shifts the on-air countdown by its full skew (behind, it also defeats
+// the grace check, so the freeze never engages). Receipt time asks no two
+// clocks to agree. The state handler below resets it per fresh frame.
+let selSeenAt = 0;
+let selStamp = null;
+
 function paintSelectionClock(sel) {
   if (!sel?.showTimer) return;
-  const age = Date.now() - sel.updatedAt;
-  const left = age > SELECTION_GRACE_MS
-    ? sel.timeRemainingSec
-    : Math.max(0, Math.ceil(sel.timeRemainingSec - age / 1000));
+  // Clamped, not switched: falling back to the raw field value after the
+  // grace window visibly replayed the last two seconds on air.
+  const age = Math.min(Date.now() - selSeenAt, SELECTION_GRACE_MS);
+  const left = Math.max(0, Math.ceil(sel.timeRemainingSec - age / 1000));
   $('selClockNum').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   $('selClock').toggleAttribute('data-low', left <= 10);
 }
@@ -345,19 +353,37 @@ function paintStatus(status) {
 }
 
 // ---- lower third ----------------------------------------------------------
+/**
+ * The show EVENT drives the entrance; state frames only reconcile.
+ *
+ * The reducer keeps lowerThird set until an explicit hide, and every bus
+ * event fans out with full state, so painting the entrance from state frames
+ * had two on-air failure modes: any event cadence under the dwell (realtime
+ * scoring alone is ~1Hz) re-armed the timer forever, and once the dwell did
+ * fire, the next state frame slid the retired third straight back in,
+ * looping it on and off air until an operator hid it by hand.
+ */
 let thirdTimer = null;
-function paintThird(lt) {
+let thirdKey = null;       // JSON of the third currently or last shown
+let thirdExpired = false;  // dwell retired it; state frames must not resurrect it
+
+function hideThird() {
   const el = $('third');
   clearTimeout(thirdTimer);
+  if (!el.hasAttribute('data-show')) return;
+  el.className = 'lower-third third--exit';
+  const out = parseFloat(getComputedStyle(document.documentElement)
+    .getPropertyValue('--dur-out')) || 260;
+  // Tracked in thirdTimer so a show landing mid-exit cancels it: a stray
+  // timeout here would strip data-show out from under the fresh entrance.
+  thirdTimer = setTimeout(() => el.removeAttribute('data-show'), out);
+}
 
-  if (!lt) {
-    if (!el.hasAttribute('data-show')) return;
-    el.className = 'lower-third third--exit';
-    const out = parseFloat(getComputedStyle(document.documentElement)
-      .getPropertyValue('--dur-out')) || 260;
-    setTimeout(() => el.removeAttribute('data-show'), out);
-    return;
-  }
+function showThird(lt) {
+  const el = $('third');
+  clearTimeout(thirdTimer);
+  thirdKey = JSON.stringify(lt);
+  thirdExpired = false;
 
   $('thirdT1').textContent = lt.line1 ?? '';
   $('thirdT2').textContent = lt.line2 ?? '';
@@ -368,8 +394,22 @@ function paintThird(lt) {
   if (!lt.pinned) {
     const dwell = parseFloat(getComputedStyle(document.documentElement)
       .getPropertyValue('--dwell')) || 8000;
-    thirdTimer = setTimeout(() => paintThird(null), dwell);
+    thirdTimer = setTimeout(() => { thirdExpired = true; hideThird(); }, dwell);
   }
+}
+
+function paintThird(lt) {
+  if (!lt) {
+    thirdKey = null;
+    thirdExpired = false;
+    hideThird();
+    return;
+  }
+  // Seen already: either on air (leave the dwell alone) or retired (stay
+  // retired until a fresh show event or a different payload).
+  if (JSON.stringify(lt) === thirdKey) return;
+  // Unseen with no show event: the snapshot after a (re)connect.
+  showThird(lt);
 }
 
 // ---- local clock, derived every frame -------------------------------------
@@ -390,8 +430,21 @@ startTicker(() => {
     : hub === 'none' ? '' : `${hub} hub live`;
 
   // Endgame: suppress decorative motion, keep score and clock running.
-  document.documentElement.toggleAttribute('data-lockdown',
-    c !== null && c >= REBUILT.ENDGAME_START && c < REBUILT.MATCH_END);
+  const endgame = c !== null && c >= REBUILT.ENDGAME_START && c < REBUILT.MATCH_END;
+  document.documentElement.toggleAttribute('data-lockdown', endgame);
+
+  // Alert Pulse: the gold band pulses three times as endgame opens, then
+  // holds steady. The class is added once per entry (cg-pulse runs 3
+  // iterations on its own); re-adding it every tick would restart the
+  // animation at 10Hz and it would never visibly pulse.
+  const bar = $('endgameBar');
+  if (endgame && bar.hidden) {
+    bar.hidden = false;
+    bar.classList.add('pulse');
+  } else if (!endgame && !bar.hidden) {
+    bar.hidden = true;
+    bar.classList.remove('pulse');
+  }
 
   if (currentScreen === 'selection') paintSelectionClock(st.selection);
 });
@@ -408,10 +461,22 @@ desk.on('state', state => {
   paintRpStrips(state.thresholds);
   paintScore(state);
   if (state.screen === 'score') paintFinal(state);
+  if (state.selection && state.selection.updatedAt !== selStamp) {
+    selStamp = state.selection.updatedAt;
+    selSeenAt = Date.now();
+  }
   if (state.selection) paintSelection(state.selection);
   paintThird(CLEAN ? null : state.lowerThird);
   paintStatus(CLEAN ? null : state.status);
   showScreen(CLEAN ? 'match' : state.screen);
+});
+
+// The event, not the state frame, is the authority for a fresh entrance: an
+// operator deliberately re-showing identical text emits an identical payload,
+// which the keyed state path in paintThird correctly swallows. Read the
+// payload back off state so the key always matches later state frames.
+desk.on('lower_third.show', () => {
+  if (!CLEAN && desk.state?.lowerThird) showThird(desk.state.lowerThird);
 });
 
 // Media can land after the overview was built. Rebuild so a photo uploaded

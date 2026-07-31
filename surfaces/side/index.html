@@ -60,10 +60,25 @@ h1, .sub { max-width: calc(100% - var(--qr-zone)); }
 .tick { height: 6px; background: var(--tick); margin-bottom: 20px; }
 
 /* ---- on deck ---- */
+/* Names the columns once: alliance is never encoded by color alone (docs/03),
+   and without this the two blocks below are just unlabeled slabs of red and
+   blue. Sub-floor size like .deck-eta, because every pixel of its height
+   comes straight out of the four rows under it. */
+.deck-head {
+  flex: none;
+  display: grid; grid-template-columns: 200px 1fr 1fr; gap: var(--gap);
+  padding: 0 26px; margin-bottom: 10px;
+  font-family: var(--font-cond); font-weight: 700; font-size: 34px; line-height: 1;
+  letter-spacing: .14em; text-indent: .14em; text-transform: uppercase;
+  text-align: center; color: var(--cg-white-dim);
+}
+.deck-head[hidden] { display: none; }
 /* min-height:0 is load-bearing: a flex item defaults to min-height:auto, which
    pins this to its content height and pushes the last row off the screen
-   instead of letting the rows share what the header left. */
-.deck { display: flex; flex-direction: column; gap: var(--gap); flex: 1; min-height: 0; }
+   instead of letting the rows share what the header left. Row gap is 22px,
+   not var(--gap): the tightening pays for the label row above, keeping the
+   eta line clear of each row's bottom edge. */
+.deck { display: flex; flex-direction: column; gap: 22px; flex: 1; min-height: 0; }
 /* Rows split whatever the header leaves rather than sizing to content: with
    four rows plus a start estimate under each name, content-sizing overflowed
    the bottom of the screen by a few pixels and clipped the last time. */
@@ -76,10 +91,13 @@ h1, .sub { max-width: calc(100% - var(--qr-zone)); }
 }
 /* kill the leading so centering is optical; a playoff ShortName like
    "SF2-3", or the fallback to the full LongName when Cheesy sends no
-   ShortName at all, must stay one line and step down rather than wrap:
-   this column is fixed-width, and a wrapped second line pushes into the
-   row below instead of just being smaller. */
-.deck-name { line-height: 1; white-space: nowrap; overflow: hidden; }
+   ShortName at all, must stay one line: this column is fixed-width, and a
+   wrapped second line pushes into the row below instead of just being
+   smaller. The fit pass steps the playoff shapes down; a LongName like
+   "Qualification 108" outruns every step in 200px (461px wide even at
+   56px), so past the last step it truncates on the ellipsis rather than
+   clipping mid-glyph. */
+.deck-name { line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Honest start estimate from actual cycle pace, not the printed fiction. */
 .deck-eta {
   margin-top: 10px;
@@ -148,10 +166,11 @@ h1, .sub { max-width: calc(100% - var(--qr-zone)); }
   font-weight: 900; font-size: 60px; line-height: 1; text-align: left; }
 /* Names run smaller than the numerals: the number is what the back half of
    the room needs; the name is for whoever walks up to the TV. The fit pass
-   steps long ones down rather than ever cutting them off. */
+   steps long ones down; a name that outruns the last step ends on the
+   ellipsis instead of clipping mid-glyph. */
 .rank-team { font-family: var(--font-cond); font-weight: 600; font-size: 48px;
   line-height: 1.15; text-transform: uppercase; letter-spacing: .03em;
-  overflow: hidden; white-space: nowrap; }
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .rank-team[data-fit="1"] { font-size: 42px; }
 .rank-team[data-fit="2"] { font-size: 35px; }
 .rank-rp { font-family: var(--font-num); font-variant-numeric: tabular-nums;
@@ -195,6 +214,9 @@ h1, .sub { max-width: calc(100% - var(--qr-zone)); }
     <h1>On deck</h1>
     <div class="sub" id="deckSub">&nbsp;</div>
     <div class="tick"></div>
+    <div class="deck-head" id="deckHead" hidden>
+      <span></span><span>Red alliance</span><span>Blue alliance</span>
+    </div>
     <div class="deck" id="deck"></div>
   </section>
 
@@ -236,6 +258,12 @@ function show(deck) {
   onDeck = deck;
   $('scr-deck').toggleAttribute('data-active', deck);
   $('scr-rank').toggleAttribute('data-active', !deck);
+  // The fit passes need layout: inside display:none both scrollWidth and
+  // clientWidth read 0, every overflow check passes vacuously, and a panel
+  // painted during the other panel's dwell came up unfitted (worse, the
+  // paint had already stripped whatever fit it was showing last time).
+  // Always re-fit the panel at the moment it becomes visible.
+  if (deck) fitDeck(); else fitRank();
 }
 
 function advance() {
@@ -280,7 +308,6 @@ function paint(s) {
             ? `${s.match.displayName} · ${behindText}`
             : `Now playing · ${s.match.displayName}`)
         : 'Waiting for the field');
-  fitLine($('deckSub'));
   const teamSpans = list => list.map(n => `<span>${n}</span>`).join('');
   // Estimated start per row: the projected next start plus one median cycle
   // per queue position. Only shown once the pace model has real signal.
@@ -295,7 +322,19 @@ function paint(s) {
           <div class="deck-teams deck-teams--blue num" style="--n:${Math.max(1, m.blue.length)}">${teamSpans(m.blue)}</div>
         </div>`).join('')
     : '<div class="empty">Schedule not published yet</div>';
-  // Fit pass, per station column: a 5-digit rookie number steps its block
+  // Column labels only over actual columns: floating them over the empty
+  // state would label nothing.
+  $('deckHead').hidden = !up.length;
+  fitDeck();
+
+  renderRank();
+}
+
+// Deck fit passes, split out so show() can re-run them at reveal time: a
+// paint that lands during the rankings dwell measures a hidden deck.
+function fitDeck() {
+  fitLine($('deckSub'));
+  // Per station column: a 5-digit rookie number steps its block
   // down (72 -> 62 -> 54) rather than ever bleeding into the next column.
   for (const el of document.querySelectorAll('.deck-teams')) {
     delete el.dataset.fit;
@@ -305,15 +344,14 @@ function paint(s) {
     if (overflowing()) el.dataset.fit = '2';
   }
   // Same fit pass for the match name: a playoff ShortName ("SF2-3", "QF10-3")
-  // or a LongName fallback steps down rather than wrapping into row two.
+  // steps down rather than wrapping into row two; a LongName fallback that
+  // outruns the last step ends on the CSS ellipsis.
   for (const el of document.querySelectorAll('.deck-name')) {
     delete el.dataset.fit;
     const overflowing = () => el.scrollWidth > el.clientWidth;
     if (overflowing()) el.dataset.fit = '1';
     if (overflowing()) el.dataset.fit = '2';
   }
-
-  renderRank();
 }
 
 // One page of rankings: PAGE_SIZE rows, ranks running DOWN the left column
@@ -328,7 +366,6 @@ function renderRank() {
   $('rankSub').textContent = rows.length
     ? `${through} · ${start + 1}-${start + rows.length} of ${all.length}`
     : through;
-  fitLine($('rankSub'));
   $('rank').innerHTML = rows.length
     ? rows.map(r => `
         <div class="rank-row">
@@ -338,6 +375,13 @@ function renderRank() {
           <span class="rank-rp num">${r.rankingPoints}</span>
         </div>`).join('')
     : '<div class="empty">No rankings yet</div>';
+  fitRank();
+}
+
+// Rankings fits, split out so show() can re-run them at reveal time: page 1
+// is always rendered during the deck dwell, while this panel is hidden.
+function fitRank() {
+  fitLine($('rankSub'));
   for (const el of document.querySelectorAll('.rank-team')) {
     delete el.dataset.fit;
     if (el.scrollWidth > el.clientWidth) el.dataset.fit = '1';
