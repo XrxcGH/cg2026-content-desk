@@ -89,7 +89,7 @@ export class Recorder {
       '-f', 'segment',
       '-segment_time', String(this.#cfg.segmentSeconds),
       // Align cuts to wall-clock multiples so filename -> start time is exact.
-      // Without this, boundaries drift and clip maths slowly goes wrong.
+      // Without this, boundaries drift and clip math slowly goes wrong.
       '-segment_atclocktime', '1',
       '-reset_timestamps', '1',
       '-strftime', '1',
@@ -144,7 +144,7 @@ export class Recorder {
     for (const t of this.#timers) clearTimeout(t);
     this.#timers.clear();
 
-    // 'q' on ffmpeg's stdin asks it to finalise the current segment cleanly;
+    // 'q' on ffmpeg's stdin asks it to finalize the current segment cleanly;
     // SIGKILL would leave the last file unplayable, which is exactly the
     // moment you'd want it. A raw kill signal is not a substitute for this:
     // on Windows, Node's kill('SIGTERM') has no graceful effect at all, since

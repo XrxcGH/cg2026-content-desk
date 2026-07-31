@@ -20,8 +20,8 @@ const REDIRECT = `http://127.0.0.1:${PORT}/callback`;
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
 console.log(`
-YouTube authorisation
-─────────────────────
+YouTube authorization
+---------------------
 You need a Google Cloud project with the YouTube Data API v3 enabled and an
 OAuth 2.0 Client ID of type "Desktop app".
 
@@ -45,7 +45,7 @@ authUrl.search = new URLSearchParams({
   scope: `${UPLOAD_SCOPE} ${MANAGE_SCOPE}`,
   access_type: 'offline',
   // Without this, Google only returns a refresh token the FIRST time an
-  // account authorises the app. Re-running the helper would silently give
+  // account authorizes the app. Re-running the helper would silently give
   // you nothing.
   prompt: 'consent',
 }).toString();
@@ -61,13 +61,13 @@ const code = await new Promise<string>((resolve, reject) => {
     const got = url.searchParams.get('code');
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(`<body style="font-family:system-ui;padding:48px;background:#1B0322;color:#fff">
-      <h1 style="color:#F0AF00">${err ? 'Authorisation failed' : 'Authorised'}</h1>
+      <h1 style="color:#F0AF00">${err ? 'Authorization failed' : 'Authorized'}</h1>
       <p>${err ? err : 'You can close this tab and return to the terminal.'}</p></body>`);
 
     server.close();
     err ? reject(new Error(err)) : resolve(got!);
   });
-  server.listen(PORT, '127.0.0.1', () => console.log('Waiting for the redirect…'));
+  server.listen(PORT, '127.0.0.1', () => console.log('Waiting for the redirect...'));
 });
 
 const res = await fetch('https://oauth2.googleapis.com/token', {

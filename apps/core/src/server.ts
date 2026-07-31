@@ -904,7 +904,7 @@ ${sections}</body></html>`;
       // Relay: ephemeral, high-frequency data that must NOT go through the
       // bus. Telestrator strokes arrive at pointer rate; putting them in the
       // event log would bloat a 3-day NDJSON archive with hundreds of
-      // thousands of coordinate pairs and add a reduce+serialise step to every
+      // thousands of coordinate pairs and add a reduce+serialize step to every
       // frame of a stroke. Relayed messages are broadcast and forgotten.
       // The durable record of a stroke is emitted separately, once, on finish.
       if (msg.t === 'relay' && msg.channel) {

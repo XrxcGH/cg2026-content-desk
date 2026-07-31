@@ -79,7 +79,7 @@ export function qcHold(kind: ItemKind, cutSeconds: number): string | null {
   const seconds = Math.round(cutSeconds);
   if (seconds < minSec || seconds > maxSec) {
     return `QC hold: cut totals ${seconds}s, outside ${minSec}-${maxSec}s for a ${kind}. `
-      + 'Check the clip, then release';
+      + 'Check the clip, then release.';
   }
   return null;
 }

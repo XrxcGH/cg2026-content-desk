@@ -166,7 +166,7 @@ test('teleop start re-anchors the clock across the field pause', () => {
   let s = started();
   // The field pauses (here 2s) between auto and teleop, so teleop begins at
   // wall +22s even though the desk axis says +20. Without the re-anchor every
-  // teleop boundary, including the synthesised buzzer, ran 2s early.
+  // teleop boundary, including the synthesized buzzer, ran 2s early.
   s = reduce(s, ev('match.teleop_start', T0 + 22_000));
   assert.equal(s.matchClock, 0, 'matchClock is exactly 0 at the field teleop start');
   assert.equal(s.lastMatchStartedAt, T0, 'the true start survives for clip cutting');

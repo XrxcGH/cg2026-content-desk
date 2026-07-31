@@ -146,7 +146,7 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
 
       // Cheesy Arena pauses between auto and teleop, and the pause length is
       // not fixed, so a clock anchored only at match.start ran ahead of the
-      // field for the whole teleop: shifts, endgame, and the synthesised
+      // field for the whole teleop: shifts, endgame, and the synthesized
       // buzzer all fired early by the pause length, and the field's real
       // match.end then landed as a duplicate. The field bridge emits this at
       // the teleop transition; re-anchoring puts matchClock at exactly 0

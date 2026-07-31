@@ -63,9 +63,9 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
 
 .nextline { font-family: var(--font-cond); font-size: 17px; letter-spacing: .04em; line-height: 1.7; }
 .nextline b { font-family: var(--font-num); color: var(--accent); }
-/* Alliance labels. Lightened off the on-field colours because the official
+/* Alliance labels. Lightened off the on-field colors because the official
    red and blue do not clear 4.5:1 against this panel; the word itself is
-   still there, so colour is a second cue rather than the only one. */
+   still there, so color is a second cue rather than the only one. */
 .al { font-weight: 700; }
 .al--red { color: #FF6B6B; }
 .al--blue { color: #6FB6FF; }
@@ -86,7 +86,7 @@ a:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
   <section>
     <h2>Right now</h2>
-    <p class="statusline" id="line">Waiting for a match…</p>
+    <p class="statusline" id="line">Waiting for a match...</p>
     <div class="rpline" id="rp"></div>
   </section>
 
@@ -124,7 +124,7 @@ const desk = connect('talent');
 
 desk.on('link', up => {
   $('dot').dataset.up = String(up);
-  $('linkText').textContent = up ? 'live' : 'reconnecting…';
+  $('linkText').textContent = up ? 'linked' : 'reconnecting...';
 });
 
 const note = team => localStorage.getItem(`talent.note.${team}`) ?? '';
@@ -162,7 +162,7 @@ desk.on('state', s => {
   const rp = side => {
     const sc = s.score[side];
     const seg = (label, val, need, got) =>
-      `<span class="${got ? 'got' : ''}">${label} <b>${val}/${need}</b>${got ? ' ✓' : ''}</span>`;
+      `<span class="${got ? 'got' : ''}">${label} <b>${val}/${need}</b>${got ? ' earned' : ''}</span>`;
     return `<span style="text-transform:uppercase">${side}</span> ` +
       seg('Energized', sc.fuel, th.energizedFuel, sc.rp.energized) + ' ' +
       seg('Supercharged', sc.fuel, th.superchargedFuel, sc.rp.supercharged) + ' ' +
@@ -170,9 +170,9 @@ desk.on('state', s => {
   };
   $('rp').innerHTML = `${rp('red')}&nbsp;&nbsp;·&nbsp;&nbsp;${rp('blue')}`;
 
-  // Alliance words carry their own colour. The announcer scans this line
+  // Alliance words carry their own color. The announcer scans this line
   // between matches, and "Red" in red is found faster than "red" in the same
-  // white as everything around it. The word stays, so colour is never the
+  // white as everything around it. The word stays, so color is never the
   // only thing carrying the meaning.
   const up = (s.upcoming ?? []).slice(0, 3).map(m =>
     `<b>${esc(m.shortName)}</b> <span class="al al--red">Red</span> ${m.red.join(', ')}` +

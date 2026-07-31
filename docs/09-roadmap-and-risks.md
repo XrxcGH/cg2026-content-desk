@@ -15,29 +15,29 @@ them, CalGames still gets something better than last year.
 The floor. Everything here runs off manual operator input and a camera. No FMS, no Cheesy Arena,
 no network approval needed.
 
-- ✅ Theme tokens + the seven-transition motion system (see [tokens.css](../packages/theme/tokens.css))
-- ✅ `core`: event bus, dual-clocked NDJSON event log, snapshot reducer, WS fan-out, log replay
-- ✅ Program overlay: alliance overview + score bar + hub indicator + threshold-labelled RP
+- Done: Theme tokens + the seven-transition motion system (see [tokens.css](../packages/theme/tokens.css))
+- Done: `core`: event bus, dual-clocked NDJSON event log, snapshot reducer, WS fan-out, log replay
+- Done: Program overlay: alliance overview + score bar + hub indicator + threshold-labeled RP
   badges + lower third + final score + analysis-desk strap + arcade bumper, all in one
   Browser Source, switching on `state.screen`
-- ✅ Desk console: keyboard-first, drives the whole show including shadow scoring at `estimated`
+- Done: Desk console: keyboard-first, drives the whole show including shadow scoring at `estimated`
   confidence and back-dated replay markers
-- ✅ Team media library: drag-drop upload, alpha/perimeter validation, trim, multi-width output,
+- Done: Team media library: drag-drop upload, alpha/perimeter validation, trim, multi-width output,
   two-tier fallback in the overview (cutout, else the gold-number plinth; the tier-2 TBA avatar
   is designed but not wired, see [07-team-media.md](07-team-media.md))
-- ✅ Telestrator: `/s/draw` pad + `/s/tele` render surface, shared renderer, six tools
-  (pen, arrow, circle, spotlight, path, team tag), five inks, frozen-frame backdrop,
+- Done: Telestrator: `/s/draw` pad + `/s/tele` render surface, shared renderer, six tools
+  (pen, arrow, ellipse, spotlight, path, team tag), five inks, frozen-frame backdrop,
   6s auto-fade, ANALYSIS chip. Strokes relay off-bus at pointer rate; one durable
   `telestrator.stroke` event per finished stroke goes to the log
-- ✅ Rolling record: supervised ffmpeg per source, wall-clock-aligned segments, restart-with-backoff,
+- Done: Rolling record: supervised ffmpeg per source, wall-clock-aligned segments, restart-with-backoff,
   and an encoder chooser that picks by **running a real encode** rather than trusting
-  `-encoders` (NVENC→QSV→AMF→libx264)
-- ✅ Clip extraction: segment index, accurate seek, multi-range cuts, optional slow-motion.
-  Timing-aware `matchCut()` frames a match video as pre-roll over the announcer's countdown → the
-  match → a jump to the score reveal, skipping referee deliberation
-- ✅ Replay console (`/s/replay`): match-clock timeline, automatic markers, cut/preview,
+  `-encoders` (NVENC, then QSV, then AMF, then libx264)
+- Done: Clip extraction: segment index, accurate seek, multi-range cuts, optional slow-motion.
+  Timing-aware `matchCut()` frames a match video as pre-roll over the announcer's countdown, then the
+  match, then a jump to the score reveal, skipping referee deliberation
+- Done: Replay console (`/s/replay`): match-clock timeline, automatic markers, cut/preview,
   and a frame grab that pushes the frozen frame to the telestrator
-- ✅ Durable publish queue → YouTube resumable upload → TBA `match_videos/add` / `media/add`,
+- Done: Durable publish queue, then YouTube resumable upload, then TBA `match_videos/add` / `media/add`,
   with official FIRST-channel naming. Credentials live in a gitignored `config.json`
 
 **P0 is complete.** Everything above runs today; only the credentials are outstanding.
@@ -47,15 +47,15 @@ replay and telestration using nothing but keyboards.
 
 ### P1: Live data *(target: end of September)*
 
-- ✅ **Cheesy Arena adapter**: wire shapes transcribed from the 2026 source, not guessed
-- ✅ **The bridge**, hardened per [10-field-bridge.md](10-field-bridge.md): socket and REST
+- Done: **Cheesy Arena adapter**: wire shapes transcribed from the 2026 source, not guessed
+- Done: **The bridge**, hardened per [10-field-bridge.md](10-field-bridge.md): socket and REST
   allowlists as constants with tests, GET-only client, exponential backoff, request audit log,
   kill switch. Launch flag (`--cheesy`), never a config setting
-- ✅ `score.delta` synthesis → automatic replay markers (bursts, lead changes, climbs), plus
+- Done: `score.delta` synthesis driving automatic replay markers (bursts, lead changes, climbs), plus
   "robot dropped" markers off `arenaStatus`
-- ✅ Hub state indicator + shift clock, taken from the field, not inferred (see below)
-- ✅ Cue engine with per-cue autopilot toggles, and a hand-rolled obs-websocket v5 client
-- ✅ **Validated against a real `cheesy-arena -dev` build** driving a genuine scored match.
+- Done: Hub state indicator + shift clock, taken from the field, not inferred (see below)
+- Done: Cue engine with per-cue autopilot toggles, and a hand-rolled obs-websocket v5 client
+- Done: **Validated against a real `cheesy-arena -dev` build** driving a genuine scored match.
   `harness.mjs` makes it repeatable
 
 **Ship criterion: met.** The score bar is correct without anyone typing, and replay markers land
@@ -68,26 +68,26 @@ That's why hub state now comes from the field rather than any local inference. D
 
 ### P2: Depth *(target: first week of October)*
 
-- ✅ Arcade: head-to-head sets, Mario Kart GP points model with the MK8D table and
+- Done: Arcade: head-to-head sets, Mario Kart GP points model with the MK8D table and
   best-finish tie-break, `/s/arcade` overlay and `/s/arcadedesk` console. Entrants can
   register by FRC team, so the card reads `846 The Funky Monkeys` rather than a gamertag
-- ✅ Cheesy REST polling (60s): rankings and schedule, feeding the side screens
-- ✅ Side screens (`/s/side`): on-deck and rankings, rotating on a timer, room-scale type
+- Done: Cheesy REST polling (60s): rankings and schedule, feeding the side screens
+- Done: Side screens (`/s/side`): on-deck and rankings, rotating on a timer, room-scale type
   set locally (the only surface that is *only* ever seen in the room)
-- ✅ Post-match social cards (`/s/cards`): 1080×1080 canvas-rendered result graphics, auto-built
+- Done: Post-match social cards (`/s/cards`): 1080×1080 canvas-rendered result graphics, auto-built
   on `match.score_posted`. Download a PNG or save it to the desk. Same shape language and WRRF
   palette as the broadcast: winner cap, RP badges with icons and thresholds, team lists
-- ✅ Crowd trivia (`/s/trivia` overlay · `/s/quiz` phones · `/s/triviadesk` host): the audience
-  plays from their seats over the venue wifi, with FRC and 2026 REBUILT questions (the RP-threshold
+- Done: Crowd trivia (`/s/trivia` overlay · `/s/quiz` phones · `/s/triviadesk` host): the audience
+  plays from their seats over the venue Wi-Fi, with FRC and 2026 REBUILT questions (the RP-threshold
   ones double as scorebug education), speed scoring, team-tagged leaderboard. Answers never
   leave the server before reveal, and scoring is entirely server-side. A per-event question
   bank drops in at `data/trivia.json`, and the host console can add, edit, reorder, and delete
   questions live during the event, writing straight back to that file
-- ⬜ Statbotics pre-match prediction + alliance selection value board.
+- Open: Statbotics pre-match prediction + alliance selection value board.
   **Still blocked** (re-checked 2026-07-30): every `/v3` path returns 500, so the schema
   cannot be verified against a live response. The rule stands: wire shapes get transcribed
   from reality, never guessed. Re-check before the September freeze
-- ✅ start.gg adapter, bracket metadata only (`apps/core/src/ingest/startgg/`): round labels,
+- Done: start.gg adapter, bracket metadata only (`apps/core/src/ingest/startgg/`): round labels,
   entrants, seeds, and the FRC-team crossover parse, polled once a minute into
   `ArcadeStore.setBracket()`. The console's **Load** button pre-fills the next set. The live
   score stays operator-authoritative because start.gg lags reality by up to a full round. That's
@@ -103,52 +103,52 @@ through a capture card, then Elgato/Cam Link into an OBS scene. See
 A sourced sweep of what the FRC community actually complains about at events, mapped against this
 desk. The high-leverage items are built:
 
-- ✅ **Pace model** ([pace.ts](../apps/core/src/pace.ts)): median actual cycle time → drift-adjusted
+- Done: **Pace model** ([pace.ts](../apps/core/src/pace.ts)): median actual cycle time feeding drift-adjusted
   start estimates on the side screens, the phone page, and the talent view, answering "why does the
   printed schedule say 4:02 when it's 4:20"
-- ✅ **Status cards**: one desk button puts *Field delay / Score review / Arena fault / Match
+- Done: **Status cards**: one desk button puts *Field delay / Score review / Arena fault / Match
   replay* with an estimated return time on the program, side screens, and phones. Silence is the
   complaint, not the delay
-- ✅ **Talent view** (`/s/talent`): announcer tablet with the same numbers as the overlay, RP
+- Done: **Talent view** (`/s/talent`): announcer tablet with the same numbers as the overlay, RP
   progress in words, and pronunciation notes that persist on the device
-- ✅ **"When do we play?"** (`/s/next`): per-team schedule on any phone, reached by a vendored-QR
+- Done: **"When do we play?"** (`/s/next`): per-team schedule on any phone, reached by a vendored-QR
   corner card on the side screens: no third-party QR service, works on venue LAN
-- ✅ **Clean second program** (`/s/program?mode=clean`): match screen only, no thirds or status
+- Done: **Clean second program** (`/s/program?mode=clean`): match screen only, no thirds or status
   cards, for a scouting/pit feed; shed first when the uplink degrades ([11](11-distribution.md))
-- ✅ **Dual-bus audio** ([06](06-hardware-and-network.md)): the event Spotify playlist plays
+- Done: **Dual-bus audio** ([06](06-hardware-and-network.md)): the event Spotify playlist plays
   in-house only, never to stream; MC/GA mics ride both buses. Copyright-safe VODs by construction
-- ✅ **Wide-shot lock**: autopilot cues can't cut the program away from the field mid-match;
+- Done: **Wide-shot lock**: autopilot cues can't cut the program away from the field mid-match;
   operator and replay cues still can
-- ✅ **Publish QC hold**: a cut whose length is implausible for what it claims to be is held
+- Done: **Publish QC hold**: a cut whose length is implausible for what it claims to be is held
   rather than uploaded (the classic "the VOD is 4 seconds long" failure). Bounds are per kind,
   so a 40-minute awards ceremony is not held for being long
-- ✅ **Alliance selection board** (program screen `selection`): captains in seed order, the ranked
-  pool greying out as teams are taken, and Cheesy Arena's own pick clock. The wire shape came from
+- Done: **Alliance selection board** (program screen `selection`): captains in seed order, the ranked
+  pool graying out as teams are taken, and Cheesy Arena's own pick clock. The wire shape came from
   `generateAllianceSelectionMessage` in the 2026 source, and it arrives on the audience display
   socket we already subscribe to. The selection websocket itself stays forbidden: the scorekeeper
   runs selection, we only draw it
-- ✅ **Explainer loop** (program screen `explain`): six cards, twelve seconds each, in the gaps.
+- Done: **Explainer loop** (program screen `explain`): six cards, twelve seconds each, in the gaps.
   What fuel is, why only one hub scores, why a losing alliance is celebrating. The newcomer
   complaint is not that the game is complex, it is that nobody ever says what the numbers mean
-- ✅ **Head referee review** (`/s/var`): frame-step the recording with no cut, no send to air, no
+- Done: **Head referee review** (`/s/var`): frame-step the recording with no cut, no send to air, no
   publish, and no route to the field. Frames are grabbed with `send: false`, so nothing this page
   does can reach the broadcast. Only useful if CalGames adopts review; harmless if it does not
-- ✅ **Day-VOD chapters** ([chapters.ts](../apps/core/src/chapters.ts)): the event log already
+- Done: **Day-VOD chapters** ([chapters.ts](../apps/core/src/chapters.ts)): the event log already
   knows when every match started, so `GET /api/chapters` turns it into text that pastes into a
   YouTube description. YouTube's rules (0:00 first, three minimum, ten seconds apart) are
   enforced rather than discovered on a live VOD, because breaking one silently shows no chapters
-- ✅ **Award, ceremony and selection videos**: the operator marks both ends from the desk and the
+- Done: **Award, ceremony and selection videos**: the operator marks both ends from the desk and the
   queue cuts them from the program recording. Teams ask for these and nobody records them
-- ✅ **Pick the winner**: a trivia round on the match that is up. The answer is unleakable by
+- Done: **Pick the winner**: a trivia round on the match that is up. The answer is unleakable by
   construction, since at the moment the question opens the match has not been played and no
   answer exists on the server either. It resolves from the posted score
 
-- ✅ **Alliance size is data, not a constant**: every surface that lists teams sizes itself off
+- Done: **Alliance size is data, not a constant**: every surface that lists teams sizes itself off
   the array it is given. The overview grid takes its row count from the alliance, the score
   bar tightens its leading for a fourth line, the deck blocks on the venue TVs follow suit, and
   the social card recomputes its vertical rhythm. Team numerals scale against their own column
   with container queries, so a 5-digit rookie number in a four-up playoff alliance stops short
-  of its neighbour instead of colliding with it. Cheesy Arena only ever fields three robots, so
+  of its neighbor instead of colliding with it. Cheesy Arena only ever fields three robots, so
   the fourth member of a playoff alliance is a backup: the seeds ride along on `match.loaded`
   as `redAlliance` / `blueAlliance` for the join against the selection rosters
 
@@ -180,9 +180,9 @@ back row of the gym**. Nothing new ships Friday.
 
 | # | Decision | Outcome |
 | --- | --- | --- |
-| 1 | Field management system | ✅ **Cheesy Arena.** The `cheesy` adapter is the primary and only ingest path; the FMS adapter is not being built |
-| 2 | Field bridge | ✅ **Approved.** Any software is fine as long as it can't interfere with Cheesy Arena controlling the field |
-| 2b | Registering as a display | ✅ **In scope.** Unlocks live score, `score.delta`, and `arenaStatus` |
+| 1 | Field management system | **Cheesy Arena.** The `cheesy` adapter is the primary and only ingest path; the FMS adapter is not being built |
+| 2 | Field bridge | **Approved.** Any software is fine as long as it can't interfere with Cheesy Arena controlling the field |
+| 2b | Registering as a display | **In scope.** Unlocks live score, `score.delta`, and `arenaStatus` |
 
 Rule 2 resolves to a hard endpoint allowlist, and the guarantee is structural rather than
 procedural: `HandleNotifiers` never calls `Read()`, so display endpoints *cannot* process anything

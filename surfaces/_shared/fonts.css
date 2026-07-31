@@ -6,7 +6,7 @@
      Saira Condensed 600/700: labels, team names
      JetBrains Mono  operator surfaces only
 
-   ⚠ BEFORE THE EVENT: replace this @import with self-hosted WOFF2s in
+   BEFORE THE EVENT: replace this @import with self-hosted WOFF2s in
    surfaces/_shared/fonts/. An OBS Browser Source that fetches Google Fonts
    renders fallback type the one time venue internet drops, which will be
    during finals. The @import is a development convenience, not the plan.

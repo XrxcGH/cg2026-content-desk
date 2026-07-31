@@ -376,7 +376,7 @@ export class TriviaStore {
     return this.snapshot();
   }
 
-  /** Full reset: scores, progress, and players stay unless `hard`. */
+  /** Reset scores and progress. Players stay unless `hard`. */
   reset(hard = false): TriviaSnapshot {
     this.#phase = 'idle';
     this.#index = 0;

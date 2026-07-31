@@ -43,7 +43,7 @@ export function readPngHeader(buf: Buffer): PngHeader | null {
     w: buf.readUInt32BE(16),
     h: buf.readUInt32BE(20),
     colorType,
-    // 4 = grey+alpha, 6 = truecolour+alpha
+    // 4 = gray+alpha, 6 = truecolor+alpha
     hasAlpha: colorType === 4 || colorType === 6,
   };
 }
@@ -131,7 +131,7 @@ export class MediaLibrary {
       const img = sharp(buf, { failOn: 'none' });
 
       // Trim to the alpha bounding box, then record real dimensions so the
-      // overview can normalise by HEIGHT: normalising by width puts a robot
+      // overview can normalize by HEIGHT: normalizing by width puts a robot
       // the size of a bus next to one the size of a shoebox.
       const trimmed = await img.trim({ threshold: 1 }).png().toBuffer({ resolveWithObject: true });
       w = trimmed.info.width;

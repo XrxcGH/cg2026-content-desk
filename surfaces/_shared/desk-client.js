@@ -21,7 +21,7 @@ export const REBUILT = {
 export const PHASE_LABEL = {
   pre: 'Pre-match', auto: 'Auto', transition: 'Transition',
   shift1: 'Shift 1', shift2: 'Shift 2', shift3: 'Shift 3', shift4: 'Shift 4',
-  endgame: 'End game', post: 'Final',
+  endgame: 'Endgame', post: 'Final',
 };
 
 export function phaseAt(c) {
@@ -271,7 +271,7 @@ export function startTicker(fn) {
 }
 
 /**
- * Fit a 1920x1080 stage into the window. The scale rounds UP a hair (≤0.05%,
+ * Fit a 1920x1080 stage into the window. The scale rounds UP a hair (0.05% at most,
  * cropped by the wrap's overflow) so fractional scaling can never leave a
  * sub-pixel seam of page background at the stage edges. On a broadcast
  * overlay that seam reads as a white line around the score bar.

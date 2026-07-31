@@ -54,7 +54,7 @@ export interface TbaAuth { authId: string; authSecret: string }
  * X-TBA-Auth-Sig = md5(authSecret + requestPath + requestBody)
  *
  * The signature covers the path AND the exact body bytes, so the body must be
- * serialised once and both signed and sent; serialise twice and you get
+ * serialized once and both signed and sent; serialize twice and you get
  * intermittent 401s that look like a credentials problem and aren't.
  */
 export function signature(authSecret: string, path: string, body: string): string {
@@ -83,7 +83,7 @@ export class TbaClient {
     if (!this.configured) throw new Error('TBA credentials are not configured (see config.json).');
 
     const path = this.#path(op);
-    // Serialise exactly once (this string is both signed and sent).
+    // Serialize exactly once (this string is both signed and sent).
     const body = JSON.stringify(payload);
 
     const res = await fetch(BASE + path, {

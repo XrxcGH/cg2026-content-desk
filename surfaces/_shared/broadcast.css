@@ -428,7 +428,7 @@
   clip-path: var(--chamfer); --ch: 12px;
 }
 .final-break .fb-h {
-  font-family: var(--font-cond); font-weight: 700; font-size: calc(var(--t-label) * .8);
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
   letter-spacing: .14em; text-transform: uppercase; color: rgba(255, 255, 255, .72);
   text-align: right;
 }
@@ -523,7 +523,7 @@
    idea who is still available or how long the pick has taken.
 
    Every number here comes from the field. The captains sit in seed order on
-   the left, the pool on the right greys out as teams are taken, and the clock
+   the left, the pool on the right grays out as teams are taken, and the clock
    is Cheesy Arena's own pick timer rather than one we run.
    ========================================================================== */
 .sel-head { position: absolute; top: var(--safe-y); left: var(--safe-x); right: var(--safe-x);
@@ -592,7 +592,7 @@
 .sel-pool-team { display: flex; align-items: baseline; gap: 10px;
   font-variant-numeric: tabular-nums; }
 .sel-pool-rank {
-  font-family: var(--font-cond); font-weight: 600; font-size: 22px;
+  font-family: var(--font-cond); font-weight: 600; font-size: 28px;
   color: var(--cg-white-dim); min-width: 34px; text-align: right;
 }
 .sel-pool-num {

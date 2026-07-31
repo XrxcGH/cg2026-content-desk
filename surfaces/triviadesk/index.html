@@ -28,6 +28,8 @@ label.in { font-family: var(--font-cond); font-weight: 600; font-size: 13px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }
 input { padding: 8px 10px; font-family: var(--font-display); font-size: 14px;
   background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
+/* Chrome's default placeholder gray sits just under AA on this input fill. */
+input::placeholder { color: var(--text-dim); }
 input:focus { outline: none; border-color: var(--accent); }
 
 .qbox { background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 10px;
@@ -227,7 +229,7 @@ $('resetHard').onclick = () => post('reset', { hard: true })
 
 const load = async () => {
   try { paint(await fetch('/api/trivia').then(r => r.json())); }
-  catch { $('dot').dataset.up = 'false'; $('linkText').textContent = 'reconnecting…'; }
+  catch { $('dot').dataset.up = 'false'; $('linkText').textContent = 'reconnecting...'; }
 };
 setInterval(load, 2000);
 load();

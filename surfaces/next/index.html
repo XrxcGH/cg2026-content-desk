@@ -10,8 +10,8 @@
 /* The answer to the most-asked question at any FRC event: "when does my
    team play next?" (on the phone that asked it). Estimated times come from
    the pace model (actual cycle times), not the printed schedule. */
-/* The base colour lives on the root, not just the body. The body is a
-   centred 560px column, so anything outside it (either side on a laptop, or
+/* The base color lives on the root, not just the body. The body is a
+   centered 560px column, so anything outside it (either side on a laptop, or
    below it if the list ever runs long) would otherwise show the canvas with
    the atmosphere gradient tiling, which reads as a second, brighter page. */
 html { background-color: var(--cg-purple-void); }
@@ -43,6 +43,8 @@ label { display: block; font-family: var(--font-cond); font-weight: 600; font-si
 input { flex: 1; min-width: 0; box-sizing: border-box; padding: 12px 14px; font-size: 18px;
   font-family: var(--font-num); background: var(--cg-purple-lo); color: var(--cg-white);
   border: 2px solid var(--cg-purple-hi); }
+/* Chrome's default placeholder gray is under AA on the sunken purple fill. */
+input::placeholder { color: var(--cg-white-dim); }
 input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; border-color: var(--cg-gold); }
 .btn-go { padding: 12px 20px; border: 0; cursor: pointer;
   clip-path: var(--chamfer); --ch: 10px;
@@ -69,9 +71,9 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 15px; }
 /* 19px bold puts these in WCAG's large-text tier, where white on the
    official alliance red clears the 3:1 floor. At 15px it measured 4.38:1
-   against a 4.5 requirement, and the alliance colours are not ours to
+   against a 4.5 requirement, and the alliance colors are not ours to
    change. Bigger chips are easier to hit on a phone anyway. */
-.m-teams span { padding: 4px 10px; clip-path: var(--chamfer); --ch: 6px;
+.m-teams span { padding: 8px 10px; clip-path: var(--chamfer); --ch: 6px;
   font-size: 19px; font-weight: 700; }
 .m-teams .r { background: var(--alliance-red); }
 .m-teams .b { background: var(--alliance-blue); }
@@ -91,7 +93,7 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
     <h1>When do we play?</h1>
     <div class="tick" aria-hidden="true"></div>
   </div>
-  <div class="sub" id="now" aria-live="polite">connecting…</div>
+  <div class="sub" id="now" aria-live="polite">connecting...</div>
 
   <!-- A real form, so Enter and the phone keyboard's go key follow too. -->
   <form class="card" id="follow">
@@ -201,7 +203,7 @@ function trimToFit() {
 
 async function poll() {
   try { paint(await fetch('/api/state').then(r => r.json())); }
-  catch { setText($('now'), 'reconnecting…'); }
+  catch { setText($('now'), 'reconnecting...'); }
 }
 setInterval(poll, 5000);
 poll();

@@ -117,13 +117,15 @@ kbd { font-family: var(--font-num); background: var(--surface-sunken); padding: 
       aria-label="Match clock position">
 
     <div class="steps">
-      <button data-step="-1">&minus;1 s</button>
-      <button data-step="-0.2">&minus;0.2 s</button>
+      <!-- "sec", not "s": these buttons uppercase in the condensed face, and a
+           lone uppercase S reads as a 5 ("−0.2 S" becomes "−0.25"). -->
+      <button data-step="-1">&minus;1 sec</button>
+      <button data-step="-0.2">&minus;0.2 sec</button>
       <button data-step="-0.0333">&minus;1 frame</button>
       <button class="key" id="grab">Grab frame</button>
       <button data-step="0.0333">+1 frame</button>
-      <button data-step="0.2">+0.2 s</button>
-      <button data-step="1">+1 s</button>
+      <button data-step="0.2">+0.2 sec</button>
+      <button data-step="1">+1 sec</button>
     </div>
     <p class="err" id="err" aria-live="polite"></p>
   </section>

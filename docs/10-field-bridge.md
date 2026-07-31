@@ -23,7 +23,7 @@ the event:
 
 | Endpoint | Commands it accepts | Why it's forbidden |
 | --- | --- | --- |
-| `/match_play/websocket` | `startMatch`, **`abortMatch`**, `loadMatch`, `substituteTeams`, `toggleBypass`, `commitAndPost`, `discardResults`, `startTimeout`, `signalReset`, … | **Literally stops a match.** Also discards results |
+| `/match_play/websocket` | `startMatch`, **`abortMatch`**, `loadMatch`, `substituteTeams`, `toggleBypass`, `commitAndPost`, `discardResults`, `startTimeout`, `signalReset`, ... | **Literally stops a match.** Also discards results |
 | `/panels/scoring/{position}/websocket` | **`autoTower`**, **`endgame`**, **`addFoul`**, `commitMatch` | **Literally is game-piece scoring.** Corrupts the official score |
 | `/panels/referee/websocket` | fouls, cards | corrupts the official score |
 | `/alliance_selection/websocket` + POSTs | picks, finalize, reset | destroys alliance selection |
@@ -75,12 +75,12 @@ whole safety argument.
 3. **Path allowlist checked at call time**, against the constant above. Reject and log, don't warn.
 4. **Reserved `displayId`, coordinated with the scorekeeper.** This is now the top *real* risk:
    registering with an ID a genuine audience display uses could reconfigure that display. Agree
-   `contentdesk1`…`contentdesk4` (or whatever they prefer) in advance, and always pass it
+   `contentdesk1` through `contentdesk4` (or whatever they prefer) in advance, and always pass it
    explicitly. Connecting without one makes Cheesy allocate an ID and redirect.
 5. **Connection budget:** one WS per allowed endpoint, one concurrent HTTP request. The schedule
    and rankings poll every 60s, plus one deferred refresh about 1.5s after a posted score so the
    side screens are not a minute behind the room. There is no faster polling mode.
-6. **Exponential backoff with jitter, 1s → 60s.** A reconnect storm during a field reset is now
+6. **Exponential backoff with jitter, 1s to 60s.** A reconnect storm during a field reset is now
    the most plausible way this project causes a problem. There is no circuit breaker beyond the
    60s cap: the bridge keeps retrying at that ceiling until the kill switch or the operator stops
    it.
@@ -110,11 +110,11 @@ So:
 Registering as a display was the blocker on live data, and it's now in scope. That restores:
 
 - **Live in-match score** on the broadcast, `authoritative`, not a shadow-scorer guess.
-- **`score.delta` synthesis** → automatic replay markers for scoring bursts, lead changes, and
+- **`score.delta` synthesis**: automatic replay markers for scoring bursts, lead changes, and
   climbs (see [02-architecture.md](02-architecture.md)). This was the single highest-value derived
   signal in the design and it's back.
-- **`arenaStatus`** → "robot dropped" markers and a station-health strip on the desk console.
-- **`playSound` / `audienceDisplayMode`** → our cue engine can follow the scorekeeper's screen
+- **`arenaStatus`**: "robot dropped" markers and a station-health strip on the desk console.
+- **`playSound` / `audienceDisplayMode`**: our cue engine can follow the scorekeeper's screen
   changes instead of guessing at them.
 
 It also means the rest of the stack is unconstrained: OBS, vMix, NodeCG, Companion, ffmpeg,
@@ -172,7 +172,7 @@ node harness.mjs
 ```
 
 **Result:** the desk tracked a full match, with every phase transition, correct countdown, endgame
-lockdown at exactly `matchClock` 110, real scores (auto climb → 15, teleop L2 → 20, L3 → 30) and
+lockdown at exactly `matchClock` 110, real scores (15 for the auto climb, 20 for teleop L2, 30 for L3) and
 the correct final. Reconnect backoff was separately verified against a dead host: 24 attempts
 across six sockets in twelve seconds, no spin, desk healthy throughout.
 
@@ -206,7 +206,7 @@ Good for catching a regression in September without waiting on the next chance a
 - [x] Run the whole ingest against a local `cheesy-arena -dev` instance through a real match
 - [x] Repeatable offline regression check (`npm run fake-arena` + `npm run validate:offline`) that
       exercises the same client, allowlist, and adapter without needing a live Cheesy Arena build
-- [ ] Re-run `harness.mjs` against the actual off-season build being used at the event, in case it
+- [ ] Re-run `harness.mjs` against the actual offseason build being used at the event, in case it
       differs from `main`
 - [x] Unit test asserting the endpoint allowlist (`cheesy.test.ts`: refuses control sockets,
       permits only the listener sockets, refuses REST paths outside the read allowlist). It fails

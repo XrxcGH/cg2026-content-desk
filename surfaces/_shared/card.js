@@ -3,7 +3,7 @@
  *
  * Drawn on a canvas rather than laid out in HTML, for one reason: the output
  * has to be a real PNG somebody can post. `canvas.toBlob()` gives that with no
- * dependency, whereas rasterising a DOM node needs a library or a headless
+ * dependency, whereas rasterizing a DOM node needs a library or a headless
  * browser. The trade is doing layout by hand, which for a fixed 1080x1080
  * composition is a fair price.
  *

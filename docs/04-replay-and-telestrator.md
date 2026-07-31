@@ -26,8 +26,8 @@ ffmpeg -f dshow -i video="CAM1" -use_wallclock_as_timestamps 1 \
 ```
 
 6-second segments, wall-clock aligned, one directory per camera. Extracting "cam2, from
-`matchClock` 44 to 56" becomes: look up match start wall-clock in the event log → find the two or
-three segments spanning it → `ffmpeg -ss/-to` concat → done in well under a second on NVMe.
+`matchClock` 44 to 56" becomes: look up match start wall-clock in the event log, find the two or
+three segments spanning it, and `ffmpeg -ss/-to` concat them: done in well under a second on NVMe.
 
 Benefits that matter on the day:
 - **Every angle is always available.** The replay operator picks the camera *after* seeing the play.
@@ -51,7 +51,7 @@ find out until you try to record. **Always do an actual encode test, not a capab
 
 Fix either way: update the NVIDIA driver, or pin an ffmpeg build that matches the driver you have.
 
-**The libx264 headroom maths matters.** 2.88× realtime for *one* 1080p60 stream means a single
+**The libx264 headroom math matters.** 2.88× realtime for *one* 1080p60 stream means a single
 stream consumes roughly a third of the machine's encoding throughput. Four cameras would need
 ~139%. **CPU encoding four angles is not feasible on hardware like this.** So the recorder either
 gets working NVENC (RTX 40-series allows 8 concurrent sessions on current drivers), or fewer
@@ -146,14 +146,14 @@ travel on the relay path below, not the bus):
 ```
 
 Normalized coordinates mean the tablet's aspect ratio doesn't have to match the program feed, and
-a 60Hz stroke is a few hundred bytes. **Latency budget: <80ms tablet → program**, which is easy on
+a 60Hz stroke is a few hundred bytes. **Latency budget: <80ms from tablet to program**, which is easy on
 a LAN and impossible over the venue Wi-Fi shared with 40 teams, hence the dedicated production AP.
 
 ### Two transport paths, deliberately
 
 Strokes arrive at pointer rate: a Pencil reports at 120Hz. Putting that on the event bus would
 bloat a three-day NDJSON archive with hundreds of thousands of coordinate pairs and add a
-reduce-and-serialise step to every frame of every stroke.
+reduce-and-serialize step to every frame of every stroke.
 
 So there are two paths:
 
@@ -186,8 +186,8 @@ frame (or the live/looping clip) in OBS.
 
 | Tool | Behavior | Key |
 | --- | --- | --- |
-| **Pen** | freehand, pressure→width if the stylus reports it | `P` |
-| **Arrow** | drag start→end, arrowhead at end | `A` |
+| **Pen** | freehand, pressure maps to width if the stylus reports it | `P` |
+| **Arrow** | drag from start to end, arrowhead at end | `A` |
 | **Ellipse** | drag to circle a robot; snaps to a nice aspect | `E` |
 | **Spotlight** | dims everything outside a lassoed region to 55% purple-black | `S` |
 | **Path** | dashed line with an animated dash-offset (shows intended route) | `R` |
@@ -205,7 +205,7 @@ FRC team is, let alone which ones are on the field this match.
 
 ### Ink rules
 
-Gold default, with a 2px black halo on every stroke. The field is red, blue, and grey carpet under
+Gold default, with a 2px black halo on every stroke. The field is red, blue, and gray carpet under
 mixed gym lighting. Gold with a black outline is the only ink that survives on all of it. Every
 stroke auto-fades 800ms into a 6s window, so the analyst never has to remember to clear; there's no
 pin to hold one past that.

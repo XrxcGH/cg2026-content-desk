@@ -104,7 +104,7 @@ if (!tools) {
   clips = new ClipStore(tools, encoder, REC_ROOT);
 
   if (has('record')) {
-    // `--test-sources` records synthetic colour bars so the whole pipeline can
+    // `--test-sources` records synthetic color bars so the whole pipeline can
     // be exercised without cameras plugged in.
     const sources: SourceConfig[] = has('test-sources')
       ? [
@@ -225,7 +225,7 @@ function lanAddress(): string | null {
 // OBS password comes from the environment, never a CLI arg: argv is visible
 // in `ps` and in the shell history of whoever launched it.
 //
-//   --obs [--obs-host 127.0.0.1:4455]   OBS_PASSWORD=…
+//   --obs [--obs-host 127.0.0.1:4455]   OBS_PASSWORD=...
 //   --autopilot                          arm every cue at boot (default: off)
 let obs: ObsClient | null = null;
 if (has('obs')) {
@@ -372,7 +372,7 @@ const shutdown = (): void => {
   obs?.close();
   server.close();
   if (!recorder) process.exit(0);
-  // Give ffmpeg a moment to finalise the segment it's mid-way through:
+  // Give ffmpeg a moment to finalize the segment it's mid-way through:
   // SIGKILL would leave the most recent file unplayable, which is exactly the
   // one you'd want after a crash. Capped, because a child that already died
   // never answers, and shutdown must not hang on it.

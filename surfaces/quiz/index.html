@@ -37,6 +37,8 @@ label { display: block; font-family: var(--font-cond); font-weight: 600; font-si
 input { width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 17px;
   font-family: var(--font-display); background: var(--cg-purple-lo); color: var(--cg-white);
   border: 2px solid var(--cg-purple-hi); }
+/* Chrome's default placeholder gray is under AA on the sunken purple fill. */
+input::placeholder { color: var(--cg-white-dim); }
 input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; border-color: var(--cg-gold); }
 
 .btn-go { width: 100%; margin-top: 14px; padding: 15px; border: 0; cursor: pointer;
@@ -108,7 +110,7 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
   <div id="play" hidden>
     <div class="card">
       <div class="sub" id="cat" aria-live="polite"></div>
-      <p id="q" aria-live="polite">Waiting for the next question…</p>
+      <p id="q" aria-live="polite">Waiting for the next question...</p>
       <div id="fuse" hidden aria-hidden="true"><div id="fuseFill"></div></div>
     </div>
     <div style="height:12px"></div>
@@ -182,7 +184,7 @@ function paint(v) {
 
   setText($('cat'), q ? `${q.category ?? 'Question'} · ${v.questionIndex + 1} of ${v.questionCount}` : '');
   setText($('q'), q ? q.text
-    : (v.phase === 'idle' ? 'Waiting for the next question…' : ''));
+    : (v.phase === 'idle' ? 'Waiting for the next question...' : ''));
   $('fuse').hidden = v.phase !== 'open';
 
   // Rebuild the buttons only when their markup actually changes. The

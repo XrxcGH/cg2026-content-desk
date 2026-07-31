@@ -24,7 +24,7 @@ It then opens a browser at the desk's index page, which lists every screen.
 ### Why it is built this way
 
 **The payload is inside the exe.** A gym is the worst possible place to find out that the guest
-wifi blocks nodejs.org, or that the venue has no uplink at all. The exe carries the desk, its one
+Wi-Fi blocks nodejs.org, or that the venue has no uplink at all. The exe carries the desk, its one
 runtime dependency, the image tools, and a full copy of Node. Nothing is downloaded at the event.
 That is most of the 42 MB, and it is worth every byte.
 
@@ -63,7 +63,7 @@ first that replies with Cheesy Arena's JSON. Somebody's dev server on 8080 does 
 1. Copy the exe onto the desk laptop. Double-click it.
 2. Note the address it prints. It looks like `http://10.0.100.23:8720/`.
 3. Open that address on every pit monitor and pick a screen from the **On a pit monitor** group.
-4. Point OBS at `/s/program` as a Browser Source, 1920x1080.
+4. Point OBS at `/s/program` as a Browser Source, 1920×1080.
 
 ### Saturday morning
 
@@ -79,7 +79,7 @@ first run there are two files in the desk folder that answer the same question b
 
 ### Assigning the pit monitors
 
-The index page lists these under **On a pit monitor**. Each is a full screen picture with no OBS in
+The index page lists these under **On a pit monitor**. Each is a full-screen picture with no OBS in
 front of it, so a monitor needs nothing but a browser in full screen.
 
 | Screen | URL | Good for |
@@ -155,8 +155,9 @@ These exist for the lead, not for the volunteer. The volunteer double-clicks.
 | `/dir:D:\desk` | Install somewhere other than Downloads |
 | `/cheesy-host:10.0.100.5:8080` | Skip the scan and use this address |
 | `/no-cheesy` | Do not look for the field at all |
-| `/demo` | Run the simulated match, for building graphics |
+| `/demo` | Practice mode: a pretend match on a loop, no field needed |
 | `/no-browser` | Do not open a browser window |
+| `/no-wait` | Do not pause before closing the window |
 
 ---
 
@@ -168,7 +169,7 @@ These exist for the lead, not for the volunteer. The volunteer double-clicks.
 | "no field found, starting in manual mode" | The scan found no Cheesy Arena | Fine for rehearsal. At the event, check the cable and re-run, or pass `/cheesy-host:` |
 | "The Node download does not match its published checksum" | The download was corrupted or intercepted | Try a different network. Do not work around it |
 | "This is 32-bit Windows" | The bundled Node cannot run here | Use a 64-bit machine |
-| A phone on the venue wifi cannot reach the desk | Client isolation, or the firewall | See below |
+| A phone on the venue Wi-Fi cannot reach the desk | Client isolation, or the firewall | See below |
 | The window closed instantly | A crash before the console could be read | Read `desk-log.txt` in the desk folder |
 
 Everything the desk printed is in `desk-log.txt` next to its files, which is the first thing to
@@ -189,7 +190,7 @@ New-NetFirewallRule -DisplayName "CalGames Content Desk 8720" -Direction Inbound
 When it works, it prints a short table describing the new rule. Note `-Profile Private`: do not
 open the port on a public profile you do not control.
 
-**The network has to permit client-to-client traffic.** Guest and captive-portal wifi almost always
+**The network has to permit client-to-client traffic.** Guest and captive-portal Wi-Fi almost always
 enables client isolation, which blocks this no matter what the firewall says. Use the event's own
 production access point, which [06-hardware-and-network.md](06-hardware-and-network.md) already
 calls for on 5GHz clear of the field AP. A phone hotspot works for testing.

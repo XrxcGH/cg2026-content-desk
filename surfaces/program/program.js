@@ -321,7 +321,9 @@ function paintFinal(state) {
   // score[side].fouls = points that side CONCEDED, so they land in the other total.
   paintBreak($('finalRedBreak'), state.score.red, state.score.blue.fouls);
   paintBreak($('finalBlueBreak'), state.score.blue, state.score.red.fouls);
-  $('finalMatchName').textContent = state.match?.displayName ?? ' ';
+  // The escaped nbsp holds the line box like the markup fallback &nbsp; does;
+  // a plain space collapses and the final-score header jumps.
+  $('finalMatchName').textContent = state.match?.displayName ?? '\u00a0';
   $('finalRed').textContent = r;
   $('finalBlue').textContent = b;
   $('finalRedTeams').textContent = (state.match?.red ?? []).map(t => t.number).join(' · ');

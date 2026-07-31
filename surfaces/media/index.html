@@ -74,7 +74,7 @@ input:focus { outline: none; border-color: var(--accent); }
     polycarbonate. That's exactly what an automated background remover deletes.
     Add a rim light from behind. Expose the backdrop about a stop brighter than
     the robot but <b>not</b> blown to pure white. Around 235-245 still cuts cleanly
-    and keeps the edges. Light grey works even better than white.<br><br>
+    and keeps the edges. Light gray works even better than white.<br><br>
     <b>Consistency beats quality:</b> same three-quarter angle, camera at robot
     mid-height, signature pose (arm up, intake out). Full robot, with a little
     headroom. Six matched photos look better than three great ones and three snaps.<br><br>
@@ -143,7 +143,7 @@ function row(file) {
     if (!team || team === lastSent) return;
     lastSent = team;
     const st = el.querySelector('.st');
-    st.textContent = 'uploading…';
+    st.textContent = 'uploading...';
     try {
       const res = await fetch(`/api/media/${team}`, {
         method: 'POST',

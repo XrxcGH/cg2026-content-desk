@@ -61,7 +61,7 @@ Selection is a long on-stage segment where spectators watch students walk across
 **Recommendation:** Build an alliance-selection board overlay: live alliance grid, remaining ranked teams (from the rankings poll the hub already does), accepted/declined states, and an optional pick-clock countdown graphic so CalGames can run an IRI-style timed selection.
 
 **Built since this audit:** the program's `selection` screen draws captains in seed order, the
-ranked pool greying out as teams are taken, and Cheesy Arena's own pick clock.
+ranked pool graying out as teams are taken, and Cheesy Arena's own pick clock.
 
 - <https://www.chiefdelphi.com/t/split-thread-alliance-selection-time-limits-iri/438736>
 - <https://www.chiefdelphi.com/t/2024-iri-alliance-selection/468464>
@@ -101,7 +101,7 @@ Raised in the DMCA/stream-audio thread as a cheap accessibility win ('even the p
 
 Since 2025 FIRST's own audience displays put a QR code on every match-results screen linking to the detailed breakdown on FRC Events, and parents' guides lean on QR/app links as the answer to 'what just happened?'. No QR codes exist anywhere in the desk's surfaces.
 
-**Recommendation:** Add a small QR to the final-score screen (venue projector path), a rotating QR on side screens (TBA event page, live stream URL, phone-facing next-match view), and a TBA-match-page QR on the 1080x1080 social cards. Cheap canvas render; matches what spectators now expect from official events.
+**Recommendation:** Add a small QR to the final-score screen (venue projector path), a rotating QR on side screens (TBA event page, live stream URL, phone-facing next-match view), and a TBA-match-page QR on the 1080×1080 social cards. Cheap canvas render; matches what spectators now expect from official events.
 
 **Built since this audit:** the side screens carry a vendored-QR corner card pointing at
 `/s/next`, no third-party QR service, so it works on a LAN with no internet.
@@ -254,7 +254,7 @@ Nexus (formerly FRC Queue) ran at 140+ events in 2024 including Champs, became a
 
 Team 2363 prints tri-fold spectator brochures because 'I had no idea what was happening' comes up repeatedly from parents, grandparents, and sponsors; community members argue FRC games have 'convoluted scoring mechanics that aren't visibly obvious'; third-party parent guides (FRC Zero) exist because events don't explain the game to families on site.
 
-**Recommendation:** RP badges with icons, hub-state text, and scorebug-education trivia questions help, but there is no dedicated explainer. Add a 30-60s 'how to watch REBUILT' graphics loop for pre-session and gap time (auto → teleop → endgame, what hub shifts mean, what an RP is) plus a printable/QR one-pager modeled on the Triple Helix tri-fold that side screens can point to.
+**Recommendation:** RP badges with icons, hub-state text, and scorebug-education trivia questions help, but there is no dedicated explainer. Add a 30-60s 'how to watch REBUILT' graphics loop for pre-session and gap time (auto, then teleop, then endgame, what hub shifts mean, what an RP is) plus a printable/QR one-pager modeled on the Triple Helix tri-fold that side screens can point to.
 
 **Built since this audit:** the program's `explain` screen loops six cards, twelve seconds each,
 in the gaps: what fuel is, why only one hub scores, why a losing alliance is celebrating.
@@ -267,7 +267,7 @@ in the gaps: what fuel is, why only one hub scores, why a losing alliance is cel
 
 *recurring*
 
-Merged from three raw findings. The desk is ahead of official graphics on the biggest asks (live bonus-RP progress with icons, hub-state indicator with text, red-left/blue-right locked to the scoring-table view, auto/teleop/foul final breakdown). Remaining community asks it doesn't cover: the event name on the score overlay/results screen ('my kingdom for the event name'), which also brands every uploaded match-video frame; greyed-out RP indicators indistinguishable on washed-out projectors; and viewer confusion when the display freezes at T=0:00 while scoring counts until T+0:03, so the frozen realtime score is mistaken for final.
+Merged from three raw findings. The desk is ahead of official graphics on the biggest asks (live bonus-RP progress with icons, hub-state indicator with text, red-left/blue-right locked to the scoring-table view, auto/teleop/foul final breakdown). Remaining community asks it doesn't cover: the event name on the score overlay/results screen ('my kingdom for the event name'), which also brands every uploaded match-video frame; grayed-out RP indicators indistinguishable on washed-out projectors; and viewer confusion when the display freezes at T=0:00 while scoring counts until T+0:03, so the frozen realtime score is mistaken for final.
 
 **Recommendation:** Add event name/branding to the score bar and final-score screen; verify achieved-vs-unachieved RP badge states survive a washed-out-projector/720p-phone test; add a brief 'scores settling' state between the buzzer and score post; and confirm at the venue that the broadcast camera actually sits on the scoring-table side so the red-left/blue-right lock matches what viewers see.
 
@@ -308,7 +308,7 @@ Merged from two raw findings. FIRST's own 2026 Newton FMS timer post-mortem show
 
 Long delays for awards and speeches between playoff matches 'suck the energy out of the crowd' (FIRST eventually moved most awards to division level); closing ceremonies run long; families who leave early ask for recorded ceremonies. Ceremony length is event ops, but the broadcast can make ceremonies feel produced.
 
-**Recommendation:** Pre-build award-winner lower thirds / full-screen cards driven by a desk-console list, and extend the existing 1080x1080 social-card generator to auto-build award-winner cards.
+**Recommendation:** Pre-build award-winner lower thirds / full-screen cards driven by a desk-console list, and extend the existing 1080×1080 social-card generator to auto-build award-winner cards.
 
 - <https://www.chiefdelphi.com/t/frc-einstein-almost-ready-for-primetime/136966>
 - <https://www.chiefdelphi.com/t/recorded-award-ceremony/516458>
@@ -354,7 +354,7 @@ Offseason webcasters can't share the field's internet drop and buy their own (hu
 
 *occasional*
 
-Teams watching from their pits resort to USB-tethered phones and LTE routers because venues provide no pit wifi and the public stream runs 30+ seconds behind; historic championship pits had a wired video feed teams could plug into. In-room distribution is treated as part of production at well-run events.
+Teams watching from their pits resort to USB-tethered phones and LTE routers because venues provide no pit Wi-Fi and the public stream runs 30+ seconds behind; historic championship pits had a wired video feed teams could plug into. In-room distribution is treated as part of production at well-run events.
 
 **Recommendation:** Side screens cover the venue floor but carry no video. Cheap options: one or two HDMI-over-cat5 runs or a LAN-local low-latency HLS/SRT endpoint of program output for pit TVs, keeping teams off cellular and off the delayed YouTube feed. Raise at the venue AV walkthrough before building software.
 
@@ -525,7 +525,7 @@ Parent guides route families to TBA because events rarely communicate where to w
 
 *occasional*
 
-Chezy Champs runs a robot photo booth and publishes the set for teams; STEMley Cup made robot trading cards. Consistent robot photos are what make RSN-style pre-match alliance graphics possible. docs/07 specifies the shoot (3/4 angle, height normalization, grey backdrop avoiding the white-robot masking trap) and the roadmap assigns a photographer with a Friday photo block.
+Chezy Champs runs a robot photo booth and publishes the set for teams; STEMley Cup made robot trading cards. Consistent robot photos are what make RSN-style pre-match alliance graphics possible. docs/07 specifies the shoot (3/4 angle, height normalization, gray backdrop avoiding the white-robot masking trap) and the roadmap assigns a photographer with a Friday photo block.
 
 **Recommendation:** Optional extension in the Chezy spirit: publish the processed cutout library to teams after the event, since the social-card pipeline already produces shareable assets.
 

@@ -202,7 +202,7 @@ function placeFormat(grid, size, mask) {
 export function qrMatrix(text) {
   const len = new TextEncoder().encode(text).length;
   const version = len <= 14 ? 1 : len <= 26 ? 2 : 3;
-  if (len > 42) throw new Error(`QR: "${text.slice(0, 20)}…" is ${len} bytes; max 42`);
+  if (len > 42) throw new Error(`QR: "${text.slice(0, 20)}..." is ${len} bytes; max 42`);
 
   const codewords = toCodewords(text, version);
   const { grid, fixed, size } = buildMatrix(codewords, version);

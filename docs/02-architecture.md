@@ -1,4 +1,4 @@
-# 02. Architecture
+# 02: Architecture
 
 ## The shape
 
@@ -73,10 +73,10 @@ REBUILT is 20s auto + 2:20 teleop. We use a single continuous axis so replay scr
 
 | `matchClock` | Phase |
 | --- | --- |
-| `-20 … 0` | AUTO |
-| `0 … 10` | Transition Shift |
-| `10 … 110` | Shifts 1-4 (25s each) |
-| `110 … 140` | End Game |
+| `-20 ... 0` | AUTO |
+| `0 ... 10` | Transition Shift |
+| `10 ... 110` | Shifts 1-4 (25s each) |
+| `110 ... 140` | End Game |
 | `> 140` | post-match |
 
 Derived from `matchTiming` (Cheesy) or hard-coded + `Match Start` trigger (FMS).
@@ -207,8 +207,8 @@ Three legs, best-effort combined:
 
 1. **Companion shim (primary).** Stand up an HTTP endpoint that speaks Companion's press API and
    point Audience Display's automation URL at it. Yields the 10 documented state transitions with
-   real timing. → `match.prestart`, `match.preview`, `match.start`, `match.endgame`, `match.end`,
-   `match.score_posted`, `alliance_selection.start`, `award.presented`. `authoritative`.
+   real timing: `match.prestart`, `match.preview`, `match.start`, `match.endgame`, `match.end`,
+   `match.score_posted`, `alliance_selection.update`, `award.presented`. `authoritative`.
    *If A/V already uses Companion for switching, don't fight it: run Companion and consume its
    own HTTP/TCP API, or chain our shim after it.*
 2. **OBS scene watch (fallback).** Subscribe to obs-websocket `CurrentProgramSceneChanged`; map
@@ -235,10 +235,10 @@ under FMS, off-season sync handles it. Either way we consume, not duplicate.
 
 ### `statbotics`
 
-Pulled once on Friday, cached. Team EPA, component EPAs (auto/teleop/endgame), RP EPAs → pre-match
+Pulled once on Friday, cached. Team EPA, component EPAs (auto/teleop/endgame), and RP EPAs feed the pre-match
 prediction bar, "biggest EPA delta on the field", alliance-selection value board. No key required.
 
-**Caveat to state on air:** EPA is season-long and CalGames is an off-season event with swapped
+**Caveat to state on air:** EPA is season-long and CalGames is an offseason event with swapped
 drivers, B-teams (2025 had five `999x` B-team entries), and rebuilt robots. Label predictions as
 season-form, not a forecast. A graphic that's confidently wrong costs more credibility than no
 graphic.
@@ -258,7 +258,7 @@ with a Stream Deck binding.
 | `bridge` | sits on the field-adjacent NIC, reads Cheesy/FMS, republishes to production LAN | only component allowed to touch the field side; read-only |
 | `core` | normalizer, event log, snapshot store, WS fan-out, REST | single process; NDJSON log to disk, replayable |
 | `replay` | rolling record, clip extraction, clip library | separate process/box, a crash here must not take program down |
-| `cue` | show automation: `on(state) → actions` | drives OBS-WS scene changes today, honoring a wide-shot lock that keeps autopilot from cutting away from the field mid-match; ATEM and Companion integrations are not built |
+| `cue` | show automation: `on(state) -> actions` | drives OBS-WS scene changes today, honoring a wide-shot lock that keeps autopilot from cutting away from the field mid-match; ATEM and Companion integrations are not built |
 | `surfaces` | static web bundles, one per surface | served by `core`; every one is just a WS subscriber. Every operator console shares a navigation strip (writes `screen.change` directly) so an operator can jump between consoles and take a program screen without going back to `/` |
 
 Deliberately small. Five processes, one of which is optional, all on a LAN, no cloud dependency

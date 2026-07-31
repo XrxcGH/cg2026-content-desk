@@ -46,14 +46,14 @@ const CSS = `
 .opnav a, .opnav button {
   font-family: var(--font-cond); font-weight: 600; font-size: 14px;
   letter-spacing: .06em; text-transform: uppercase; text-decoration: none;
-  padding: 7px 12px; cursor: pointer; border: 0;
+  padding: 8px 12px; cursor: pointer; border: 0;
   clip-path: var(--chamfer); --ch: 6px;
   background: var(--surface-sunken); color: var(--text); }
 .opnav a:hover, .opnav button:hover { background: var(--btn-hover); }
 .opnav a:focus-visible, .opnav button:focus-visible {
   outline: 3px solid var(--focus-ring); outline-offset: 2px; }
-/* Where you are, said twice: colour and a filled underline, so it is not
-   colour alone doing the work. */
+/* Where you are, said twice: color and a filled background, so it is not
+   color alone doing the work. */
 .opnav a[aria-current="page"] { background: var(--accent); color: var(--text-on-accent); }
 .opnav .sep { width: 1px; height: 22px; background: var(--surface-sunken); margin: 0 6px; }
 .opnav .lbl { font-family: var(--font-cond); font-size: 13px; letter-spacing: .12em;

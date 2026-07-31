@@ -29,7 +29,7 @@ header { display: flex; align-items: center; gap: 10px; padding: 14px 4px 10px; 
 h1 { margin: 0; font-size: 19px; font-variation-settings: "wdth" 118; }
 .dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px; background: var(--st-bad); }
 .dot[data-up="true"] { background: var(--st-ok); }
-.link { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--cg-white-dim); }
+.link { margin-left: auto; font-family: var(--font-mono); font-size: 13px; color: var(--cg-white-dim); }
 
 /* ---- now playing ---- */
 .now {
@@ -48,13 +48,13 @@ h1 { margin: 0; font-size: 19px; font-variation-settings: "wdth" 118; }
 .now .clk { font-family: var(--font-num); font-weight: 900; font-size: 26px; line-height: 1; color: var(--cg-gold); }
 /* Tracking adds a trailing space to every glyph, so centered tracked text
    sits half a track left of center; the indent puts it back. */
-.now .ph { font-family: var(--font-cond); font-size: 11px; letter-spacing: .14em; text-indent: .14em;
+.now .ph { font-family: var(--font-cond); font-size: 13px; letter-spacing: .14em; text-indent: .14em;
   text-transform: uppercase; color: var(--cg-white-dim); margin-top: 3px; }
-.mname { font-family: var(--font-cond); font-size: 12px; letter-spacing: .1em; text-indent: .1em;
+.mname { font-family: var(--font-cond); font-size: 13px; letter-spacing: .1em; text-indent: .1em;
   text-transform: uppercase; color: var(--cg-white-dim); text-align: center; margin: -4px 0 12px; }
 
 section { margin-bottom: 14px; }
-h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-spacing: .18em;
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px; letter-spacing: .18em;
   text-transform: uppercase; color: var(--cg-white-dim); margin: 0 0 8px 4px; }
 
 .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
@@ -72,7 +72,7 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-sp
 }
 .b:active { transform: scale(.95); background: var(--cg-gold); color: var(--cg-black); }
 .b[data-on="true"] { background: var(--cg-gold); color: var(--cg-black); }
-.b small { display: block; font-size: 10px; opacity: .6; letter-spacing: .04em; margin-top: 2px; }
+.b small { display: block; font-size: 13px; opacity: .75; letter-spacing: .04em; margin-top: 2px; }
 .b--go { background: var(--cg-green); }
 .b--warn { background: var(--cg-purple-hi); }
 .b--wide { grid-column: 1 / -1; }
@@ -105,14 +105,14 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-sp
   border: 3px solid var(--cg-gold-lo); margin-bottom: 12px;
 }
 #pin:focus { outline: none; border-color: var(--cg-gold); }
-.hint { color: var(--cg-white-dim); font-size: 12px; line-height: 1.6; margin-top: 14px; }
+.hint { color: var(--cg-white-dim); font-size: 13px; line-height: 1.6; margin-top: 14px; }
 </style>
 </head>
 <body>
 
 <div id="gate">
   <div class="box">
-    <h2>Enter show PIN</h2>
+    <h2>Enter event PIN</h2>
     <!-- type=password masks the PIN from shoulder surfers in a crowded venue;
          inputmode=numeric keeps the digit keypad, same pairing as /signin. -->
     <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="••••">
@@ -162,7 +162,7 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-sp
       <button class="b" data-emit="match.armed">Arm</button>
       <button class="b b--go" data-emit="match.start">Start</button>
       <button class="b" data-emit="match.end">End</button>
-      <button class="b" data-emit="match.score_posted">Post</button>
+      <button class="b" data-emit="match.score_posted">Post score</button>
       <button class="b b--warn" data-emit="match.aborted">Abort</button>
     </div>
   </section>
@@ -171,7 +171,9 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-sp
     <h2>Replay</h2>
     <div class="grid">
       <button class="b b--go b--wide" id="mark" style="min-height:76px">
-        Mark<small>drops at now − 2s</small></button>
+        <!-- "sec", not "s": .b uppercases, and a condensed uppercase S reads
+             as a 5 ("NOW − 2S" becomes "NOW − 25"). -->
+        Mark<small>drops at now − 2 sec</small></button>
     </div>
   </section>
 
@@ -242,7 +244,7 @@ $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
 // ---- connection ------------------------------------------------------------
 desk.on('link', up => {
   $('dot').dataset.up = String(up);
-  $('link').textContent = up ? 'linked' : 'reconnecting…';
+  $('link').textContent = up ? 'linked' : 'reconnecting...';
 });
 
 // ---- live readout ----------------------------------------------------------

@@ -27,7 +27,7 @@ desk.on('denied', () => {
 desk.on('link', up => {
   if (signedOut) return;
   $('dot').dataset.up = String(up);
-  $('linkText').textContent = up ? 'core connected' : 'reconnecting…';
+  $('linkText').textContent = up ? 'linked' : 'reconnecting...';
 });
 
 // ---- live readout ----------------------------------------------------------

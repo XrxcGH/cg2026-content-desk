@@ -1,4 +1,4 @@
-﻿import { test } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { CheesyClient, assertPathAllowed, assertSocketAllowed, ALLOWED_SOCKETS } from './client.ts';
@@ -87,7 +87,7 @@ test('fuel and tower points combine auto and teleop', () => {
   assert.equal(towerPoints({}), 0);
 });
 
-test('synthesises score deltas from consecutive snapshots', () => {
+test('synthesizes score deltas from consecutive snapshots', () => {
   const bus = new EventBus();
   const seen: DeskEvent[] = [];
   bus.subscribe(ev => seen.push(ev));

@@ -21,7 +21,7 @@ The design has to assume a segregated production LAN with a single, tightly-scop
 
 ### Off-Season FMS
 
-FIRST distributes an off-season build of FMS to registered off-season events. Requirements are
+FIRST distributes an offseason build of FMS to registered offseason events. Requirements are
 modest (Win10 x64, a laptop, an AP, a few unmanaged switches). It provides schedule generation,
 real-time scoring, field control, and drives the **Audience Display**.
 
@@ -75,7 +75,7 @@ manual scoring, while live *state* comes from the Companion/OBS hooks above.
 
 ## 2. Cheesy Arena (Team 254)
 
-Open-source alternative FMS, free for off-season events, scrimmages, and practice. Written in
+Open-source alternative FMS, free for offseason events, scrimmages, and practice. Written in
 **Go**, embedded Bolt DB, entirely browser-driven. Server binds `10.0.100.5:8080` in production
 (`-dev` flag for a laptop). Supports real FRC-style networking (per-team SSIDs/WPA keys, VLANs),
 Allen-Bradley PLC field sensors, Advatek LEDs, DMX, and direct publishing to The Blue Alliance.
@@ -99,7 +99,7 @@ GET  /api/bracket/svg          # playoff bracket as SVG
 
 Plus ~19 display pages, each with its own WebSocket
 (`/displays/audience/websocket`, `/displays/announcer/websocket`, `/displays/queueing/websocket`,
-`/displays/rankings/websocket`, `/displays/bracket/websocket`, `/displays/field_monitor/websocket`, …).
+`/displays/rankings/websocket`, `/displays/bracket/websocket`, `/displays/field_monitor/websocket`, ...).
 
 The **arena notifier set** is the real prize. This is the full live event vocabulary:
 
@@ -171,12 +171,12 @@ Their **GameSense** tooling pulls from the FRC API to drive on-air data.
 | --- | --- | --- | --- |
 | **FRC Events API v3** | `https://frc-api.firstinspires.org/` | username + token (free, self-serve; non-commercial) | official schedule/results/rankings when the event runs FMS |
 | **The Blue Alliance v3** | `https://www.thebluealliance.com/api/v3` | `X-TBA-Auth-Key` header | team metadata, avatars, historical data, match videos |
-| **TBA Trusted API v1** | write API | event-specific auth id/secret | **publishing CalGames results live to TBA**. This is how off-season events get real-time results out. Cheesy Arena does this natively. |
+| **TBA Trusted API v1** | write API | event-specific auth id/secret | **publishing CalGames results live to TBA**. This is how offseason events get real-time results out. Cheesy Arena does this natively. |
 | **Statbotics** | `https://api.statbotics.io` | none | EPA ratings incl. component EPAs (auto/teleop/endgame) and ranking-point EPAs, for pre-match prediction graphics |
 | **start.gg** | `https://api.start.gg/gql/alpha` | bearer token, GraphQL | Smash bracket data (see [05-arcade.md](05-arcade.md)) |
 
 TBA also runs **GameDay**, a multi-stream FRC viewing page, and the **Event Wizard** for
-off-season data entry (schedules, rankings, results, match videos, awards).
+offseason data entry (schedules, rankings, results, match videos, awards).
 
 ---
 
@@ -184,7 +184,7 @@ off-season data entry (schedules, rankings, results, match videos, awards).
 
 Needed so the scoreboard graphics are correct.
 
-**Timing.** AUTO 0:20 → TELEOP 2:20 (Transition Shift 0:10, Shifts 1-4 at 0:25 each, End Game 0:30).
+**Timing.** AUTO 0:20, then TELEOP 2:20 (Transition Shift 0:10, Shifts 1-4 at 0:25 each, End Game 0:30).
 Total 2:40.
 
 **Scoring.**

@@ -1,4 +1,4 @@
-# 06. Hardware, network, and show flow
+# 06: Hardware, network, and show flow
 
 ## Network: the field is sacred
 
@@ -117,12 +117,12 @@ venue console runs **two mixes**, and the music source is physically absent from
 
 | Source | HOUSE bus (PA) | STREAM bus (OBS / recordings) |
 | --- | --- | --- |
-| **Event Spotify playlist** (the DJ machine) | ✅ | ❌ **never** |
-| MC / GA / emcee mics | ✅ | ✅ |
-| Desk mics (commentary/analysis), ducked under the announcer | ✅ optional | ✅ |
-| Match sounds from the Audience Display machine (charge, endgame, buzzer) | ✅ | ✅ |
-| Field ambience mic (crowd + robots) | n/a | ✅ |
-| Console game audio (arcade) | ✅ | ❌ **never** (see [05-arcade.md](05-arcade.md)) |
+| **Event Spotify playlist** (the DJ machine) | Yes | **Never** |
+| MC / GA / emcee mics | Yes | Yes |
+| Desk mics (commentary/analysis), ducked under the announcer | Optional | Yes |
+| Match sounds from the Audience Display machine (charge, endgame, buzzer) | Yes | Yes |
+| Field ambience mic (crowd + robots) | n/a | Yes |
+| Console game audio (arcade) | Yes | **Never** (see [05-arcade.md](05-arcade.md)) |
 
 Rules that make it hold up all weekend:
 
@@ -184,7 +184,7 @@ because that is who will be operating it.
 | **Endgame** | `matchClock` 110 | endgame chip. The camera stays wherever the switcher has it: the wide-shot lock stops autopilot from cutting away from the field mid-match, so a tight tower shot is the switcher op's call |
 | **End** | `match.end` | hold field wide 4s for the celebration. Don't cut early |
 | **Result** | `match.score_posted` | score reveal, RP pips, ranking movement |
-| **Replay** | operator | gold wipe → clip → telestrate → back to desk |
+| **Replay** | operator | gold wipe, clip, telestrate, back to desk |
 | **Gap** | 3 min after a posted score, no match running | auto-cut to arcade |
 
 Every row except Intro maps to a cue in the engine, each with a manual override. The autopilot

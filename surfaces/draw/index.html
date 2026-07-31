@@ -76,7 +76,9 @@ body {
 }
 .tool:active { transform: scale(.94); }
 .tool[aria-pressed="true"] { background: var(--cg-gold); color: var(--cg-black); }
-.tool small { display: block; font-size: 12px; opacity: .55; letter-spacing: .06em; text-indent: .06em; }
+.tool small { display: block; font-size: 13px; opacity: .55; letter-spacing: .06em; text-indent: .06em; }
+/* Black at .55 over the gold pressed face is under AA; the purple faces pass. */
+.tool[aria-pressed="true"] small { opacity: .8; }
 
 .ink { width: 44px; height: 44px; border: 0; cursor: pointer; padding: 0;
   clip-path: var(--chamfer); --ch: 7px; box-shadow: inset 0 0 0 3px transparent; }
@@ -228,7 +230,7 @@ canvas.addEventListener('pointerdown', e => {
   if (e.button !== undefined && e.button !== 0) return;
 
   // Capture keeps events flowing if the stylus leaves the canvas mid-stroke.
-  // It is an optimisation, not a requirement, and it throws NotFoundError if
+  // It is an optimization, not a requirement, and it throws NotFoundError if
   // the pointer is no longer active by the time we get here. Letting that
   // escape would abort the handler and silently drop the whole stroke, so the
   // analyst would draw and nothing would appear. Never worth failing over.
@@ -384,7 +386,7 @@ let signedOut = false;
 function markSignedOut() {
   signedOut = true;
   $('dot').dataset.up = 'false';
-  $('statusText').textContent = 'signed out: reload this page';
+  $('statusText').textContent = 'signed out: reload this page to sign in again';
 }
 desk.on('denied', markSignedOut);
 // The server only says 'denied' once a stroke is actually sent, so ask it
@@ -398,7 +400,7 @@ async function checkSession() {
 desk.on('link', up => {
   if (signedOut) return;
   $('dot').dataset.up = String(up);
-  $('statusText').textContent = up ? 'linked' : 'reconnecting…';
+  $('statusText').textContent = up ? 'linked' : 'reconnecting...';
   if (up) {
     checkSession();
     // If the socket dropped mid-stroke, tele's copy of that stroke is still

@@ -29,6 +29,8 @@ label.in { font-family: var(--font-cond); font-weight: 600; font-size: 13px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }
 input, select { padding: 8px 10px; font-family: var(--font-display); font-size: 14px;
   background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
+/* Chrome's default placeholder gray sits just under AA on this input fill. */
+input::placeholder { color: var(--text-dim); }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 input.wide { flex: 1; min-width: 180px; }
 
@@ -140,7 +142,7 @@ input.wide { flex: 1; min-width: 180px; }
       <input id="gpRacers" class="wide"
              placeholder="Comma separated (e.g. Ana 846, Ben 1868, Cy, Dee)">
     </div>
-    <p class="hint">A trailing number is read as an FRC team. There is no API for MK8D.
+    <p class="hint">A trailing number is read as an FRC team. There is no API for Mario Kart 8 Deluxe.
       The operator types the finishing order after each race, and standings fall out on their own.</p>
 
     <div class="row" style="margin-top:10px">
@@ -174,7 +176,7 @@ const desk = connect('arcadedesk');
 
 desk.on('link', up => {
   $('dot').dataset.up = String(up);
-  $('linkText').textContent = up ? 'linked' : 'reconnecting…';
+  $('linkText').textContent = up ? 'linked' : 'reconnecting...';
   if (up) load();
 });
 
@@ -245,7 +247,7 @@ function paint(s) {
     }
   } else {
     $('scoreRows').innerHTML = '<p class="hint">Start a set and score buttons appear here, ' +
-      'one row per player. Versus sets end on their own at 2 wins; free-for-alls end ' +
+      'one row per player. Versus sets end on their own at 2 wins (3 for a best-of-5 grand final); free-for-alls end ' +
       'when you press End set.</p>';
   }
 

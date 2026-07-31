@@ -25,7 +25,7 @@ export interface MatchIdentity {
 const ORDINAL: Record<string, number> = { one: 1, two: 2, three: 3 };
 
 /**
- * Normalise whatever the field management system calls a match into the
+ * Normalize whatever the field management system calls a match into the
  * official naming, plus its TBA key.
  *
  * Playoff matches use the modern double-elimination scheme: FIRST shows
@@ -129,10 +129,10 @@ export interface DescriptionInput {
  *   Final Tiebreaker - CalGames
  *   Red (Teams 6238, 1323, 254) - 552
  *   Blue (Teams 6665, 1678, 9470) - 527
- *   https://…
+ *   https://...
  *
- *   Uploaded by …
- *   (c) 2026 …
+ *   Uploaded by ...
+ *   (c) 2026 ...
  */
 export function description(d: DescriptionInput): string {
   const side = (label: string, s: { teams: number[]; score: number }): string =>

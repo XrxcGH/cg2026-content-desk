@@ -56,7 +56,7 @@ current row layout has no line for it: only the team number and name render toda
 later, it should follow the rule everywhere else on the bus and hide rather than show a number
 that's `estimated`.
 
-Animation: each row is a Block Reveal, staggered 90ms per row and 380ms each, travelling up from
+Animation: each row is a Block Reveal, staggered 90ms per row and 380ms each, traveling up from
 below (see [08-motion.md](08-motion.md)). Both alliances build at once, since the stagger index
 restarts on each side rather than running across the whole screen. Stop animating in lockdown mode.
 
@@ -92,7 +92,7 @@ Two mitigations, use both:
    backdrop that reads ~235-245 still separates cleanly and preserves edge detail. Pure 255 clips
    and takes the robot's highlights with it.
 
-If you can, shoot on **light grey (~#D8D8D8) rather than white.** It cuts out just as easily, and
+If you can, shoot on **light gray (~#D8D8D8) rather than white.** It cuts out just as easily, and
 white robots stop disappearing into it. Worth raising with whoever's running the photo booth.
 
 Use subject-aware masking (Photoshop *Select Subject*, `rembg`, Remove.bg) rather than
@@ -120,7 +120,7 @@ usable by a volunteer photographer on Friday night with no training.
 
 On upload, `core` automatically:
 
-1. **Verifies there's a real alpha channel.** No alpha → reject with "this looks like a JPEG, the
+1. **Verifies there's a real alpha channel.** No alpha: reject with "this looks like a JPEG, the
    background needs to be removed first."
 2. **Runs the uncut-photo check.** Warn loudly if it looks like a photo whose background was never
    removed. *Implementation note, learned the hard way:* the obvious version of this test,

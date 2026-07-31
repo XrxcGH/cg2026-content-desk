@@ -56,7 +56,7 @@ export function assertPathAllowed(path: string): string {
   // Parse the way fetch() will before matching anything. A raw-string check
   // missed percent-encoded dot segments: "/api/matches/%2e%2e/%2e%2e/setup/
   // settings" contains no literal ".." and starts with an allowed prefix, but
-  // fetch normalises it onto /setup/settings. Checking the parsed pathname
+  // fetch normalizes it onto /setup/settings. Checking the parsed pathname
   // closes that gap, and the same parsed value is what gets requested.
   const parsed = new URL(path, 'http://placeholder');
   const bare = parsed.pathname;
@@ -144,7 +144,7 @@ export class CheesyClient {
     });
 
     // We never send an application frame. The endpoints cannot read one, but
-    // belt and braces: there is no code path here that writes.
+    // belt and suspenders: there is no code path here that writes.
     ws.on('close', () => this.#reopen(path, 'closed'));
     ws.on('error', err => this.#reopen(path, err.message));
   }

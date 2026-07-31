@@ -6,7 +6,7 @@
  * the bus and drops a marker whenever something happened that someone might
  * want to see again.
  *
- * Everything here is derived from `score.delta`, which is itself synthesised
+ * Everything here is derived from `score.delta`, which is itself synthesized
  * from consecutive realtime-score snapshots. Neither Cheesy Arena nor FMS
  * emits "team X just scored", and this is why we bother to compute it.
  */
@@ -25,7 +25,7 @@ export interface Marker {
   matchClock: number | null;
   alliance?: Alliance;
   label: string;
-  /** 3 = drop everything, 1 = background colour. */
+  /** 3 = drop everything, 1 = background color. */
   priority: 1 | 2 | 3;
 }
 

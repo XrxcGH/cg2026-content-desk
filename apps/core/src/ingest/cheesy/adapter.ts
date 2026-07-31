@@ -2,7 +2,7 @@
  * Cheesy Arena -> DeskEvent adapter.
  *
  * Close to a rename of fields, with one genuinely interesting piece: neither
- * Cheesy Arena nor FMS emits "team X just scored". `score.delta` is synthesised
+ * Cheesy Arena nor FMS emits "team X just scored". `score.delta` is synthesized
  * here by diffing consecutive realtime-score snapshots, and it is what drives
  * automatic replay markers, scoring-rate graphics, and the post-match timeline.
  * It is the highest-value derived signal in the system and it costs about forty
@@ -369,7 +369,7 @@ export class CheesyAdapter {
       blue: this.#totals(summaries.blue, summaries.red),
     };
 
-    // Synthesise the deltas Cheesy never sends.
+    // Synthesize the deltas Cheesy never sends.
     for (const side of ALLIANCES) {
       for (const [field, of] of [['fuel', fuelOf], ['tower', towerOf]] as const) {
         const amount = of(next[side]) - of(this.#last[side]);

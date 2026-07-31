@@ -65,7 +65,7 @@ export const RP_BADGES = rpBadges();
 
 /** One badge as markup. Surfaces flip `data-earned` per state frame. */
 export const rpBadge = b =>
-  `<span class="rp" data-rp="${b.key}" title="${b.label} · ${b.need} ${b.unit} points">` +
+  `<span class="rp" data-rp="${b.key}" title="${b.label} · ${b.need} ${b.unit}">` +
   `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${b.path}"/></svg>` +
   `<span class="rp-need">${b.need}</span></span>`;
 

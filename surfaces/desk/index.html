@@ -51,13 +51,15 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
    section panels, which left every button as bare floating text. The sunken
    fill gives them an edge; the nav strip's buttons use the same treatment. */
 .btn { font-size: 14px; padding: 9px 14px; background: var(--surface-sunken); }
-.btn kbd { font-family: var(--font-mono); font-size: 12px; opacity: .6; margin-left: 7px; }
+.btn kbd { font-family: var(--font-mono); font-size: 13px; opacity: .6; margin-left: 7px; }
 
 label { display: block; font-family: var(--font-cond); font-weight: 600; font-size: 14px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); margin: 10px 0 4px; }
 input, select { width: 100%; box-sizing: border-box; padding: 9px 12px;
   font-family: var(--font-display); font-size: 14px;
   background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
+/* Chrome's default placeholder gray sits just under AA on this input fill. */
+input::placeholder { color: var(--text-dim); }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 input:focus-visible, select:focus-visible {
   outline: 3px solid var(--focus-ring); outline-offset: 2px; }
@@ -160,7 +162,7 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
         <div class="row">
           <label class="in" for="statusMin" style="font-family:var(--font-cond);font-weight:600;font-size: 14px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim)">Back in</label>
           <input id="statusMin" type="number" min="0" max="120" placeholder="min" style="width:70px">
-          <input id="statusCustom" placeholder="Custom message…" aria-label="Custom status message" style="flex:1;min-width:180px">
+          <input id="statusCustom" placeholder="Custom message..." aria-label="Custom status message" style="flex:1;min-width:180px">
           <button class="btn" id="statusShowCustom">Show custom</button>
           <button class="btn" id="statusClear">Clear card</button>
         </div>
@@ -204,7 +206,7 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
         <label for="analyst">Analyst name (shown on the ANALYSIS chip)</label>
         <input id="analyst" placeholder="Priya Raman">
         <label for="frame">Frozen frame URL</label>
-        <input id="frame" placeholder="/media/… or any image URL">
+        <input id="frame" placeholder="/media/... or any image URL">
         <p class="hint">The analyst draws on the frame the audience is seeing, not a
           blank sheet. The replay console's <b>Send frame to analyst</b> pushes one
           automatically; this field is the manual fallback. <b>Hide</b> kills the
@@ -229,7 +231,7 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
           <button class="btn" id="loadMatch">Load</button>
         </div>
         <p class="hint">With the Cheesy bridge up, names fill in from the field's team
-          list on their own. Desk-only, numbers alone are enough for the overview to
+          list on their own. Running desk-only, numbers alone are enough for the overview to
           build itself.</p>
       </section>
     </div>

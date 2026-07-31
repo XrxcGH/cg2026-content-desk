@@ -2,9 +2,9 @@
 
 Four requirements:
 
-1. Auto-record every match → upload to YouTube → link on The Blue Alliance
-2. Matches that got strategy analysis (some, not all) → record and upload separately
-3. Between-match content (trivia, video game comps, human player matches) → optional record/upload
+1. Auto-record every match, upload it to YouTube, and link it on The Blue Alliance
+2. Matches that got strategy analysis (some, not all): record and upload separately
+3. Between-match content (trivia, video game comps, human player matches): optional record/upload
 4. Live-stream the whole display to YouTube **and** TBA in real time on competition days
 
 All four are the same machine with different bounds and different metadata. That's the design.
@@ -61,8 +61,8 @@ X-TBA-Auth-Id:  <auth_id>
 X-TBA-Auth-Sig: md5_hexdigest(auth_secret + request_path + request_body)
 ```
 
-The signature covers the path *and* the exact body bytes, so the body must be serialised once and
-both signed and sent. Serialise twice and you'll get intermittent 401s that look like a
+The signature covers the path *and* the exact body bytes, so the body must be serialized once and
+both signed and sent. Serialize twice and you'll get intermittent 401s that look like a
 credentials problem and aren't.
 
 ### The rule that keeps us out of trouble
@@ -140,10 +140,10 @@ competes with an upload.**
                                                ▼
                                      ┌──────────────────┐
                                      │  Publish Queue   │  durable, on disk
-                                     │  pending →       │  survives crash,
-                                     │  cut → uploading │  venue outage,
-                                     │  → uploaded →    │  and the event
-                                     │  linked → done   │  ending
+                                     │  pending ->      │  survives crash,
+                                     │ cut -> uploading │  venue outage,
+                                     │ -> uploaded ->   │  and the event
+                                     │  linked -> done  │  ending
                                      └────────┬─────────┘
                                               │
                           ┌───────────────────┴──────────────┐
@@ -158,8 +158,8 @@ Match videos on TBA and YouTube should be **the broadcast**: overlay, score bar,
 That's what people actually want to watch, and it's what makes the CalGames graphics worth having
 built. So the recorder captures the composited program output *in addition to* the ISO cameras.
 
-- **Program record** → archive, match videos, uploads
-- **ISO camera records** → replay source ([04](04-replay-and-telestrator.md))
+- **Program record**: archive, match videos, uploads
+- **ISO camera records**: replay source ([04](04-replay-and-telestrator.md))
 
 ### Cut bounds come from the event log, and a match video is two parts, not one
 
@@ -173,9 +173,9 @@ air removed:
 
 ```
    ┌─ part 1: the match ──────────────────┐        ┌─ part 2: the reveal ─┐
-   │                                      │   ✂    │                      │
+   │                                      │  cut   │                      │
    ▼                                      ▼        ▼                      ▼
- start−8s ······ START ······ buzzer ··· +6s   posted−2s ······· posted+15s
+ start-8s ······ START ······ buzzer ··· +6s   posted-2s ······· posted+15s
    │                                                    │
    └── catches the announcer's "three, two, one, GO"    └── the score animation
 ```
@@ -198,7 +198,7 @@ to a single continuous 187s cut, and a match whose score is never posted falls b
 | Content type | In | Out | Destination |
 | --- | --- | --- | --- |
 | **match** | two-part cut above | | YouTube + `match_videos/add` |
-| **analysis** | first `telestrator.stroke` − 20s | last stroke + 15s | YouTube + `media/add` |
+| **analysis** | first `telestrator.stroke` - 20s | last stroke + 15s | YouTube + `media/add` |
 | **segment** | desk marks in | desk marks out | YouTube + `media/add`, optional |
 
 Analysis segments are detected automatically. The telestrator already emits one durable
@@ -282,7 +282,7 @@ Uploaded by the CalGames Content Desk
 ```
 
 > **One deliberate difference.** FIRST's own descriptions close with
-> *"(c) 2026 FIRST Robotics Competition"*, which is theirs to claim. CalGames is a WRRF off-season event,
+> *"(c) 2026 FIRST Robotics Competition"*, which is theirs to claim. CalGames is a WRRF offseason event,
 > so copying that line verbatim would be inaccurate. The credit and copyright lines are
 > configurable and default to WRRF.
 
@@ -296,7 +296,7 @@ link never leaves an orphan video with no context.
 
 ## Live stream
 
-- One OBS/vMix output → YouTube RTMP (`rtmp://a.rtmp.youtube.com/live2`, stream key from YouTube
+- One OBS/vMix output to YouTube RTMP (`rtmp://a.rtmp.youtube.com/live2`, stream key from YouTube
   Studio).
 - On stream start, register the YouTube URL on TBA: `POST info/update` with the full `webcasts`
   list. At end of day, send the list without it. Nothing fires this automatically on stream

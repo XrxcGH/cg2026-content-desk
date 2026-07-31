@@ -101,7 +101,7 @@ Because the team list and rankings are already on the event bus:
 
 | Feature | What it looks like |
 | --- | --- |
-| **Team vs Team** | Smash entrants registered by team number → the card reads `846 The Funky Monkeys`, not `xX_smashgod_Xx` |
+| **Team vs Team** | Smash entrants registered by team number, so the card reads `846 The Funky Monkeys`, not `xX_smashgod_Xx` |
 | **Alliance GP** | During alliance selection, run a Mario Kart GP where the karts *are* the alliance captains. `ArcadePlayer.alliance` tags each racer for that context, but the standings graphic still renders with the arcade's own purple/green scheme, not alliance colors: see the color rule below |
 | **Pit Crew Cup** | Bracket seeded by qualification ranking; the underdog storyline writes itself |
 | **Between-match filler** | Cut to the arcade automatically three minutes after a score posts with no match running: a cue rule, not an operator decision. It never consults the schedule, and it never fires before the day's first posted score, so a Friday load-in morning stays on whatever the producer chose |

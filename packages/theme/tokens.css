@@ -44,7 +44,7 @@
   /* ---- Ink -------------------------------------------------------------- */
   --cg-black:         #000000;
   --cg-white:         #FFFFFF;
-  --cg-white-dim:     #C9BCD0;  /* white tinted toward purple, not grey */
+  --cg-white-dim:     #C9BCD0;  /* white tinted toward purple, not gray */
   --cg-white-mute:    #8E7F97;  /* dimmest legible ink on purple-lo: 4.5:1 where purple-hi reads 2:1 */
 
   /* ---- Alliance: official FIRST red/blue. --------------------------------

@@ -144,7 +144,7 @@
   <section class="pane" id="pane-join" data-active>
     <span class="chip chip--accent" style="margin-top:30px">Play from your seat</span>
     <div id="joinQr"></div>
-    <div id="joinUrl">…</div>
+    <div id="joinUrl">...</div>
     <span class="chip" id="joinCount">0 players in</span>
   </section>
 
@@ -212,7 +212,7 @@ function paint(s) {
   snap = s;
 
   $('joinCount').textContent = `${s.players} player${s.players === 1 ? '' : 's'} in`;
-  $('joinUrl').textContent = (s.joinUrl ?? '').replace(/^https?:\/\//, '') || 'join from the desk';
+  $('joinUrl').textContent = (s.joinUrl ?? '').replace(/^https?:\/\//, '') || 'Join from the desk';
   if (s.joinUrl && $('joinQr').dataset.url !== s.joinUrl) {
     $('joinQr').dataset.url = s.joinUrl;
     try { $('joinQr').innerHTML = qrSvg(s.joinUrl); } catch { /* URL too long: text stands */ }

@@ -179,7 +179,7 @@ async function cut() {
   const fromMs = wallAt(inClock), toMs = wallAt(outClock);
   if (!fromMs) return say('No match start recorded yet: nothing to map the clock onto.', true);
 
-  say('Cutting…');
+  say('Cutting...');
   try {
     const clip = await post('/api/clips', {
       sourceId: $('src').value,
@@ -193,7 +193,7 @@ async function cut() {
 }
 
 async function cutMatch() {
-  say('Cutting full match video…');
+  say('Cutting full match video...');
   try {
     const clip = await post('/api/clips/match', { sourceId: $('src').value });
     showClip(clip);
@@ -230,7 +230,7 @@ async function sendFrame() {
     t -= dur;
   }
   const atMs = Math.min(range.toMs, range.fromMs + t * 1000 * speed);
-  say('Sending frame…');
+  say('Sending frame...');
   try {
     await post('/api/frame', { sourceId: lastClip.sourceId, atMs: Math.round(atMs) });
     say('Frame sent to the analyst.');
@@ -279,13 +279,13 @@ let signedOut = false;
 desk.on('denied', () => {
   signedOut = true;
   $('dot').dataset.up = 'false';
-  $('linkText').textContent = 'signed out: reload this page';
+  $('linkText').textContent = 'signed out: reload this page to sign in again';
   say('Signed out. Reload this page and sign in again.', true);
 });
 desk.on('link', up => {
   if (signedOut) return;
   $('dot').dataset.up = String(up);
-  $('linkText').textContent = up ? 'linked' : 'reconnecting…';
+  $('linkText').textContent = up ? 'linked' : 'reconnecting...';
   if (up) { loadSources(); loadMarkers(); }
 });
 

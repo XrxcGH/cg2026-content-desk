@@ -234,7 +234,7 @@ export class ClipStore {
 
     const filters: string[] = [];
     if (speed !== 1) {
-      // setpts alone gives choppy slow-mo; minterpolate synthesises frames.
+      // setpts alone gives choppy slow-mo; minterpolate synthesizes frames.
       // Too slow for live, fine for a 12s clip in the gap between matches.
       filters.push(`setpts=${(1 / speed).toFixed(4)}*PTS`);
       filters.push('minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:vsbmc=1');

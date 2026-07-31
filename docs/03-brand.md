@@ -37,7 +37,7 @@ shadow (see broadcast rule 2, where shadows die under a luma key).
 | `--cg-white` | `#FFFFFF` | primary text on dark |
 | `--cg-white-dim` | `#C9BCD0` | secondary text, labels (white tinted toward purple) |
 
-`--cg-white-dim` is white pulled 20% toward `--cg-purple` rather than toward grey. Neutral grey
+`--cg-white-dim` is white pulled 20% toward `--cg-purple` rather than toward gray. Neutral gray
 next to a saturated purple reads as dirty; a purple-tinted dim white reads as intentional.
 
 ### Alliance: official FIRST colors, reserved, never themed
@@ -141,7 +141,7 @@ Nothing in this system is ever `background: #1B0322`.
 Plus a fourth, used sparingly: the **blueprint tick rule** (`--tick`), measurement marks along a
 panel's top edge. A CAD reference that reads as texture from the back row.
 
-The Gold Sweep inherits the geometry: its leading edge is **skewed −12°** with a brighter
+The Gold Sweep inherits the geometry: its leading edge is **skewed -12°** with a brighter
 highlight band, so the signature transition is visibly part of the same shape language.
 
 ## Broadcast rules
@@ -198,7 +198,7 @@ and a **numeral block** (tabular, gold). Build those three well and the rest is 
 
 ### Telestrator ink
 
-Drawing colors have to survive on top of a field that is itself red, blue, and grey carpet:
+Drawing colors have to survive on top of a field that is itself red, blue, and gray carpet:
 
 | Ink | Hex | Use |
 | --- | --- | --- |

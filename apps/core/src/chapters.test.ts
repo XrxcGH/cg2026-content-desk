@@ -62,7 +62,7 @@ test('chapters closer together than ten seconds are dropped, because they void t
   const log = [
     ...match(5_000, 'Qualification 41'),          // lead-in lands it at 0:00
     ...match(10 * 60_000, 'Qualification 42'),   // lands at 9:45 after the lead-in
-    ev('award.presented', 588_000, { name: 'Chairmans' }),   // 3s later
+    ev('award.presented', 588_000, { name: 'FIRST Impact Award' }),   // 3s later
     ...match(20 * 60_000, 'Qualification 43'),
   ];
   const chapters = chaptersFrom(log, T0);
@@ -71,7 +71,7 @@ test('chapters closer together than ten seconds are dropped, because they void t
     assert.ok(chapters[i]!.atSec - chapters[i - 1]!.atSec >= 10,
       `chapter ${i} is too close to the one before it`);
   }
-  assert.ok(!chapters.some(c => c.title === 'Chairmans'),
+  assert.ok(!chapters.some(c => c.title === 'FIRST Impact Award'),
     'an award three seconds after a match start would void the whole list');
   assert.ok(!chapters.some(c => c.title === 'Qualification 41'),
     'the lead-in pulled it onto 0:00, where it collides with the opener');

@@ -9,7 +9,7 @@
 <style>
 body { font-size: var(--font-ui-body, 16px); display: grid; place-items: center;
   min-height: 100vh; margin: 0; }
-.box { width: min(420px, calc(100vw - 40px));
+.box { width: min(420px, calc(100vw - 40px)); box-sizing: border-box;
   background: var(--surface-raised); clip-path: var(--chamfer); --ch: 16px;
   padding: 28px 30px 26px; }
 h1 { margin: 0 0 6px; font-size: 24px; font-variation-settings: "wdth" 118; }
@@ -33,14 +33,16 @@ button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px
 .err { color: var(--st-bad-text); font-size: 14px; min-height: 20px; margin-top: 10px; }
 .open { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--surface-sunken);
   font-size: 13px; }
-.open a { color: var(--accent); }
+/* Padded tap targets for the two spectator links, pulled back with a negative
+   margin so the paragraph keeps its text rhythm. */
+.open a { color: var(--accent); display: inline-block; padding: 12px 2px; margin: -8px 0; }
 </style>
 </head>
 <body>
   <main class="box">
     <h1>Content desk</h1>
     <p>Match and content controls are for the production crew. Enter the event PIN to
-      carry on.</p>
+      continue.</p>
 
     <form id="form" autocomplete="off">
       <label for="pin">Event PIN</label>

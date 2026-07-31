@@ -5,7 +5,7 @@
  * renderer, so what the analyst sees on the tablet is exactly what goes to
  * air. Two renderers would drift, and the drift would only show up live.
  *
- * Coordinates are normalised 0-1, so the tablet's aspect ratio doesn't have to
+ * Coordinates are normalized 0-1, so the tablet's aspect ratio doesn't have to
  * match the program feed and a 60Hz stroke costs a few hundred bytes.
  */
 
@@ -22,7 +22,7 @@ export const INKS = {
 const css = name => getComputedStyle(document.documentElement)
   .getPropertyValue(name).trim();
 
-/** Resolve ink token -> concrete colour, once per frame rather than per stroke. */
+/** Resolve ink token -> concrete color, once per frame rather than per stroke. */
 function inkPalette() {
   return {
     gold: css('--cg-gold') || '#F0AF00',
@@ -150,11 +150,11 @@ export function render(ctx, book, opts = {}) {
 
     if (s.tool === 'tag') { drawTag(ctx, s, W, H, palette); continue; }
 
-    // Two passes: a black halo, then the ink. The field is red, blue and grey
+    // Two passes: a black halo, then the ink. The field is red, blue and gray
     // carpet under mixed gym lighting, so gold with a black outline is the only
     // ink that survives on all of it.
-    const colour = palette[s.ink] ?? palette.gold;
-    for (const pass of [{ c: palette.outline, w: s.width + 4 }, { c: colour, w: s.width }]) {
+    const color = palette[s.ink] ?? palette.gold;
+    for (const pass of [{ c: palette.outline, w: s.width + 4 }, { c: color, w: s.width }]) {
       ctx.strokeStyle = pass.c;
       ctx.fillStyle = pass.c;
       ctx.lineWidth = pass.w;

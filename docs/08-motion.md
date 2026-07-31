@@ -29,7 +29,7 @@ a brutally reduced layout with its own 72px type floor, set locally on that surf
 Woodside's gym is a standard high-school court; the back row of spectators is realistically
 **70-90 feet** from the audience screen. Take 90 ft (1080 inches) as worst case.
 
-**Screen size.** A realistic gym projection is 12-16 ft wide → **81-108 inches tall**. That puts
+**Screen size.** A realistic gym projection is 12-16 ft wide, i.e. **81-108 inches tall**. That puts
 the back row at roughly **10× image height**. AVIXA DISCAS treats 8× image height as the limit for
 *Basic Decision Making* content, meaning the back of the gym is already past the threshold where
 detailed content is legible at all.
@@ -47,14 +47,14 @@ viewing distance.
 | Comfortable (1:150) | 7.2 in | 72 px | 96 px |
 | Threshold (1:200) | 5.4 in | 54 px | 72 px |
 
-**→ 72px is the hard floor for any text on a venue surface.** Primary data gets 96px+, the score
+**So 72px is the hard floor for any text on a venue surface.** Primary data gets 96px+, the score
 gets 140px+.
 
 **Motion amplitude.** Peripheral vision detects movement long before it resolves detail, but the
 movement has to subtend enough visual angle to register. **1° of visual angle** at 90 ft is about
 19 inches ≈ **190 px** on our screen.
 
-**→ Entrance animations on venue surfaces travel at least 190px, or nobody in the back half
+**So entrance animations on venue surfaces travel at least 190px, or nobody in the back half
 notices they happened.** A 12px slide-and-fade (the default in every web UI kit) is completely
 invisible at 90 feet. So is a 250ms opacity fade, because projector gamma crushes the midpoint of
 a fade into mush.
@@ -63,10 +63,10 @@ a fade into mush.
 
 ## What works at distance, and what doesn't
 
-| ✗ Invisible from the back row | ✓ Reads from anywhere |
+| Invisible from the back row | Reads from anywhere |
 | --- | --- |
 | Opacity-only fades | **Hard-edged wipes**: a gold bar with a crisp leading edge sweeping across purple |
-| Subtle scale (1.0 → 1.02) | **Scale from 0.85** with an overshoot |
+| Subtle scale (1.0 to 1.02) | **Scale from 0.85** with an overshoot |
 | 12-48px slides | **190px+ travel** |
 | Thin 1-2px accent lines animating | **Solid color-block reveals**, 12px+ bars |
 | Blur, glow, soft shadows | **Contrast changes** between two high-contrast states |
@@ -96,7 +96,7 @@ motion available.
 
 ### 2. Block Reveal: panels and cards
 
-Scale `0.85 → 1`, travel `--travel-lg` (320px) from the nearest screen edge. **380ms**,
+Scale `0.85` to `1`, travel `--travel-lg` (320px) from the nearest screen edge. **380ms**,
 `cubic-bezier(.16,1,.3,1)` (expo-out: fast start, long settle, reads as decisive at distance).
 
 ### 3. Number Roll: scores and counters
@@ -123,7 +123,7 @@ around 560ms; a four-team playoff alliance runs to about 650ms.
 
 ### 6. Alert Pulse: endgame and E-stop
 
-Full-width `--cg-gold` bar, opacity 1 → 0.45 → 1, **1200ms period** (0.83 Hz), 3 cycles then hold.
+Full-width `--cg-gold` bar, opacity 1 to 0.45 and back, **1200ms period** (0.83 Hz), 3 cycles then hold.
 
 Deliberately slow. **Never exceed 3 flashes per second** (WCAG 2.3.1). This is a public venue
 full of kids, and a photosensitive-seizure risk is not a design trade-off. 0.83 Hz is well clear
@@ -206,7 +206,7 @@ the room-only side screens override the type tokens locally in their own stylesh
 
 ```css
 /* surfaces/side/index.html: the one room-only surface */
-:root { --t-title: 84px; --t-body: 76px; --t-label: 72px; /* … */ }
+:root { --t-title: 84px; --t-body: 76px; --t-label: 72px; /* ... */ }
 ```
 
 Nothing else changes. If a component needs bespoke CSS to survive on a room-only surface, the

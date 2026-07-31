@@ -157,7 +157,7 @@ and phones at once. Once two matches have run, the desk measures the real cycle 
 code to `/s/next` so anyone can follow their own team from their seat.
 
 Two more screens cover the parts of the weekend that usually have no graphics at all. The
-**alliance selection board** mirrors the field: captains in seed order, the pool greying out as
+**alliance selection board** mirrors the field: captains in seed order, the pool graying out as
 teams are taken, and Cheesy Arena's own pick clock. The **explainer loop** runs in the gaps and
 answers what nobody ever says out loud, like what fuel is and why a losing alliance is
 celebrating. Both are in the screen dropdown on the desk.
@@ -182,7 +182,7 @@ a file copied between machines.
 npm start -- --cheesy --cheesy-host 10.0.100.5:8080 --display-id contentdesk1
 ```
 
-Agree the display id with the scorekeeper in advance so it can't collide with a real audience
+Agree the display ID with the scorekeeper in advance so it can't collide with a real audience
 screen. `GET /api/cheesy/audit?format=text` prints every request the bridge has made, which is what
 [docs/10-field-bridge.md](docs/10-field-bridge.md) promises the FTA.
 
@@ -192,7 +192,7 @@ The OBS password comes from the environment, never a CLI argument, because `argv
 `ps` and in shell history.
 
 ```powershell
-$env:OBS_PASSWORD = "…"; npm start -- --cheesy --obs --obs-host 127.0.0.1:4455
+$env:OBS_PASSWORD = "..."; npm start -- --cheesy --obs --obs-host 127.0.0.1:4455
 ```
 
 To rehearse without a field, build [Cheesy Arena](https://github.com/Team254/cheesy-arena), run it
@@ -329,7 +329,7 @@ driver, no server or build step.
 `H` toggle telestrator · `U` toggle the control bar
 
 It demonstrates the Gold Sweep transition, the alliance overview with its tier-3 photo fallback,
-the live score bar with the 2026 hub-state indicator and threshold-labelled RP badges, Number Roll
+the live score bar with the 2026 hub-state indicator and threshold-labeled RP badges, Number Roll
 counters, endgame lockdown, and the telestrator.
 
 ## Status

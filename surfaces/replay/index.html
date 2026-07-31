@@ -24,11 +24,13 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
 
 /* ---- timeline: the MATCH CLOCK, phase-segmented. The operator thinks in
        "endgame", not "18:42:07". ------------------------------------------ */
-#tl { position: relative; height: 92px; user-select: none; }
-#phases { position: absolute; inset: 0 0 auto 0; height: 30px; display: flex;
+#tl { position: relative; height: 100px; user-select: none; }
+/* 38px, not 30: the 13px labels need the full 8px top/bottom clearance
+   inside the chamfered strip. The layers below shift down with it. */
+#phases { position: absolute; inset: 0 0 auto 0; height: 38px; display: flex;
   clip-path: var(--chamfer); --ch: 8px; overflow: hidden; }
 #phases div { display: grid; place-items: center; font-family: var(--font-cond);
-  font-weight: 600; font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+  font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
   color: var(--text-dim); background: var(--surface-sunken); padding: 0 4px;
   /* Tracking adds a trailing space to every glyph, so centered tracked text
      sits half a track left of center; the indent puts it back (see broadcast.css). */
@@ -39,14 +41,14 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
    gold-hi text above 4.5:1, and even --cg-gold-lo is too light for that. */
 #phases div[data-p="endgame"] { background: #4A3305; color: var(--cg-gold-hi); }
 
-#track { position: absolute; left: 0; right: 0; top: 34px; height: 34px;
+#track { position: absolute; left: 0; right: 0; top: 42px; height: 34px;
   background: var(--surface-sunken); cursor: crosshair; }
-#playhead { position: absolute; top: 30px; width: 2px; height: 42px;
+#playhead { position: absolute; top: 38px; width: 2px; height: 42px;
   background: var(--cg-gold-hi); pointer-events: none; }
-#sel { position: absolute; top: 34px; height: 34px; background: rgba(240,175,0,.42);
+#sel { position: absolute; top: 42px; height: 34px; background: rgba(240,175,0,.42);
   box-shadow: inset 0 0 0 2px var(--cg-gold); pointer-events: none; }
 
-.mk { position: absolute; top: 34px; width: 3px; height: 34px; cursor: pointer;
+.mk { position: absolute; top: 42px; width: 3px; height: 34px; cursor: pointer;
   background: var(--cg-purple-hi); }
 .mk[data-pri="3"] { background: var(--cg-gold); width: 5px; }
 .mk[data-pri="2"] { background: var(--cg-green); }
@@ -60,8 +62,8 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
    exactly the ones whose labels matter most. Set in paintMarkers. */
 .mk[data-edge]:hover::after, .mk[data-edge]:focus-visible::after { left: auto; right: 0; }
 .mk:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
-#ticks { position: absolute; top: 72px; left: 0; right: 0; height: 16px;
-  font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
+#ticks { position: absolute; top: 80px; left: 0; right: 0; height: 16px;
+  font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); }
 #ticks span { position: absolute; transform: translateX(-50%); }
 /* The first and last tick sit exactly at the track's edges: centering them
    would hang half the label off the end and into the panel's padding, where
@@ -74,7 +76,7 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
    by the browser's default button text-align: same trailing-space offset as
    #phases div above, corrected the same way. */
 .btn { font-size: 14px; padding: 9px 14px; text-indent: .1em; }
-.btn kbd { font-family: var(--font-mono); font-size: 12px; opacity: .6; margin-left: 6px; }
+.btn kbd { font-family: var(--font-mono); font-size: 13px; opacity: .6; margin-left: 6px; }
 .btn--go { background: var(--accent); color: var(--text-on-accent); }
 label.inline, .inline { font-family: var(--font-cond); font-weight: 600; font-size: 13px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }

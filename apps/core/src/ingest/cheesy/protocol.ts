@@ -1,14 +1,14 @@
 /**
  * Cheesy Arena wire shapes, transcribed from the 2026 source.
  *
- * Field names are Go struct fields serialised with default JSON marshalling,
+ * Field names are Go struct fields serialized with default JSON marshaling,
  * so they are PascalCase. Everything here is `Partial`-ish and read
  * defensively: an off-season FMS build may differ slightly, and a missing
  * field must degrade rather than crash the broadcast.
  */
 
 /**
- * field/arena.go, serialised as an integer.
+ * field/arena.go, serialized as an integer.
  *
  * A const object rather than an `enum`: enums emit runtime code, and this
  * project runs TypeScript through Node's type stripping, which requires every
