@@ -156,13 +156,17 @@ desk.on('state', s => {
 });
 
 // ---- camera list ----------------------------------------------------------
-const sources = await fetch('/api/recorder').then(r => r.json()).catch(() => null);
+const sourcesRes = await fetch('/api/recorder').catch(() => null);
+const sources = sourcesRes ? await sourcesRes.json().catch(() => null) : null;
 if (sources?.sources?.length) {
   $('src').innerHTML = sources.sources
     .map(s => `<option value="${s.id}">${esc(s.label ?? s.id)}</option>`).join('');
 } else {
   $('src').innerHTML = '<option value="program">program</option>';
-  if (!sources?.available) {
+  if (sourcesRes?.status === 401) {
+    fail('Signed out. Reload this page and sign in again to review video.');
+    $('grab').disabled = true;
+  } else if (!sources?.available) {
     fail('Recording is not running, so there is nothing to review.');
     $('grab').disabled = true;
   }
@@ -224,8 +228,10 @@ function fail(message) { $('err').textContent = message; }
 
 // ---- markers --------------------------------------------------------------
 async function loadMarkers() {
-  let marks = [];
-  try { marks = await fetch('/api/markers').then(r => r.json()); } catch { return; }
+  let res;
+  try { res = await fetch('/api/markers'); } catch { return; }
+  if (!res.ok) return fail('Signed out. Reload this page and sign in again to see markers.');
+  const marks = await res.json().catch(() => []);
   if (!marks.length) return;
   $('marks').innerHTML = marks.map(m => `
     <button class="mark" data-p="${m.priority}" data-c="${m.matchClock ?? ''}">

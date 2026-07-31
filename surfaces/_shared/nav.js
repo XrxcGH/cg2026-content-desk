@@ -94,26 +94,45 @@ export function mountNav(current, opts = {}) {
   // The take buttons drive the bus directly rather than going through a page's
   // own desk client, so this works identically on a console that has no other
   // reason to hold a socket open.
-  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?surface=nav`);
+  //
+  // This socket reconnects on its own, the same way the console's own
+  // connection does. Without that, a single network blip (or a desk restart
+  // mid-show) would leave the take buttons dead silently: `ready` would never
+  // go back to true, and nothing on the strip says so.
+  let ws = null;
   let ready = false;
-  ws.addEventListener('open', () => { ready = true; });
+  let backoff = 250;
 
-  ws.addEventListener('message', ev => {
-    try {
-      const msg = JSON.parse(ev.data);
-      const state = msg?.state;
-      const screen = state?.screen ?? msg?.payload?.screen;
-      if (!screen) return;
-      for (const b of nav.querySelectorAll('button[data-screen]')) {
-        // 'Auto' lights when nothing is being held, so the strip always says
-        // whether the screen is following the match or an operator.
-        const on = b.dataset.screen === 'auto'
-          ? state?.screenHold === false
-          : b.dataset.screen === screen;
-        b.classList.toggle('live', !!on);
-      }
-    } catch { /* not a state frame */ }
-  });
+  function connectNav() {
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?surface=nav`);
+
+    ws.addEventListener('open', () => { ready = true; backoff = 250; });
+
+    ws.addEventListener('message', ev => {
+      try {
+        const msg = JSON.parse(ev.data);
+        const state = msg?.state;
+        const screen = state?.screen ?? msg?.payload?.screen;
+        if (!screen) return;
+        for (const b of nav.querySelectorAll('button[data-screen]')) {
+          // 'Auto' lights when nothing is being held, so the strip always says
+          // whether the screen is following the match or an operator.
+          const on = b.dataset.screen === 'auto'
+            ? state?.screenHold === false
+            : b.dataset.screen === screen;
+          b.classList.toggle('live', !!on);
+        }
+      } catch { /* not a state frame */ }
+    });
+
+    ws.addEventListener('close', () => {
+      ready = false;
+      setTimeout(connectNav, backoff);
+      backoff = Math.min(backoff * 2, 5000);
+    });
+    ws.addEventListener('error', () => ws.close());
+  }
+  connectNav();
 
   for (const b of nav.querySelectorAll('button[data-screen]')) {
     b.onclick = () => {

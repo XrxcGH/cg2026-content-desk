@@ -113,6 +113,8 @@ export class CheesyAdapter {
   #armedSent = false;
   #pollTimer: NodeJS.Timeout | null = null;
   #refreshTimer: NodeJS.Timeout | null = null;
+  /** True while a REST round-trip is in flight, to hold the one-request budget. */
+  #polling = false;
 
   constructor(opts: CheesyAdapterOpts) {
     this.#bus = opts.bus;
@@ -170,20 +172,32 @@ export class CheesyAdapter {
    * Pull the schedule and rankings. Failures are logged once and retried on the
    * next tick. A missing schedule degrades the side screens, it does not stop
    * the broadcast, so there is nothing here worth throwing over.
+   *
+   * Guarded against overlap: docs/10's connection budget is one concurrent
+   * HTTP request. The 60s timer and the post-score refresh can otherwise land
+   * close enough together to both be in flight at once, especially if the
+   * field network is already slow, which is exactly when you don't want a
+   * second request stacked on the first.
    */
   async #poll(): Promise<void> {
+    if (this.#polling) { this.#refreshSoon(); return; }
+    this.#polling = true;
     try {
-      const res = await this.#client.get<RankingsResponse>('/api/rankings');
-      this.#emit({ type: 'rankings.updated', payload: mapRankings(res) });
-    } catch (err) {
-      console.warn('[cheesy] rankings poll failed:', (err as Error).message);
-    }
+      try {
+        const res = await this.#client.get<RankingsResponse>('/api/rankings');
+        this.#emit({ type: 'rankings.updated', payload: mapRankings(res) });
+      } catch (err) {
+        console.warn('[cheesy] rankings poll failed:', (err as Error).message);
+      }
 
-    try {
-      const matches = await this.#client.get<MatchWithResult[]>('/api/matches/qualification');
-      this.#emit({ type: 'queue.updated', payload: { upcoming: mapUpcoming(matches) } });
-    } catch (err) {
-      console.warn('[cheesy] schedule poll failed:', (err as Error).message);
+      try {
+        const matches = await this.#client.get<MatchWithResult[]>('/api/matches/qualification');
+        this.#emit({ type: 'queue.updated', payload: { upcoming: mapUpcoming(matches) } });
+      } catch (err) {
+        console.warn('[cheesy] schedule poll failed:', (err as Error).message);
+      }
+    } finally {
+      this.#polling = false;
     }
   }
 

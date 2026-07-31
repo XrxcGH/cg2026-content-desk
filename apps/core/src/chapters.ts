@@ -110,8 +110,11 @@ export function chaptersFrom(
   for (const c of found) {
     const previous = out[out.length - 1]!;
     // Too close to the one before it, so it would invalidate the whole list.
+    // A repeated title on its own is not a reason to drop it: a match that
+    // gets aborted and replayed keeps its displayName for the re-run, and
+    // that re-run is exactly the moment worth a chapter, not the aborted
+    // attempt before it.
     if (c.atSec - previous.atSec < MIN_CHAPTER_SEC) continue;
-    if (c.title === previous.title) continue;
     out.push(c);
   }
   return out;

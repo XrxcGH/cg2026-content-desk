@@ -163,10 +163,11 @@ export class TriviaStore {
    */
   pick(): TriviaSnapshot {
     if (this.#phase === 'open') throw new Error('Reveal the open question first.');
-    const name = this.#bus.state.match?.displayName;
+    const match = this.#bus.state.match;
+    const name = match?.displayName;
     if (!name) throw new Error('No match is loaded, so there is nothing to pick.');
 
-    const q = pickQuestion(name);
+    const q = pickQuestion(name, match?.id ?? null);
     if (this.#questions.some(existing => existing.id === q.id)) {
       throw new Error(`${name} has already been picked.`);
     }
@@ -192,8 +193,16 @@ export class TriviaStore {
     }));
   }
 
-  /** Reject anything that would put a broken question on the big screen. */
-  #validate(draft: QuestionDraft): TriviaQuestion {
+  /**
+   * Reject anything that would put a broken question on the big screen.
+   *
+   * `preserve` carries fields the generic edit form never shows: `kind` and
+   * `matchId` mark a pick-the-winner round and, without this, editing one
+   * through the same form as an ordinary question would silently strip both
+   * and leave it scored as a fact whose "correct" answer is just the
+   * placeholder it was created with.
+   */
+  #validate(draft: QuestionDraft, preserve?: Pick<TriviaQuestion, 'kind' | 'matchId'>): TriviaQuestion {
     const text = String(draft.text ?? '').trim();
     if (!text) throw new Error('The question needs text.');
 
@@ -214,6 +223,8 @@ export class TriviaStore {
       options: options as [string, string, string, string],
       answer: answer as 0 | 1 | 2 | 3,
       ...(draft.category ? { category: String(draft.category).trim() } : {}),
+      ...(preserve?.kind ? { kind: preserve.kind } : {}),
+      ...(preserve?.matchId !== undefined ? { matchId: preserve.matchId } : {}),
     };
   }
 
@@ -241,7 +252,10 @@ export class TriviaStore {
     if (!existing) throw new Error('No such question.');
     this.#assertNotLive(index);
     // Keep the id so a half-finished edit cannot silently fork a duplicate.
-    this.#questions[index] = this.#validate({ ...draft, id: existing.id });
+    this.#questions[index] = this.#validate(
+      { ...draft, id: existing.id },
+      { kind: existing.kind, matchId: existing.matchId },
+    );
     this.#publish();
     return this.snapshot();
   }
@@ -278,10 +292,20 @@ export class TriviaStore {
     // it here, at reveal, is also what makes it unleakable: there is nothing
     // to leak while the question is open.
     if (q.kind === 'match') {
-      const { red, blue } = this.#bus.state.score;
       if (this.#bus.state.scorePostedAt === null) {
         throw new Error('The score is not posted yet, so there is no winner to reveal.');
       }
+      // The host can sit on an open prediction while the field moves on to a
+      // later match, whose own score_posted would otherwise look like a valid
+      // answer. Refuse rather than resolve a match's prediction against a
+      // different match's score.
+      if (q.matchId != null && this.#bus.state.match?.id !== q.matchId) {
+        throw new Error(
+          'The field has moved on to a different match, so this prediction cannot be '
+          + 'revealed against it.',
+        );
+      }
+      const { red, blue } = this.#bus.state.score;
       q.answer = resolvePick(red.total, blue.total);
     }
     for (const [playerId, a] of this.#answers) {

@@ -15,7 +15,7 @@ import type { Config } from '../config.ts';
 import type { EventBus } from '../bus.ts';
 import { matchCut, type ClipStore, type Range } from '../clips.ts';
 import { TbaClient } from './tba.ts';
-import { description, identify, segmentDescription, segmentName, videoTitle } from './naming.ts';
+import { description, identify, isPractice, segmentDescription, segmentName, videoTitle } from './naming.ts';
 import { YouTubeClient, watchUrl, type VideoMeta } from './youtube.ts';
 
 export type ItemKind = 'match' | 'analysis' | 'segment';
@@ -144,8 +144,13 @@ export class PublishQueue {
     const startedAt = st.lastMatchStartedAt;
     if (!startedAt) return null;
 
+    const displayName = st.match?.displayName ?? 'Match';
+    // Practice matches are explicitly never published (docs/11-distribution.md):
+    // queueing one would cut, upload, and link a scrimmage as tournament play.
+    if (isPractice(displayName)) return null;
+
     // Official FIRST-channel naming: "Qualification 42 - CalGames".
-    const { name, key } = identify(st.match?.displayName ?? 'Match');
+    const { name, key } = identify(displayName);
     const title = videoTitle(name, this.#cfg.event.name);
 
     if (this.#items.some(i => i.kind === 'match' && i.label === name && i.state !== 'failed')) {

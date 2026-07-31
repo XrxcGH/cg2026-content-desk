@@ -29,6 +29,12 @@ export interface TriviaQuestion {
    * at the moment the question opens, nobody knows it, including the server.
    */
   kind?: 'fact' | 'match';
+  /**
+   * For a `match`-kind question, the id of the match it predicts. `reveal()`
+   * checks this against whatever match is currently loaded, so a prediction
+   * left open too long can never be resolved against a later match's score.
+   */
+  matchId?: string | null;
 }
 
 /** Options for a pick-the-winner round, in the order the phone shows them. */
@@ -45,7 +51,7 @@ export const PICK_TIE = 2;
  * `answer` starts on red purely as a placeholder; `resolvePick` overwrites it
  * from the posted score before anything is revealed or scored.
  */
-export function pickQuestion(displayName: string): TriviaQuestion {
+export function pickQuestion(displayName: string, matchId: string | null = null): TriviaQuestion {
   return {
     id: `pick-${displayName.toLowerCase().replace(/\s+/g, '-')}`,
     text: `Who takes ${displayName}?`,
@@ -53,6 +59,7 @@ export function pickQuestion(displayName: string): TriviaQuestion {
     answer: PICK_RED,
     category: 'Pick the winner',
     kind: 'match',
+    matchId,
   };
 }
 

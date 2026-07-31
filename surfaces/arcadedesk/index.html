@@ -187,7 +187,13 @@ async function post(action, body) {
   return json;
 }
 
-const load = async () => { try { paint(await fetch('/api/arcade').then(r => r.json())); } catch {} };
+const load = async () => {
+  try {
+    const res = await fetch('/api/arcade');
+    if (!res.ok) return say('Signed out. Reload this page and sign in again.', true);
+    paint(await res.json());
+  } catch { /* transient */ }
+};
 
 // Repaint when arcade state changes elsewhere, whether from a start.gg bracket poll
 // or a second console. Every arcade event carries the full snapshot.

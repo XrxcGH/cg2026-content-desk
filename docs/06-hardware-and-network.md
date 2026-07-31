@@ -36,6 +36,30 @@ Rules:
 5. If the FTA says no to the bridge: the whole system still runs on manual desk input. Degraded,
    not dead. Design for this: it's a realistic Friday-morning outcome.
 
+## Access: the shared PIN
+
+Core itself isn't as private as owning the production LAN suggests. The desk runs on the venue
+network, and at an event that network has a few hundred phones on it; the trivia QR code puts
+core's address on a projector in front of the whole gym, so being on the content desk's own LAN is
+not the same as being hard to reach. `apps/core/src/access.ts` gates every operator console and
+every request that changes something (starting a match segment, cutting a clip, arming a cue)
+behind one shared PIN, while leaving the overlays, the venue TVs, and the two audience phone pages
+(`/s/quiz`, `/s/next`) open, since an OBS Browser Source cannot type a PIN and a spectator should
+not have to.
+
+Set it before the desk goes anywhere near the venue network, not after:
+
+```bash
+$env:REMOTE_PIN = "4726"; npm start -- --cheesy --cheesy-host 10.0.100.5:8080 --display-id contentdesk1
+```
+
+Startup logs which mode it's in and warns loudly if a venue-facing box comes up with no PIN set.
+It's one PIN, not per-volunteer accounts: the crew is a handful of people who arrive on the day, and
+a password reset at 8am on a Saturday gets worked around by propping the door open. Hand it out to
+crew the way you would a radio channel, not somewhere a phone camera in the stands could catch it.
+Sign in once at `/signin` and the session lasts the day. Full open/gated surface list in
+[README.md](../README.md).
+
 ## Machines
 
 | Box | Job | Spec notes |

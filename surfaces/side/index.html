@@ -21,7 +21,6 @@
   --ch:  34px;       /* chamfer scales with the type, or it vanishes */
   --rule: 6px solid var(--cg-gold);
   --tex-perf-size: 22px 22px;
-  --wdth-display: 125;
   /* Width the corner QR block claims: label + gap + code. Header text keeps
      out of it. */
   --qr-zone: 500px;
@@ -252,7 +251,14 @@ function advance() {
     show(true);
   }
 }
-setInterval(advance, DWELL_MS);
+// Resettable so a fresh match load (below) always buys the deck a full
+// dwell instead of possibly showing it for a few leftover milliseconds
+// before the already-running interval flips to rankings.
+let rotateTimer = setInterval(advance, DWELL_MS);
+function restartRotation() {
+  clearInterval(rotateTimer);
+  rotateTimer = setInterval(advance, DWELL_MS);
+}
 
 function paint(s) {
   if (!s) return;
@@ -351,7 +357,11 @@ fetch('/api/urls').then(r => r.json()).then(({ base }) => {
 }).catch(() => { /* QR is a bonus, never a blocker */ });
 
 // A new match loading is the one thing worth interrupting the rotation for.
-desk.on('match.loaded', () => { show(true); restart($('scr-deck'), 'data-active'); });
+desk.on('match.loaded', () => {
+  show(true);
+  restart($('scr-deck'), 'data-active');
+  restartRotation();
+});
 
 /**
  * Hold a header line to one line.

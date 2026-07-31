@@ -67,8 +67,8 @@ const EXPLAINERS = [
   {
     chip: 'How to watch',
     title: 'Two alliances, three teams each',
-    // Red and blue stay unemphasised on purpose: the accent here is gold, and
-    // gold on the words "red" and "blue" reads as a third alliance colour.
+    // Red and blue stay unemphasized on purpose: the accent here is gold, and
+    // gold on the words "red" and "blue" reads as a third alliance color.
     body: 'Six robots on the field, red against blue, three teams a side. '
       + 'The teams were paired at random for this match, so today\'s opponent is '
       + 'tomorrow\'s teammate.',
@@ -90,7 +90,7 @@ const EXPLAINERS = [
     chip: 'Scoring',
     title: 'Only one hub is live at a time',
     body: 'The hubs alternate through the match. Scoring into a hub that is not lit '
-      + 'earns <b>nothing</b>. Watch which alliance the field is favouring right now.',
+      + 'earns <b>nothing</b>. Watch which alliance the field is favoring right now.',
   },
   {
     chip: 'Why they cheer',

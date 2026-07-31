@@ -1,9 +1,12 @@
 # 07: Team media library + pre-match alliance overview
 
-RSN-style: six robots on screen before the match, cut out on transparent backgrounds, three per
-alliance, with team names and numbers. It's the single graphic that most makes a broadcast look
-professional, and it's the one an offseason event can actually pull off because the robots are
-sitting right there in the pits all weekend.
+RSN-style: robots on screen before the match, cut out on transparent backgrounds, one row per
+team, with team names and numbers. Three per alliance in qualification; a playoff alliance can
+carry a fourth (the backup that doesn't play this particular match but is still part of it), and
+the screen sizes itself off however many teams it's actually given rather than assuming three.
+It's the single graphic that most makes a broadcast look professional, and it's the one an
+offseason event can actually pull off because the robots are sitting right there in the pits all
+weekend.
 
 ---
 
@@ -12,41 +15,50 @@ sitting right there in the pits all weekend.
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                          QUALIFICATION 42                                 │
-│  ┌─────────────────────────────┐ ┌──┐ ┌─────────────────────────────┐    │
-│  │   ██     ██     ██          │ │  │ │          ██     ██     ██   │    │
-│  │  robot  robot  robot        │ │CG│ │        robot  robot  robot  │    │
-│  │  ─────  ─────  ─────        │ │  │ │        ─────  ─────  ───── │    │
-│  │   846    1868    253        │ │VS│ │         100    115    670   │    │
-│  │  Funky   Space   Boba       │ │  │ │        Wild-   MVRT   Home- │    │
-│  │  Monkeys Cookies Bots       │ │  │ │        hats           stead │    │
-│  │        RED ALLIANCE         │ └──┘ │        BLUE ALLIANCE        │    │
-│  └─────────────────────────────┘      └─────────────────────────────┘    │
+│  ┌───────────────────────────┐          ┌───────────────────────────┐    │
+│  │ ██  846   Funky Monkeys   │  ┌────┐  │   Wildhats     100   ██  │    │
+│  │ ██  1868  Space Cookies   │  │ CG │  │       MVRT     115   ██  │    │
+│  │ ██  253   Boba Bots       │  │ VS │  │ Homestead Rob. 670   ██  │    │
+│  │        RED ALLIANCE       │  └────┘  │       BLUE ALLIANCE      │    │
+│  └───────────────────────────┘          └───────────────────────────┘    │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Red left, blue right, always.** This matches the field as seen from the scoring table, and the
-rule in [03-brand.md](03-brand.md) that alliance is never encoded by color alone. The gold rule
-separates each alliance block from the purple chrome.
+Each team is a row, not a column: the cutout sits beside the number and name rather than above
+them. **Blue mirrors red.** The two alliances face each other across the center logo the way they
+face each other across the field, so blue's plates sit on the outside edge and its text runs back
+toward the centre. **Red left, blue right, always.** This matches the field as seen from the
+scoring table, and the rule in [03-brand.md](03-brand.md) that alliance is never encoded by color
+alone. The gold rule separates each alliance block from the purple chrome.
 
-### Layout rules that make six mismatched photos look like a set
+### Layout rules that make mismatched photos look like a set
 
 1. **Normalize by height, not width.** FRC robots vary enormously in footprint but much less in
-   height. Scale each cutout so its alpha bounding box is a fixed *height*, and the six robots read
-   as a family. Normalize by width and you get one robot the size of a bus next to one the size of
-   a shoebox.
-2. **Common floor line.** Every cutout's bottom edge sits on the same baseline, with a soft
-   elliptical gradient shadow beneath it. This is the entire difference between "cut out" and
-   "floating sticker."
+   height. Scale each cutout so its alpha bounding box is a fixed *height*, and every robot reads
+   as part of the same family. Normalize by width and you get one robot the size of a bus next to
+   one the size of a shoebox.
+2. **Rows, not columns.** Stacking cutouts above their names left each name a third of the panel's
+   width, and long ones had to shrink to fit. As a row, the name gets the whole width beside the
+   plate instead, so "Homestead Robotics" sets at full size and a fourth team costs the row height
+   (which there is spare of) rather than the row width (which there isn't).
 3. **Never mirror a robot photo.** Flipping the blue side to face inward reverses bumper numbers
    and sponsor logos. Shoot every robot at the same 3/4 angle and let both alliances face the same
    direction. Nobody notices, and mirrored `846` is the kind of thing that ends up on Chief Delphi.
-4. **Text block is fixed height**, so a two-line team name doesn't shove the robot up. Team number
-   in Archivo (tabular), name in Barlow Condensed, truncate at two lines.
-5. **Optional third line** (rank, record, or EPA), driven off the event bus. Hidden entirely if the
-   data is `estimated`.
+   Only the surrounding plate-and-text order mirrors for blue; the photo itself never flips.
+4. **Row count follows the alliance, not a constant.** Three rows in qualification; a playoff
+   alliance can supply a fourth, and both sides take the larger count so the two halves stay level
+   even when one alliance is short a robot. The plate width and the number/name type both step
+   down together once a side carries four, so nothing collides with the row below; the name still
+   clips at roughly two lines rather than pushing into it.
 
-Animation: robots stagger in at 60ms intervals, 250ms each, bottom-up. Total 500ms. Stop
-animating in lockdown mode.
+A third line for rank, record, or EPA was part of the original design for this screen, but the
+current row layout has no line for it: only the team number and name render today. If it's added
+later, it should follow the rule everywhere else on the bus and hide rather than show a number
+that's `estimated`.
+
+Animation: each row is a Block Reveal, staggered 90ms per row and 380ms each, travelling up from
+below (see [08-motion.md](08-motion.md)). Both alliances build at once, since the stagger index
+restarts on each side rather than running across the whole screen. Stop animating in lockdown mode.
 
 ---
 
@@ -156,8 +168,12 @@ of those will arrive Sunday morning. The graphic has to look deliberate with a h
 | Priority | Asset | Rendering |
 | --- | --- | --- |
 | 1 | Uploaded robot cutout | full treatment |
-| 2 | TBA team avatar | avatars are 40×40. **Do not upscale into the robot slot.** Render it small, centered in a purple plinth, as an obviously different treatment |
+| 2 | TBA team avatar | **designed, not yet wired up.** Avatars are 40×40, so the rule is not to upscale into the robot slot but to render it small, centered in a purple plinth, as an obviously different treatment |
 | 3 | Nothing | large gold team number on a purple plinth, in Archivo, with the team name below |
+
+`robotCard()` in `surfaces/program/program.js` currently only checks for an uploaded cutout and
+falls straight to tier 3 when there isn't one; nobody has wired up `/api/teams/{id}/avatar` for the
+overview yet, so tier 2 above is the design for whoever does, not something on screen today.
 
 Tier 3 must look like a designed state, not a broken image. Get it right first and the whole
 graphic degrades gracefully. That means you can ship the screen on Friday with zero photos
@@ -167,9 +183,10 @@ uploaded and improve it live all weekend as photos come in.
 
 The alliance overview is a surface bound to `match.loaded` / `match.preview`. It needs:
 
-- 6 team numbers (from `matchLoad`)
+- team numbers (from `matchLoad`): three in qualification, up to four for a playoff alliance
 - names/nicknames, from the cached team list (Cheesy `/api/rankings`, FRC Events, or TBA)
-- rank/record (from `rankings.updated`), hidden when `estimated`
+- rank/record (from `rankings.updated`), hidden when `estimated`. See the note above: this isn't
+  actually rendered on the current row layout yet
 - robot cutouts: from the local media manifest, no network dependency
 
 Nothing here requires a live FMS connection beyond the team numbers, so this screen works even in
@@ -177,13 +194,20 @@ fully-degraded manual mode: the producer types `Q42` and the graphic builds itse
 
 ## Reuse
 
-The same cutout asset drives:
+The pre-match overview is, today, the only screen that actually draws the uploaded cutout. Every
+other surface that names a team shows its number and name as text, not its photo:
 
-- **Alliance selection**: cutouts appear as picks are made
-- **Award graphics** show the winner's robot beside the award name
-- **Telestrator team tag**: the puck uses the cutout instead of the avatar
-- **Post-match cards**, social-ready 1080×1080 with the winning alliance's three robots
-- **Arcade Team vs Team** puts the team's robot next to their Smash player card
+- **Post-match cards**, the 1080×1080 result graphic, list the winning alliance's roster by number
+  and name
+- **Arcade Team vs Team** prints the team number and name beside the Smash/Kart player card
+- **Telestrator team tag** drops a numbered puck, picked from the loaded match's roster
+- **Alliance selection board** shows team numbers as picks are made
 
-One photo session on Friday, used in five places all weekend. That's the argument for spending the
-hour to shoot it properly.
+`desk.mediaFor(teamNumber)` in `surfaces/_shared/desk-client.js` is already the one lookup any of
+these would call to pull in the photo the way the overview does; nobody has wired it into the other
+four yet. Don't describe them as photo-driven in a run sheet or a sponsor conversation until
+someone does.
+
+One photo session on Friday pays for itself once even though only the overview draws on it today:
+the moment the other four reuses above get wired up, the hour spent shooting it properly pays out
+five times over instead of once.

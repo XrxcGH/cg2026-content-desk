@@ -41,7 +41,12 @@ export function attachMarkers(bus: EventBus): () => void {
   /** Recent fuel deltas per alliance, for the sliding burst window. */
   const recent: Record<Alliance, { ts: number; amount: number }[]> = { red: [], blue: [] };
   const lastBurst: Record<Alliance, number> = { red: 0, blue: 0 };
-  let leader: Alliance | 'tie' = 'tie';
+  // The last alliance to hold a lead. `null` means neither has ever led yet
+  // (so the first go-ahead score isn't a "change"); a tie does NOT reset this
+  // to null, because it isn't the same thing as "nobody has led" - it has to
+  // survive a tie so that a later go-ahead by the OTHER alliance still reads
+  // as a lead change instead of a second "first blood".
+  let leader: Alliance | null = null;
 
   const mark = (m: Omit<Marker, 'ts' | 'matchClock'>, ts: number): void => {
     bus.emit({
@@ -57,7 +62,7 @@ export function attachMarkers(bus: EventBus): () => void {
       case 'match.loaded': {
         recent.red = []; recent.blue = [];
         lastBurst.red = 0; lastBurst.blue = 0;
-        leader = 'tie';
+        leader = null;
         break;
       }
 
@@ -117,10 +122,14 @@ export function attachMarkers(bus: EventBus): () => void {
         const { red, blue } = bus.state.score;
         const now: Alliance | 'tie' =
           red.total > blue.total ? 'red' : blue.total > red.total ? 'blue' : 'tie';
-        if (now !== 'tie' && now !== leader && leader !== 'tie') {
+        if (now !== 'tie' && now !== leader && leader !== null) {
           mark({ kind: 'lead_change', alliance: now, label: `${now} takes the lead`, priority: 3 }, ev.ts);
         }
-        if (now !== leader) leader = now;
+        // A tie deliberately does NOT clear `leader`: it just means nobody is
+        // ahead RIGHT NOW. Clearing it here would make the alliance that goes
+        // back ahead after a tie look like a "first" lead again and swallow
+        // the mark, which is exactly the seesaw moment worth replaying.
+        if (now !== 'tie') leader = now;
         break;
       }
 

@@ -63,8 +63,10 @@
   position: absolute; right: 24px; top: 92px; width: 330px;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
-  clip-path: var(--chamfer);
-  padding: 8px 12px;
+  clip-path: var(--chamfer); --ch: 12px;
+  /* Inline padding clears the chamfer: at --ch 12 a 12px inset would put
+     the first and last glyph inside the corner cut. */
+  padding: 10px 20px 12px;
 }
 /* Real filled edge, not box-shadow: shadows die under the luma key. */
 .gp::before {
@@ -77,8 +79,8 @@
   font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: var(--cg-gold);
 }
 .gp-row {
-  display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: baseline;
-  padding: 2px 0; border-bottom: 1px solid var(--cg-purple-hi);
+  display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: baseline;
+  padding: 3px 0; border-bottom: 1px solid var(--cg-purple-hi);
 }
 .gp-row:last-child { border-bottom: 0; }
 .gp-pos { font-family: var(--font-num); font-weight: 900; font-size: 17px; color: var(--cg-gold); }
@@ -89,7 +91,7 @@
 .gp-pts { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 900; font-size: 17px; }
 
 #upNext {
-  position: absolute; left: 24px; top: 92px; font-size: 14px; padding: 5px 12px;
+  position: absolute; left: 24px; top: 96px; font-size: 14px; padding: 6px 18px;
   display: none;
 }
 #upNext[data-show] { display: inline-flex; }
@@ -139,8 +141,8 @@
    hub tab, flipped. +3px keeps the strip's gold border unbroken above it. */
 .ffa-tab {
   position: absolute; left: 50%; transform: translateX(-50%);
-  top: 76px; z-index: 5;
-  padding: 5px 22px 9px;
+  top: calc(76px + 6px); z-index: 4;
+  padding: 6px 24px 10px;
   background: var(--cg-gold);
   --ch: 14px;
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--ch)),
@@ -215,7 +217,13 @@ const GAME_LABEL = {
 
 let snap = null;
 const load = async () => {
-  try { paint(await fetch('/api/arcade').then(r => r.json())); } catch { /* transient */ }
+  // A non-OK response (e.g. this endpoint not open to an unauthenticated
+  // overlay) must never reach paint(): parsing an error body as if it were
+  // a snapshot would blank out whatever the live WS events already drew.
+  try {
+    const r = await fetch('/api/arcade');
+    if (r.ok) paint(await r.json());
+  } catch { /* transient */ }
 };
 
 function paint(s) {

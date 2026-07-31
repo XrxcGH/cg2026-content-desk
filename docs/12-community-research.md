@@ -105,6 +105,18 @@ frc-colors.com provides a free public API returning verified primary/secondary c
 - <https://github.com/jonahsnider/frc-colors.com>
 - <https://frc-colors.com/>
 
+### FIRST team avatars are allowlisted but nothing renders one yet
+
+*recurring*
+
+Team avatars are the official per-team identity mark on FIRST's own scoreboard/stream graphics, fetchable via TBA APIv3. The bridge's read allowlist covers `/api/teams/{id}/avatar` (docs/10), and docs/04's team tag and docs/07's photo fallback chain were both designed around one, but no surface actually fetches or draws an avatar today: the alliance overview falls straight from an uploaded cutout to the plain gold-number plinth, and the telestrator tag is a number puck with no image.
+
+**Recommendation:** Wire up the tier-2 avatar fallback in `surfaces/program/program.js`'s `robotCard()` first, since that is the one place a small, deliberately-not-upscaled avatar (docs/07) was actually planned. Revisit the telestrator tag and the other text-only reuses (docs/07) once that exists.
+
+- <https://www.chiefdelphi.com/t/frc-blog-2026-team-avatars/511664>
+- <https://www.chiefdelphi.com/t/frc-blog-2026-scoreboard-and-live-stream-graphics/513783>
+- <https://www.thebluealliance.com/apidocs>
+
 ## Partially covered: the missing half
 
 ### Full-field in-match camera view is the community's #1 production rule: codify it and check the composited frame
@@ -151,18 +163,6 @@ Long-running complaint that the mix makes speech unintelligible, 'like the adult
 - <https://www.chiefdelphi.com/t/event-recordings-and-audio-quality/520141>
 - <https://www.chiefdelphi.com/t/a-wishlist-for-the-polish-of-frc-events/367016>
 - <https://www.chiefdelphi.com/t/the-music-is-too-loud/499828>
-
-### Match-video pipeline needs a QC gate so mis-cut clips never publish
-
-*widespread*
-
-FIRST's auto splitter/uploader has repeatedly produced 11-15 second 'match videos', uploaded the wrong match, or dropped whole mornings (Kettering Q55-Q80, several FMA events); fixes depend on one volunteer's spare time. Scouts call timely, correct match video essential for picklists. The desk's durable queue, timing-aware matchCut, resumable uploads, and TBA linking cover delivery; nothing verifies a cut is the right match at full length before publishing.
-
-**Recommendation:** Add a cheap sanity gate to the publish queue: duration within expected match-length bounds, match key vs cut-timestamp cross-check, and an operator thumbnail-confirm step in the desk console before a clip goes to YouTube/TBA.
-
-- <https://www.chiefdelphi.com/t/missing-event-videos/458269>
-- <https://www.chiefdelphi.com/t/first-webcast-unit-video-issues/352827>
-- <https://www.chiefdelphi.com/t/tba-not-showing-denver-code-regional-matches-yet/460514>
 
 ### Events run chronically behind schedule: compute and surface drift-adjusted match times
 
@@ -246,14 +246,6 @@ Merged from three raw findings. The desk is ahead of official graphics on the bi
 - <https://www.chiefdelphi.com/t/fuel-is-counted-until-t-0-03-but-not-on-the-audience-display/515863>
 - <https://www.chiefdelphi.com/t/2023-iri-stream-is-actually-really-good/438732>
 
-### Publishing queue lacks non-match clip types: alliance selection, awards, ceremonies, full-day VOD
-
-*recurring*
-
-Beyond match clips, viewers ask for the full uncut day VOD (Twitch deletes them; teams restream to unlisted YouTube just to keep an archive), dedicated alliance-selection and per-award videos, and recorded award ceremonies for families who leave early. YouTube's rewind-while-live and persistent VODs are repeatedly praised.
-
-**Recommendation:** Add alliance selection, award ceremony, and opening/closing segments as first-class publish-queue item types with their own naming convention, and keep the full-day stream VOD public after the event (free via the YouTube Live path).
-
 - <https://www.chiefdelphi.com/t/opinions-on-twitch-as-an-frc-streaming-platform/458993>
 - <https://www.chiefdelphi.com/t/missing-event-videos/458269>
 - <https://www.chiefdelphi.com/t/recorded-award-ceremony/516458>
@@ -318,18 +310,6 @@ EPA is the community-standard prediction metric with a free API and prediction d
 - <https://www.chiefdelphi.com/t/statbotics-2026-season/515311>
 - <https://www.chiefdelphi.com/t/peekorobo-2026-season/514459>
 - <https://www.chiefdelphi.com/t/presenting-frc-splat-a-comprehensive-event-and-season-monte-carlo-simulator-for-frc-powered-by-the-blue-alliance-and-statbotics/509593>
-
-### Auto-generate YouTube chapters on the full-day stream VOD
-
-*recurring*
-
-The community builds splitter tools because day-long event VODs are unnavigable: finding one match in an 8-hour recording is documented pain. The desk covers the per-match side fully, but nothing generates a chapter/timestamp index for the live VOD itself; the dual-clocked event log (docs/11) already records wall-clock timestamps for every match.start, exactly the data a chapter list needs.
-
-**Recommendation:** Cheap win: at end of day, map event-log match.start times to stream-relative offsets and write an auto-generated chapter list ('00:41:23 Qualification 12') into the VOD description via the YouTube API credentials the upload queue already holds.
-
-- <https://www.chiefdelphi.com/t/frc-video-splitter-4/444971>
-- <https://github.com/tytremblay/frc-video-splitter>
-- <https://www.chiefdelphi.com/t/how-to-access-match-videos-vods/460856>
 
 ### Degraded-uplink runbook for the live encoder (venue internet is spotty and shared)
 
@@ -418,6 +398,33 @@ Merged from three raw findings. Same-day HD match videos on YouTube linked to TB
 - <https://www.chiefdelphi.com/t/frc-live-replay-match-videos-automatically-recorded-and-uploaded-in-minutes/159204>
 - <https://www.chiefdelphi.com/t/frc-youtube-uploader-match-uploading-program/348887>
 
+### A QC gate now holds an implausible cut before it publishes
+
+*widespread*
+
+FIRST's auto splitter/uploader has repeatedly produced 11-15 second 'match videos', uploaded the wrong match, or dropped whole mornings (Kettering Q55-Q80, several FMA events); fixes depend on one volunteer's spare time. Scouts call timely, correct match video essential for picklists.
+
+**Recommendation:** Covered: every publish-queue item kind carries a plausible duration range (`QC_BOUNDS` in `apps/core/src/publish/queue.ts`, e.g. 60-900s for a match), and a cut outside its range is parked `held` with a reason rather than moving on to upload. An operator releases it from the desk console after a look, the same action that lets a `deferred`-mode queue go at end of day. See [11-distribution.md](11-distribution.md).
+
+- <https://www.chiefdelphi.com/t/missing-event-videos/458269>
+- <https://www.chiefdelphi.com/t/first-webcast-unit-video-issues/352827>
+- <https://www.chiefdelphi.com/t/tba-not-showing-denver-code-regional-matches-yet/460514>
+
+### Non-match segments and day-VOD chapters are in the publish queue
+
+*recurring*
+
+Beyond match clips, viewers ask for the full uncut day VOD (Twitch deletes them; teams restream to unlisted YouTube just to keep an archive), dedicated alliance-selection and per-award videos, recorded award ceremonies for families who leave early, and a chapter index so one match is findable in an eight-hour recording.
+
+**Recommendation:** Covered: `queueSegment()` adds alliance selection, awards ceremony, and opening/closing segments as their own publish-queue item type, each named from `SEGMENTS` in `apps/core/src/publish/naming.ts` (anything else typed in becomes a literal title, for a single award's own video). The full-day stream stays public after the event for free, since it is the same YouTube Live archive this desk already uses. `apps/core/src/chapters.ts` turns the event log into a YouTube chapter list (`GET /api/chapters`), enforcing YouTube's strict, silently-failing rules (0:00 first, three chapters minimum, ten seconds each, ascending) before handing the paste-ready text back. See [11-distribution.md](11-distribution.md).
+
+- <https://www.chiefdelphi.com/t/opinions-on-twitch-as-an-frc-streaming-platform/458993>
+- <https://www.chiefdelphi.com/t/missing-event-videos/458269>
+- <https://www.chiefdelphi.com/t/recorded-award-ceremony/516458>
+- <https://www.chiefdelphi.com/t/frc-video-splitter-4/444971>
+- <https://github.com/tytremblay/frc-video-splitter>
+- <https://www.chiefdelphi.com/t/how-to-access-match-videos-vods/460856>
+
 ### Crowd trivia is the community's standard delay playbook, now being productized
 
 *recurring*
@@ -463,18 +470,6 @@ TBA GameDay is the community's multi-stream viewing hub; events get on it via th
 
 - <https://www.thebluealliance.com/gameday>
 - <https://www.chiefdelphi.com/t/tba-week-7-stream-issues/518792>
-- <https://www.thebluealliance.com/apidocs>
-
-### FIRST team avatars used correctly in graphics
-
-*recurring*
-
-Team avatars are the official per-team identity mark on FIRST's own scoreboard/stream graphics, fetchable via TBA APIv3. The desk uses them as the tier-2 photo fallback rendered small in a plinth (explicitly not upscaled from 40x40) and in the telestrator team tag.
-
-**Recommendation:** None. Implementation matches ecosystem practice, including the sensible refusal to upscale 40x40 avatars into robot-photo slots.
-
-- <https://www.chiefdelphi.com/t/frc-blog-2026-team-avatars/511664>
-- <https://www.chiefdelphi.com/t/frc-blog-2026-scoreboard-and-live-stream-graphics/513783>
 - <https://www.thebluealliance.com/apidocs>
 
 ### YouTube upload caps and API quota mitigations are already planned

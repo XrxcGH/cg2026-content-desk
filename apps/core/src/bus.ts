@@ -60,6 +60,20 @@ export class EventBus {
     };
 
     this.#state = reduce(this.#state, ev);
+    // The Cheesy adapter emits match.end straight from the field's own
+    // notifier, outside of advance()'s tick. If we didn't sync #lastPhase
+    // here too, the next 10Hz tick would find the clock-derived phase
+    // already at 'post' but #lastPhase still stuck on 'endgame', read that
+    // as a fresh transition, and fire a second, duplicate match.end (and
+    // the same for match.auto_end/match.endgame/match.shift_change) a
+    // moment after the real one, double-firing every subscriber downstream
+    // (scene cuts, replay markers). This only closes the race when the
+    // authoritative event lands before the ticker's own estimate does; see
+    // the review notes for the remaining direction.
+    if (ev.type === 'match.auto_end' || ev.type === 'match.endgame'
+      || ev.type === 'match.end' || ev.type === 'match.shift_change') {
+      this.#lastPhase = this.#state.phase;
+    }
     this.#record(ev);
     return ev;
   }
@@ -110,7 +124,13 @@ export class EventBus {
     for (const line of lines) {
       let ev: DeskEvent;
       try { ev = JSON.parse(line) as DeskEvent; }
-      catch { continue; }
+      catch {
+        // A truncated last line (e.g. the process was killed mid-write) is
+        // normal; anything else silently dropping here would make replay
+        // quietly skip real events with nothing in the console to explain it.
+        console.error('[bus] skipping unparseable log line:', line.slice(0, 200));
+        continue;
+      }
 
       if (speed > 0 && prev !== null) {
         const wait = (ev.ts - prev) / speed;

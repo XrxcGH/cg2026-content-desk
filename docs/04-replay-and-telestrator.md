@@ -92,7 +92,7 @@ time is real.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Q42  ·  RED 148 - 132 BLUE                       [ARMED ●]  │
+│  Q42                                          ● linked        │
 ├──────────────────────────────────────────────────────────────┤
 │  AUTO │ T │ SHIFT 1 │ SHIFT 2 │ SHIFT 3 │ SHIFT 4 │ ENDGAME  │
 │  ──●──┼───┼──▲──●───┼─────────┼───●─────┼─────────┼──▲▲──    │
@@ -107,8 +107,8 @@ time is real.
 
 - Timeline is the **match clock**, phase-segmented, not a raw video scrubber. The operator thinks
   in "endgame," not "18:42:07."
-- **SEND TO DESK** pushes the clip to the telestrator with the first frame frozen. **TAKE** puts it
-  straight to program with the gold replay wipe.
+- **SEND TO DESK** pushes whichever frame the clip preview is paused on to the telestrator as a
+  frozen backdrop. **TAKE** puts the clip straight to program with the gold replay wipe.
 - Pre-render 0.5x and 0.25x versions of any clip flagged for telestration: smooth slow-mo needs
   frame interpolation (`minterpolate`) which is too slow to do live, but fine on a 12-second clip
   during the ~90 seconds between matches.
@@ -141,8 +141,8 @@ converge on this and they're right.
 
 ```ts
 { type: 'telestrator.stroke',
-  payload: { strokeId, tool: 'pen'|'arrow'|'ellipse'|'spotlight'|'tag',
-             ink: 'default'|'good'|'note'|'red'|'blue',
+  payload: { strokeId, tool: 'pen'|'arrow'|'ellipse'|'spotlight'|'path'|'tag',
+             ink: 'gold'|'good'|'note'|'red'|'blue',
              pts: [[0.412, 0.688], [0.418, 0.690], ...],   // normalized 0-1
              width: 7, seq: 12 } }
 ```
@@ -193,22 +193,24 @@ frame (or the live/looping clip) in OBS.
 | **Ellipse** | drag to circle a robot; snaps to a nice aspect | `E` |
 | **Spotlight** | dims everything outside a lassoed region to 55% purple-black | `S` |
 | **Path** | dashed line with an animated dash-offset (shows intended route) | `R` |
-| **Team tag** | drag a team-number puck onto a robot; pulls avatar + number from the team list | `T` |
+| **Team tag** | tap a team number, then drop its puck onto a robot | `T` |
 | **Undo / Clear** | `Z` / `C` | |
 | **Hide** | instantly clears program without clearing the pad | `H` |
 
 **Spotlight is the underrated one.** On a field with 6 robots, an ellipse says "look here" but a
 spotlight says "ignore everything else," and it reads far better at 720p on a phone.
 
-**Team tag is the CalGames-specific one.** Because we already have the team list, avatars, and
-rankings in the event bus, dropping a tag renders `1678 · Citrus Circuits · Rank 3` with the
-avatar. No other telestrator can do that because no other telestrator knows what an FRC team is.
+**Team tag is the CalGames-specific one.** The pad builds its puck row from whichever match is
+loaded, so tagging a robot is one tap instead of typing a number blind while the field is live. The
+puck itself is just the gold number, not an avatar or name, but no other telestrator knows what an
+FRC team is, let alone which ones are on the field this match.
 
 ### Ink rules
 
 Gold default, with a 2px black halo on every stroke. The field is red, blue, and grey carpet under
-mixed gym lighting. Gold with a black outline is the only ink that survives on all of it. Strokes
-auto-fade after 6s unless pinned, so the analyst never has to remember to clear.
+mixed gym lighting. Gold with a black outline is the only ink that survives on all of it. Every
+stroke auto-fades 800ms into a 6s window, so the analyst never has to remember to clear; there's no
+pin to hold one past that.
 
 ### On-air chrome
 

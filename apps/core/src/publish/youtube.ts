@@ -98,16 +98,30 @@ export class YouTubeClient {
     return location;
   }
 
-  /** Ask how many bytes the server already has, so we resume rather than restart. */
-  async #committed(sessionUrl: string, size: number): Promise<number> {
+  /**
+   * Find out where a resumable session actually stands: how many bytes it
+   * has, whether it already finished (YouTube can fully receive a file and
+   * this process can still crash before it records the video id, a real gap
+   * during a venue power blip), or whether the session itself is gone, in
+   * which case a fresh one is opened so the caller always gets one back.
+   */
+  async #resume(sessionUrl: string, size: number, meta: VideoMeta):
+      Promise<{ id: string } | { sessionUrl: string; offset: number }> {
     const res = await fetch(sessionUrl, {
       method: 'PUT',
       headers: { 'Content-Range': `bytes */${size}` },
     });
-    if (res.status === 200 || res.status === 201) return size;
+    if (res.status === 200 || res.status === 201) {
+      const body = await res.json().catch(() => null) as { id?: string } | null;
+      if (body?.id) return { id: body.id };
+      throw new Error('YouTube reports the upload complete but returned no video id.');
+    }
     if (res.status === 308) {
       const range = res.headers.get('range');           // e.g. "bytes=0-12345"
-      return range ? Number(range.split('-')[1]) + 1 : 0;
+      return { sessionUrl, offset: range ? Number(range.split('-')[1]) + 1 : 0 };
+    }
+    if (res.status === 404) {                            // session expired: start over
+      return { sessionUrl: await this.#startSession(meta, size), offset: 0 };
     }
     throw new Error(`Could not query upload progress (${res.status})`);
   }
@@ -123,6 +137,10 @@ export class YouTubeClient {
             onSession?: (url: string) => void; attempts?: number } = {},
   ): Promise<string> {
     const size = (await stat(file)).size;
+    // A session handed in from a previous, interrupted run may already have
+    // bytes, or even the whole file, committed, so it has to be checked
+    // before the first byte goes out, not only on a retry within this call.
+    const resuming = !!opts.sessionUrl;
     let sessionUrl = opts.sessionUrl ?? await this.#startSession(meta, size);
     opts.onSession?.(sessionUrl);
 
@@ -131,7 +149,12 @@ export class YouTubeClient {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        if (attempt > 1) offset = await this.#committed(sessionUrl, size);
+        if (attempt > 1 || resuming) {
+          const status = await this.#resume(sessionUrl, size, meta);
+          if ('id' in status) { opts.onProgress?.(size, size); return status.id; }
+          if (status.sessionUrl !== sessionUrl) { sessionUrl = status.sessionUrl; opts.onSession?.(sessionUrl); }
+          offset = status.offset;
+        }
         if (offset >= size) break;
 
         const stream = createReadStream(file, { start: offset });
@@ -154,7 +177,10 @@ export class YouTubeClient {
           return body.id;
         }
         if (res.status === 308) {                  // more bytes wanted
-          offset = await this.#committed(sessionUrl, size);
+          const status = await this.#resume(sessionUrl, size, meta);
+          if ('id' in status) { opts.onProgress?.(size, size); return status.id; }
+          if (status.sessionUrl !== sessionUrl) { sessionUrl = status.sessionUrl; opts.onSession?.(sessionUrl); }
+          offset = status.offset;
           opts.onProgress?.(offset, size);
           attempt--;                               // progress isn't a failure
           continue;

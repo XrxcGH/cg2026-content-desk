@@ -184,12 +184,12 @@ Constraints from research, not taste:
 | **Hub state indicator** | *the* CalGames-2026 graphic (which hub is live now, plus shift countdown) |
 | **RP badges** | ENERGIZED / SUPERCHARGED / TRAVERSAL: icon (bolt / double bolt / tower bars) + the threshold numeral, so the goal reads off the bar; unearned = `--cg-purple-hi`, earned = `--cg-green-hi`. Shared via `surfaces/_shared/rp.js` |
 | **Alliance overview** | pre-match, RSN-style: 3 robot cutouts per side, numbers, names (see [07-team-media.md](07-team-media.md)) |
-| **Match intro** | 6 teams, avatars, EPA form line, W-L-T |
+| **Match intro** | *not built.* Planned: 6 teams, avatars, EPA form line, W-L-T. Blocked behind the Statbotics EPA feed (see [09](09-roadmap-and-risks.md)) |
 | **Lower third** | one component, four variants: name/title, stat, quote, sponsor |
 | **Replay wipe** | gold sweep on purple + "REPLAY" bug; reused for arcade |
 | **Telestrator chrome** | analyst name + "ANALYSIS" bug while strokes are live |
 | **Score reveal** | post-match delta animation, RP award, ranking movement |
-| **Bracket** | consume Cheesy's `/api/bracket/svg`, restyle with tokens |
+| **Bracket** | *not built.* Planned: consume Cheesy's `/api/bracket/svg`, restyle with tokens. The path is allowlisted but nothing polls it yet |
 | **Queueing / on-deck** | side screens |
 | **Arcade card** | player names, game logo slot, set score, bracket round |
 
@@ -212,9 +212,10 @@ elements and lighting. Strokes carry a 6-second auto-fade unless pinned.
 
 ## Logo lockup
 
-Reserve `--cg-logo-slot`: a 320×120 safe box, top-left of the score bar and center of the intro
-card. The contest logo drops in as SVG with a `currentColor` variant so it renders gold-on-purple
-and purple-on-gold from a single asset.
+Reserve `--cg-logo-slot-w` / `--cg-logo-slot-h`: a 320×120 safe box, the center column of the
+pre-match alliance overview, between the two alliance panels. The contest logo drops in as SVG
+with a `currentColor` variant so it renders gold-on-purple and purple-on-gold from a single asset.
+A second placement on the score bar is planned but not built yet.
 
 ## Implementation
 

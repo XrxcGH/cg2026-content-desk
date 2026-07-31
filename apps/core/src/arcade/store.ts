@@ -83,6 +83,10 @@ export class ArcadeStore {
   /** Operator adjusts a score. Clamped at zero (negatives are always a typo). */
   score(playerIndex: number, delta: number): ArcadeSet | null {
     if (!this.#set) return null;
+    // A stray click after the set is already decided must not reopen it or
+    // shuffle who won: `setWinner` picks the first index at the max score, so
+    // a post-completion edit can silently hand the win to the wrong player.
+    if (this.#set.state === 'complete') return this.#set;
     const current = this.#set.scores[playerIndex];
     if (current === undefined) return this.#set;
 

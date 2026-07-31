@@ -21,8 +21,8 @@
                             └──────┬───────┘   └────────┬───────┘
                                    │                    ▼
                                    │           ┌────────────────┐
-                                   └──────────▶│  Cue Engine    │──▶ OBS-WS · ATEM · Companion
-                                               │  (show automation) │   · replay markers · audio
+                                   └──────────▶│  Cue Engine    │──▶ OBS-WS scene cuts
+                                               │  (show automation) │   · replay markers
                                                └────────────────┘
 ```
 
@@ -88,11 +88,22 @@ Deliberately a superset of Cheesy Arena's notifiers so the Cheesy adapter is nea
 **Event flow**: `alliance_selection.update` · `award.presented` · `break.started` ·
 `queue.updated` · `rankings.updated`
 
-**Production**: `graphic.show` · `graphic.hide` · `lower_third.show` · `replay.marker` ·
-`replay.clip_ready` · `replay.play` · `telestrator.stroke` · `telestrator.clear` ·
-`scene.change` · `sound.play`
+**Production**: `graphic.show` · `graphic.hide` · `lower_third.show` · `lower_third.hide` ·
+`replay.marker` · `replay.clip_ready` · `replay.play` · `telestrator.stroke` · `telestrator.undo` ·
+`telestrator.clear` · `telestrator.frame` · `telestrator.hide` · `screen.change` · `scene.change` ·
+`sound.play`
+
+`screen.change` is the overlay switching its own pages (`overview`, `match`, `score`, `selection`,
+`explain`...); `scene.change` is the switcher cutting cameras. Different layers, deliberately
+different events, so an operator taking a program screen never touches what the switcher is doing.
 
 **Arcade**: `arcade.set_start` · `arcade.score` · `arcade.set_end` · `arcade.bracket_updated`
+
+**Schedule, status, and config**: `pace.updated` (drift-adjusted start estimate) ·
+`status.show` · `status.hide` (the audience-facing delay/review/fault card) ·
+`game.thresholds` (bonus RP thresholds pushed from `config.json` at boot)
+
+**Crowd trivia**: `trivia.updated`, one event type whose payload is the whole trivia snapshot
 
 ### `score.delta`: the one we synthesize
 
@@ -102,12 +113,45 @@ Neither Cheesy Arena nor FMS emits "team X just scored." We derive it by diffing
 ```ts
 { type: 'score.delta',
   matchClock: 47.3,
-  payload: { alliance: 'red', field: 'fuel', from: 118, to: 124, amount: 6, hubActive: true } }
+  payload: { alliance: 'red', field: 'fuel', amount: 6 } }
 ```
+
+Only positive deltas are emitted: a downward score correction is not a highlight, and marking one
+would drop a bogus replay marker. `field` is `'fuel' | 'tower' | 'fouls'`; the reducer attributes
+the amount to auto or teleop itself, by the match clock at the moment the event landed.
 
 This is what powers scoring-rate charts, auto replay markers ("6 fuel in 1.2s, that's a burst,
 mark it"), and the post-match timeline card. It is the highest-value thing in the whole system
 and it costs ~40 lines.
+
+### The live snapshot: `DeskState`
+
+A `DeskEvent` is the wire; `DeskState` is what every surface actually renders from.
+`reduce(state, event)` in `state.ts` is the only place one becomes the other, and it is a pure
+function, which is what lets a recorded NDJSON log replay to byte-identical state. A few fields on
+that snapshot are easy to miss from the event vocabulary alone:
+
+- **`thresholds`**. The bonus RP numbers (`energizedFuel`, `superchargedFuel`, `traversalTower`)
+  are not the constants in `REBUILT`; they live on the snapshot, arrive once from `config.json` as
+  a `game.thresholds` event at boot, and both the reducer's own scoring and every badge on every
+  surface read them from there. Change `config.game` and restart, and the whole system repaints
+  against the new numbers.
+- **`screenHold`**. Match lifecycle events drive `screen` on their own, which is what lets the show
+  run unattended. The moment an operator sends `screen.change` with a real screen name, `screenHold`
+  flips true and automatic changes stop moving the screen until something sends `screen.change`
+  with `{ screen: 'auto' }`, which clears the hold and leaves whatever is on air alone. Without
+  this, taking the arcade bumper in a gap between matches got yanked back to the overview the
+  moment the next `match.loaded` landed.
+- **`selection`**. Mirrors Cheesy Arena's own alliance-selection state (captains in seed order, the
+  ranked pool with picks marked, the field's own pick clock) off the `allianceSelection` notifier
+  already carried on the audience display socket. The desk only draws it; the field's selection
+  websocket stays on the forbidden list.
+- **Playoff seeds**. `MatchInfo.redAlliance` / `blueAlliance` carry the 1-8 seed number in a
+  playoff match, absent in qualification. Cheesy Arena only ever fields three robots per alliance
+  on the field, so a four-team playoff alliance's fourth member is a backup; the seed is the join
+  key back to the selection rosters wherever a surface needs the full roster. Every surface sizes
+  itself off the length of `red`/`blue` rather than assuming three, so a fuller roster (or a
+  four-up arcade free-for-all) renders correctly wherever one is supplied.
 
 ---
 
@@ -133,8 +177,12 @@ or `/setup/*`.
 | `/displays/queueing/websocket` | queueing, `eventStatus` |
 | `/displays/rankings/websocket`, `/displays/bracket/websocket` | rankings, bracket |
 
-**REST**, `GET` only, 60s (3s in the post-match window): `/api/matches/{type}`, `/api/rankings`,
-`/api/alliances`. Assets cached once: `/api/teams/{id}/avatar`, `/api/bracket/svg`.
+**REST**, `GET` only: the qualification schedule (`/api/matches/qualification`) and
+`/api/rankings` poll every 60s, deliberate and slow, since the field network is not ours to load
+up and both change on the order of once a match. A score post triggers one extra debounced poll
+1.5s later, so the side screens are not still showing the previous match's standings for up to a
+full minute while the room already has the new ones. `/api/alliances`, `/api/teams/{id}/avatar`,
+and `/api/bracket/svg` are on the client's endpoint allowlist but nothing polls them yet.
 
 Confidence: `authoritative` throughout. Every derived signal in this document (`score.delta`,
 automatic replay markers, hub state, the cue engine following the scorekeeper's screen) is
@@ -203,8 +251,8 @@ with a Stream Deck binding.
 | `bridge` | sits on the field-adjacent NIC, reads Cheesy/FMS, republishes to production LAN | only component allowed to touch the field side; read-only |
 | `core` | normalizer, event log, snapshot store, WS fan-out, REST | single process; NDJSON log to disk, replayable |
 | `replay` | rolling record, clip extraction, clip library | separate process/box, a crash here must not take program down |
-| `cue` | show automation: `on(state) → actions` | drives OBS-WS / ATEM / Companion / sounds |
-| `surfaces` | static web bundles, one per surface | served by `core`; every one is just a WS subscriber |
+| `cue` | show automation: `on(state) → actions` | drives OBS-WS scene changes today, honoring a wide-shot lock that keeps autopilot from cutting away from the field mid-match; ATEM and Companion integrations are not built |
+| `surfaces` | static web bundles, one per surface | served by `core`; every one is just a WS subscriber. Every operator console shares a navigation strip (writes `screen.change` directly) so an operator can jump between consoles and take a program screen without going back to `/` |
 
 Deliberately small. Five processes, one of which is optional, all on a LAN, no cloud dependency
 during show.
@@ -236,6 +284,18 @@ All surfaces are browser pages that consume the same WS stream and the same
 | Arcade console | `/s/arcadedesk` | operator laptop, side tournament |
 | Side screen | `/s/side` | venue TVs, queueing, rankings, next match |
 | Post-match cards | `/s/cards` | operator laptop, 1080×1080 result PNGs |
+| Trivia overlay | `/s/trivia` | OBS Browser Source, crowd trivia question/answer/leaderboard |
+| Trivia play | `/s/quiz` | audience phones, join and answer |
+| Trivia host | `/s/triviadesk` | operator laptop, opens/reveals questions and edits the bank |
+| Talent view | `/s/talent` | announcer tablet, RP progress in words, pronunciation notes |
+| When do we play? | `/s/next` | any phone, per-team schedule with drift-adjusted estimates |
+| Head referee review | `/s/var` | operator laptop, frame-step review only: no cut, no publish |
+| Phone remote | `/s/remote` | operator's phone, runs the show over the venue Wi-Fi |
+
+Access is gated by [`access.ts`](../apps/core/src/access.ts): the overlays, the venue TVs, and the
+two audience phone pages (`program`, `side`, `tele`, `arcade`, `trivia`, `quiz`, `next`) are open by
+allowlist; every operator console and every write requires the shared PIN. See
+[the README](../README.md#who-can-drive-it).
 
 ---
 

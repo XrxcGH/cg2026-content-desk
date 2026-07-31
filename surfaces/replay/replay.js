@@ -115,7 +115,9 @@ function paintMarkers() {
 
 async function loadMarkers() {
   try {
-    markers = await fetch('/api/markers').then(r => r.json());
+    const res = await fetch('/api/markers');
+    if (!res.ok) return say('Signed out. Reload this page and sign in again.', true);
+    markers = await res.json();
     paintMarkers();
   } catch { /* transient */ }
 }
@@ -123,7 +125,12 @@ async function loadMarkers() {
 // ---- sources ---------------------------------------------------------------
 async function loadSources() {
   try {
-    const rec = await fetch('/api/recorder').then(r => r.json());
+    const res = await fetch('/api/recorder');
+    if (!res.ok) {
+      $('src').innerHTML = '<option value="program">program</option>';
+      return say('Signed out. Reload this page and sign in again.', true);
+    }
+    const rec = await res.json();
     $('encoder').textContent = rec.available ? `encoder: ${rec.encoder}` : 'recording unavailable';
     $('src').innerHTML = rec.sources.length
       ? rec.sources.map(s => `<option value="${s.id}">${s.label}${s.running ? '' : ' (down)'}</option>`).join('')

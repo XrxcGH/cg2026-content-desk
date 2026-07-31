@@ -89,6 +89,21 @@ test('alliance selection lands once, no matter how many picks republish it', () 
   assert.equal(chapters.find(c => c.title === 'Alliance selection')?.atSec, 30 * 60);
 });
 
+test('a replayed match keeps its own chapter even though the title repeats', () => {
+  // Qualification 43 is aborted right after starting, then run again in full
+  // ten minutes later. Cheesy reloads the same match, so the title repeats,
+  // but the re-run is the one worth jumping to, not the aborted attempt.
+  const log = [
+    ...match(10 * 60_000, 'Qualification 43'),
+    ...match(20 * 60_000, 'Qualification 43'),
+  ];
+  const chapters = chaptersFrom(log, T0);
+
+  assert.equal(chapters.filter(c => c.title === 'Qualification 43').length, 2,
+    'both the aborted attempt and the real re-run get a chapter');
+  assert.deepEqual(chapters.map(c => c.atSec), [0, 10 * 60 - 15, 20 * 60 - 15]);
+});
+
 test('text is paste-ready, ascending, and empty when there is too little to work', () => {
   const log = [
     ...match(10 * 60_000, 'Qualification 41'),

@@ -97,12 +97,12 @@ Saturday-afternoon-of-October problem, not a September one.
 
 This is the part that justifies building it in-house rather than downloading BracketFlow.
 
-Because the team list, avatars, and rankings are already on the event bus:
+Because the team list and rankings are already on the event bus:
 
 | Feature | What it looks like |
 | --- | --- |
-| **Team vs Team** | Smash entrants registered by team number → the card reads `846 The Funky Monkeys` with the team's TBA avatar, not `xX_smashgod_Xx` |
-| **Alliance GP** | During alliance selection, run a Mario Kart GP where the karts *are* the alliance captains, with the standings graphic using alliance numbers and colors |
+| **Team vs Team** | Smash entrants registered by team number → the card reads `846 The Funky Monkeys`, not `xX_smashgod_Xx` |
+| **Alliance GP** | During alliance selection, run a Mario Kart GP where the karts *are* the alliance captains. `ArcadePlayer.alliance` tags each racer for that context, but the standings graphic still renders with the arcade's own purple/green scheme, not alliance colors: see the color rule below |
 | **Pit Crew Cup** | Bracket seeded by qualification ranking; the underdog storyline writes itself |
 | **Between-match filler** | Cut to the arcade automatically whenever `matchClock` is null and the next match is >3 min out: a cue rule, not an operator decision |
 

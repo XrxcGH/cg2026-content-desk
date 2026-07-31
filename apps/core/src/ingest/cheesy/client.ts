@@ -51,7 +51,18 @@ export function assertSocketAllowed(path: string): asserts path is AllowedSocket
 
 export function assertPathAllowed(path: string): void {
   const bare = path.split('?')[0] ?? '';
-  if (!ALLOWED_PATHS.some(p => bare === p || bare.startsWith(p))) {
+  // A dot segment would let an otherwise-allowed prefix resolve somewhere else
+  // once the URL is actually parsed (`/api/matches/../../setup/settings` passes
+  // a naive prefix check but fetch() would normalise it onto /setup/settings).
+  // Reject it here, before the string match, not after.
+  if (bare.includes('..')) {
+    throw new Error(`Refusing to request "${bare}": a path segment is not allowed.`);
+  }
+  // Entries ending in "/" are deliberate prefixes (one Cheesy path per match
+  // type or team id); everything else must match exactly, or a path like
+  // "/api/rankingsAndAlsoSomethingElse" would slip through on a substring hit.
+  const allowed = ALLOWED_PATHS.some(p => p.endsWith('/') ? bare.startsWith(p) : bare === p);
+  if (!allowed) {
     throw new Error(`Refusing to request "${bare}". Not on the read allowlist.`);
   }
 }
@@ -137,11 +148,14 @@ export class CheesyClient {
     this.#connected.delete(path);
     this.#opts.onStatus?.(false, `${path}: ${why}`);
 
-    // Backoff caps at 30s. A reconnect storm during a field reset is the most
+    // Backoff caps at 60s. A reconnect storm during a field reset is the most
     // plausible way this project causes a problem, so this is the important
-    // part of the whole client.
-    const wait = Math.min(30_000, (this.#backoff.get(path) ?? 500) * 2);
-    this.#backoff.set(path, wait);
+    // part of the whole client. Jitter matters as much as the cap: six sockets
+    // that all drop together (the arena restarting) must not also retry
+    // together, or backoff just delays the storm instead of preventing it.
+    const base = Math.min(60_000, (this.#backoff.get(path) ?? 500) * 2);
+    this.#backoff.set(path, base);
+    const wait = base * (0.75 + Math.random() * 0.5);
     const t = setTimeout(() => { this.#timers.delete(t); this.#open(path); }, wait);
     this.#timers.add(t);
   }

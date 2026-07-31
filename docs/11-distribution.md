@@ -196,6 +196,50 @@ checkbox somebody has to remember to tick. The desk can still force one on or of
 Extraction is the same ffmpeg concat-and-trim the replay service uses, at different bounds. One
 implementation.
 
+### Non-match segments: the parts of the day that aren't a match
+
+Alliance selection decides the afternoon and is never rewatchable; families who leave before the
+ceremony never see their team's award. `queueSegment()` in `apps/core/src/publish/queue.ts` covers
+these as their own `segment` queue items: the operator marks in and out (`POST /api/publish/segment`
+with `fromMs`/`toMs`), and the clip is cut from the program recording like any other.
+
+Four segment ids come pre-named in `apps/core/src/publish/naming.ts`'s `SEGMENTS` map, so the video
+title matches the official-channel style without anyone typing it by hand:
+
+| Id | Title |
+| --- | --- |
+| `selection` | Alliance Selection |
+| `awards` | Awards Ceremony |
+| `opening` | Opening Ceremony |
+| `closing` | Closing Ceremony |
+
+Anything else passed as the segment is taken as a literal title, which is how a single award gets
+its own video (`Chairman's Award - CalGames`). None of these carry a TBA match key, so they link to
+the event as media (`media/add`) rather than to a match.
+
+### QC hold: an implausible cut never publishes quietly
+
+FIRST's own auto-uploader has shipped 11-second "match videos" and whole wrong matches. The queue
+guards against the same failure here: every kind of item has a plausible duration range
+(`QC_BOUNDS` in `queue.ts`, e.g. 60-900s for a match, 30-7200s for a segment), and a cut outside its
+range is parked in the `held` state with a reason attached instead of moving on to upload. Releasing
+it is the same `POST /api/publish/release` action that lets a `deferred`-mode queue go at end of
+day. There's no desk-console panel listing held items yet, so operating this in October means
+someone with `GET /api/publish` open to see what's stuck (see Failure handling below).
+
+### Day-VOD chapters
+
+The full-day stream is exactly the unnavigable eight-hour recording the community asks a splitter
+for. `apps/core/src/chapters.ts` walks the event log and turns every `match.start`, `award.presented`,
+and the first `alliance_selection.update` into a chapter, backing up 15 seconds so it opens on the
+announcer's countdown rather than mid-auto. `GET /api/chapters` (gated, desk-only) returns the list
+and a paste-ready text block for the YouTube description.
+
+YouTube enforces its chapter rules strictly and silently: the first chapter must sit at `0:00`,
+there must be at least three, every one must run at least ten seconds, and they must be ascending.
+Break any one of those and YouTube shows no chapters at all with no error, so `chapters.ts` enforces
+them before handing anything back rather than leaving the operator to find out on a live VOD.
+
 ### Naming: matches the official FIRST channel
 
 So CalGames content sits alongside official uploads instead of looking homemade. Titles are
@@ -296,8 +340,11 @@ Every one of these is a "when", not an "if":
 | Core restarts | Queue is on disk. It reloads and carries on. |
 | Wrong match linked | `match_videos/delete`, fix, re-add. |
 
-The queue is deliberately boring: a JSON file, a state machine, exponential backoff, and a desk
-panel showing what's stuck. Nobody should have to SSH into anything on Sunday.
+The queue is deliberately boring: a JSON file, a state machine, and exponential backoff. Every
+item's state, including anything `held`, is readable at `GET /api/publish` (gated, so an operator
+needs to be signed in). Nobody should have to SSH into anything on Sunday, but there is no
+desk-console panel over that endpoint yet: today, "what's stuck" means someone reading the JSON,
+not a screen built for it.
 
 ---
 

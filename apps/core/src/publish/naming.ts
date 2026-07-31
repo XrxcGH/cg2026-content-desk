@@ -32,6 +32,9 @@ const ORDINAL: Record<string, number> = { one: 1, two: 2, three: 3 };
  * "Match 7 (R3)" and TBA keys them `sf7m1`. Finals are `f1m1`, `f1m2`, and the
  * tiebreaker is `f1m3`.
  */
+/** Practice matches run during load-in and pit walkthroughs; never published. */
+export const isPractice = (displayName: string): boolean => /^practice/i.test(displayName.trim());
+
 export function identify(displayName: string): MatchIdentity {
   const s = displayName.trim();
 
@@ -40,7 +43,7 @@ export function identify(displayName: string): MatchIdentity {
   if (qual) return { name: `Qualification ${Number(qual[1])}`, key: `qm${Number(qual[1])}` };
 
   // Practice matches exist but are never published.
-  if (/^practice/i.test(s)) return { name: s, key: null };
+  if (isPractice(s)) return { name: s, key: null };
 
   // Final Tiebreaker / Finals Tiebreaker / Final 3
   if (/^finals?\s*(tiebreaker|tie-breaker|tie breaker)$/i.test(s)) {

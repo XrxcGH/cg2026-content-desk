@@ -43,9 +43,11 @@ h1 { margin: 0; font-size: 19px; font-variation-settings: "wdth" 118; }
 .now .s.blue { color: var(--alliance-blue); text-align: right; }
 .now .mid { text-align: center; }
 .now .clk { font-family: var(--font-num); font-weight: 900; font-size: 26px; line-height: 1; color: var(--cg-gold); }
-.now .ph { font-family: var(--font-cond); font-size: 11px; letter-spacing: .14em;
+/* Tracking adds a trailing space to every glyph, so centered tracked text
+   sits half a track left of center; the indent puts it back. */
+.now .ph { font-family: var(--font-cond); font-size: 11px; letter-spacing: .14em; text-indent: .14em;
   text-transform: uppercase; color: var(--cg-white-dim); margin-top: 3px; }
-.mname { font-family: var(--font-cond); font-size: 12px; letter-spacing: .1em;
+.mname { font-family: var(--font-cond); font-size: 12px; letter-spacing: .1em; text-indent: .1em;
   text-transform: uppercase; color: var(--cg-white-dim); text-align: center; margin: -4px 0 12px; }
 
 section { margin-bottom: 14px; }
@@ -195,15 +197,30 @@ function toast(msg, err = false) {
 }
 
 // ---- PIN gate --------------------------------------------------------------
-desk.on('ready', () => {
-  $('gate').toggleAttribute('data-show', desk.needsPin && !desk.authed);
-});
+// Reaching this page at all already required the PIN once: the server sends
+// an unsigned request to /signin first. A valid session cookie should unlock
+// this gate too, rather than making the operator type the PIN a second time.
+// The WS-level `authed` flag alone can't tell us that: a socket opened with a
+// good cookie is granted write access silently, with no explicit "you're
+// signed in" message, so without this check the gate would show every time
+// regardless of the cookie.
+let sessionAuthed = false;
+async function refreshGate() {
+  try {
+    const status = await fetch('/api/auth/status').then(r => r.json());
+    sessionAuthed = !status.required || status.authed;
+  } catch { /* keep the last known value; the WS-level gate still covers it */ }
+  $('gate').toggleAttribute('data-show', desk.needsPin && !desk.authed && !sessionAuthed);
+}
+desk.on('ready', refreshGate);
 desk.on('auth', ok => {
-  $('gate').toggleAttribute('data-show', !ok);
+  if (ok) sessionAuthed = true;
+  $('gate').toggleAttribute('data-show', !ok && !sessionAuthed);
   toast(ok ? 'Unlocked' : 'Wrong PIN', !ok);
-  if (ok) navigator.vibrate?.(30);
+  if (ok) { navigator.vibrate?.(30); loadCues(); }
 });
 desk.on('denied', () => {
+  sessionAuthed = false;
   $('gate').setAttribute('data-show', '');
   toast('PIN required', true);
 });
@@ -262,7 +279,9 @@ $('teleHide').onclick = tap(() => { desk.emit({ type: 'telestrator.hide' }); toa
 // ---- cue arming ------------------------------------------------------------
 async function loadCues() {
   try {
-    const { cues = [] } = await fetch('/api/cues').then(r => r.json());
+    const res = await fetch('/api/cues');
+    if (!res.ok) return;   // the PIN gate already covers a signed-out session
+    const { cues = [] } = await res.json();
     $('cues').innerHTML = cues.map(c =>
       `<button class="b" data-cue="${c.id}" data-on="${c.autopilot}">${c.name}` +
       `<small>${c.autopilot ? 'armed' : `off · would have fired ${c.wouldHaveFired}×`}</small></button>`
@@ -270,8 +289,13 @@ async function loadCues() {
     for (const b of document.querySelectorAll('[data-cue]')) {
       b.onclick = tap(async () => {
         const on = b.dataset.on !== 'true';
-        await fetch(`/api/cues/${b.dataset.cue}/${on ? 'arm' : 'disarm'}`, { method: 'POST' });
-        toast(`${b.firstChild.textContent} ${on ? 'armed' : 'disarmed'}`);
+        try {
+          const r = await fetch(`/api/cues/${b.dataset.cue}/${on ? 'arm' : 'disarm'}`, { method: 'POST' });
+          if (!r.ok) throw new Error();
+          toast(`${b.firstChild.textContent} ${on ? 'armed' : 'disarmed'}`);
+        } catch {
+          toast('Could not reach the desk. Check the PIN.', true);
+        }
         loadCues();
       });
     }

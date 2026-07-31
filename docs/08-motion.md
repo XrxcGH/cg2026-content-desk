@@ -114,9 +114,11 @@ animate something small, and the pop is how it gets away with it.
 
 ### 5. Stagger Build: the alliance overview
 
-Six robots, **90ms stagger**, each a Block Reveal with 120px of vertical travel, bottom-up. Total
-~880ms. The stagger reads as choreography rather than a pop-in, and the sequential motion pulls
-attention left-to-right across the screen.
+Each side's robots stagger in **90ms** apart, one row after the next, each a Block Reveal with
+120px of vertical travel, bottom-up. Both alliances build at once rather than one after the other:
+the stagger index restarts per side, so it reads as the two alliances stepping onto the screen
+together, top row to bottom, rather than a single sweep across the whole width. Three rows finishes
+around 560ms; a four-team playoff alliance runs to about 650ms.
 
 ### 6. Alert Pulse: endgame and E-stop
 

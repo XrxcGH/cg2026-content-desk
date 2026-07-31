@@ -234,9 +234,11 @@ load();
 let editing = null;
 
 async function loadBank() {
-  let bank;
-  try { bank = await fetch('/api/trivia/bank').then(r => r.json()); }
+  let res;
+  try { res = await fetch('/api/trivia/bank'); }
   catch { return; }
+  if (!res.ok) return say('Signed out. Reload this page and sign in again to edit questions.', true);
+  const bank = await res.json().catch(() => null);
   if (!Array.isArray(bank)) return;
 
   $('bank').innerHTML = bank.length ? bank.map((q, i) => `

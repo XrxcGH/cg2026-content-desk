@@ -117,8 +117,8 @@
 .robot-art { position: relative; height: 100%; min-height: 0;
   display: grid; place-items: center; }
 .robot-id { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
-/* Normalise by HEIGHT, never width: FRC footprints vary enormously but
-   heights don't, and width-normalising puts a bus next to a shoebox. */
+/* Normalize by HEIGHT, never width: FRC footprints vary enormously but
+   heights don't, and width-normalizing puts a bus next to a shoebox. */
 .robot-art img { max-height: 100%; max-width: 100%; object-fit: contain; object-position: center; }
 
 /* Tier-3 fallback: gold number on a chamfered plinth. Must read as a designed
@@ -147,10 +147,10 @@
    the row layout, so a 3-digit number at the old ratio ran past its edge. */
 .robot-art--fallback span[data-len="4"] { font-size: min(calc(var(--t-hero) * .68), 35cqw); }
 .robot-art--fallback span[data-len="5"] { font-size: min(calc(var(--t-hero) * .55), 28cqw); }
-/* Capped by digit count against the card width. At three-up a 3-digit number
-   still lands on the full --t-score; longer numbers, and every number in a
-   four-up alliance, step down far enough to stay inside their own column.
-   Before this, "1678" and "25801" collided into one unreadable run. */
+/* Sized off the alliance's team count (--num-size, set in program.js), not
+   digit count: the row layout gives this column roughly 450-500px, which a
+   5-digit number clears with room left over. Only the fallback plate above
+   is narrow enough to need its own per-digit cap. */
 .robot-num {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-weight: 900; font-size: var(--num-size, var(--t-score)); line-height: 1;
@@ -646,7 +646,7 @@
 
 /* Blue mirrors red. The two alliances face each other across the logo, the
    way they face each other across the field, so blue's plates sit on the
-   outside edge and its text runs back toward the centre line. Grid placement
+   outside edge and its text runs back toward the center line. Grid placement
    does the swap, so the DOM order stays plate-then-text on both sides. */
 .ov-side--blue .robot { grid-template-columns: minmax(0, 1fr) var(--plate, 168px); }
 .ov-side--blue .robot-art { grid-column: 2; grid-row: 1; }

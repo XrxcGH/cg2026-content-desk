@@ -7,7 +7,7 @@
  * browser. The trade is doing layout by hand, which for a fixed 1080x1080
  * composition is a fair price.
  *
- * Colours come from the same CSS custom properties every other surface uses,
+ * Colors come from the same CSS custom properties every other surface uses,
  * so the card can never drift from the broadcast look.
  */
 
@@ -117,15 +117,15 @@ export function drawCard(ctx, card) {
   const blockY = 240, blockH = 300, gap = 24;
   const blockW = (S - 120 - gap) / 2;
 
-  const side = (x, data, colour, label, isWinner) => {
+  const side = (x, data, color, label, isWinner) => {
     ctx.save();
     chamfer(ctx, x, blockY, blockW, blockH, 26);
-    ctx.fillStyle = colour;
+    ctx.fillStyle = color;
     ctx.fill();
     ctx.restore();
     perf(ctx, x, blockY, blockW, blockH, 20);
 
-    // Winner gets a gold cap. Position and a label carry it too, never colour
+    // Winner gets a gold cap. Position and a label carry it too, never color
     // alone, because red/blue is ~8% of male viewers' worst case. Clipped to
     // the plate's chamfer so the band ends where the corner cut begins.
     if (isWinner) {

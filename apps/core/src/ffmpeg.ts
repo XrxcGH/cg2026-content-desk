@@ -135,5 +135,14 @@ export async function duration(ffprobe: string, file: string): Promise<number | 
   return Number.isFinite(n) ? n : null;
 }
 
-export const spawnDetached = (bin: string, args: string[]): ChildProcess =>
-  spawn(bin, args, { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
+export const spawnDetached = (bin: string, args: string[]): ChildProcess => {
+  // stdin is piped, not ignored, so the recorder can ask ffmpeg to quit
+  // cleanly (writing 'q') instead of only ever killing it. See Recorder#stop.
+  const proc = spawn(bin, args, { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] });
+  // A write can land after the child has already exited (a camera driver that
+  // just crashed, say). Without a handler here that's an unhandled 'error' on
+  // the stdin stream, which would take the whole desk process down over one
+  // dead recorder rather than just that one source.
+  proc.stdin?.on('error', () => {});
+  return proc;
+};

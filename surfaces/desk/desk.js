@@ -231,12 +231,14 @@ $('chapMake').onclick = async () => {
   try {
     const res = await fetch(`/api/chapters?${params}`);
     const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
     $('chapText').style.display = body.usable ? 'block' : 'none';
     $('chapText').value = body.text;
     $('chapState').textContent = body.usable
       ? `${body.chapters.length} chapters from ${new Date(body.startedAt).toLocaleTimeString()}. Select all and copy.`
       : 'Not enough yet. YouTube ignores a list under three chapters, so this stays empty until there are.';
   } catch (err) {
+    $('chapText').style.display = 'none';
     $('chapState').textContent = err.message;
   }
 };

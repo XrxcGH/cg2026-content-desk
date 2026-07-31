@@ -80,7 +80,8 @@ That's why hub state now comes from the field rather than any local inference. D
   plays from their seats over the venue wifi, with FRC and 2026 REBUILT questions (the RP-threshold
   ones double as scorebug education), speed scoring, team-tagged leaderboard. Answers never
   leave the server before reveal, and scoring is entirely server-side. A per-event question
-  bank drops in at `data/trivia.json`
+  bank drops in at `data/trivia.json`, and the host console can add, edit, reorder, and delete
+  questions live during the event, writing straight back to that file
 - ⬜ Statbotics pre-match prediction + alliance selection value board.
   **Still blocked** (re-checked 2026-07-30): every `/v3` path returns 500, so the schema
   cannot be verified against a live response. The rule stands: wire shapes get transcribed

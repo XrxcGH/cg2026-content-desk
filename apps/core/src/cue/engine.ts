@@ -132,10 +132,19 @@ export function defaultCues(): Cue[] {
       id: 'gap-filler',
       name: 'Fill the gap',
       does: 'Cut to the arcade when there is no match for three minutes.',
-      when: (ev, state) =>
-        ev.type === 'match.score_posted'
-        && state.matchStartedAt === null
-        && Date.now() - (state.scorePostedAt ?? 0) > GAP_MS,
+      // Deliberately not keyed to a specific event type: the moment that
+      // crosses the three-minute mark is a clock, not a bus event, so this
+      // has to be re-checked on whatever comes through next (the schedule and
+      // rankings poll every 60s even when nothing changed) rather than on
+      // `match.score_posted` alone, which fires exactly when scorePostedAt is
+      // set to "now" and so could never itself be three minutes stale.
+      when: (_ev, state) =>
+        state.matchStartedAt === null
+        // A score has to have been posted at all. Treating "never" as an
+        // infinitely long gap made this true from boot, so the arcade bumper
+        // fired on the first event of the day, over the pre-match overview.
+        && state.scorePostedAt !== null
+        && Date.now() - state.scorePostedAt > GAP_MS,
       run: async ctx => { await ctx.scene('arcade'); },
     },
   ];

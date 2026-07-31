@@ -137,7 +137,8 @@ whatever fits. The only line is the allowlist above.
 > The HTTP client cannot construct a non-`GET` request.
 >
 > **Endpoints we do use:** `/api/arena/websocket`, `/displays/{audience,queueing,field_monitor,rankings,bracket}/websocket`,
-> and `GET` on `/api/matches`, `/api/rankings`, `/api/alliances`, `/api/teams/*/avatar`, `/api/bracket/svg`.
+> and `GET` on `/api/matches`, `/api/rankings`, `/api/alliances`, `/api/teams/*/avatar`, `/api/bracket/svg`,
+> `/api/sponsor_slides`.
 >
 > **Display registration:** we register as display ID `________` (agreed with the scorekeeper) so
 > we can't collide with a real audience display. Listener only.
@@ -187,15 +188,27 @@ It also found three bugs that synthetic tests could not have:
 The bridge now reads hub state from Cheesy's per-alliance `ActiveRemainingSec` and only falls back
 to inference when running desk-only.
 
+### Rehearsing without a field
+
+`harness.mjs` needs a real `cheesy-arena -dev` build. When one isn't at hand, `npm run fake-arena`
+serves the real wire protocol instead: the same allowed display websockets, the same `{type, data}`
+frames, the same GET-only REST paths, looping a scripted match (robots linking, auto decided on
+fuel, alternating hub shifts, endgame climbs, score posting). `npm run validate:offline` drives the
+whole bridge against it headless and prints a PASS/FAIL checkpoint table. It's the same hardened
+client, the same allowlist, and the same adapter as the real thing; nothing on our side is stubbed.
+Good for catching a regression in September without waiting on the next chance at an actual field.
+
 ## Verify before October
 
 - [x] Run the whole ingest against a local `cheesy-arena -dev` instance through a real match
+- [x] Repeatable offline regression check (`npm run fake-arena` + `npm run validate:offline`) that
+      exercises the same client, allowlist, and adapter without needing a live Cheesy Arena build
 - [ ] Re-run `harness.mjs` against the actual off-season build being used at the event, in case it
       differs from `main`
 - [ ] Unit test asserting the endpoint allowlist. It should fail if anyone adds a `/panels/` or
       `/match_play/` path.
 - [ ] Unit test asserting the HTTP client rejects every method except `GET`.
-- [ ] Kill Cheesy Arena mid-match; confirm we back off cleanly instead of hammering.
+- [x] Kill Cheesy Arena mid-match; confirm we back off cleanly instead of hammering.
 - [ ] Wireshark the field NIC for five minutes; confirm nothing but allowlisted traffic. Bring the
       capture to the FTA conversation (more persuasive than any promise).
 - [ ] Agree the reserved `displayId` with the scorekeeper, in writing.

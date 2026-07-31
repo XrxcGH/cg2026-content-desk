@@ -26,15 +26,13 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { MatchState } from './protocol.ts';
+import { ALLOWED_SOCKETS } from './client.ts';
 
-const SOCKET_PATHS = [
-  '/api/arena/websocket',
-  '/displays/audience/websocket',
-  '/displays/field_monitor/websocket',
-  '/displays/queueing/websocket',
-  '/displays/rankings/websocket',
-  '/displays/bracket/websocket',
-];
+// Sourced from the client's own allowlist rather than a second hand-copied
+// list: the whole point of the fake arena is validating against the real
+// protocol surface, so if the allowlist ever changes, this must move with it
+// instead of silently drifting into testing a stale set of endpoints.
+const SOCKET_PATHS: readonly string[] = ALLOWED_SOCKETS;
 
 const TEAMS = {
   R1: { Id: 846, Nickname: 'The Funky Monkeys' },

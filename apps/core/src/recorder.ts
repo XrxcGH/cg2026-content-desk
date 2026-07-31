@@ -143,11 +143,23 @@ export class Recorder {
     this.#stopping = true;
     for (const t of this.#timers) clearTimeout(t);
     this.#timers.clear();
-    // 'q' asks ffmpeg to finalise the current segment; SIGKILL would leave the
-    // last file unplayable, which is exactly the moment you'd want it.
-    for (const [, proc] of this.#procs) proc.kill('SIGTERM');
+
+    // 'q' on ffmpeg's stdin asks it to finalise the current segment cleanly;
+    // SIGKILL would leave the last file unplayable, which is exactly the
+    // moment you'd want it. A raw kill signal is not a substitute for this:
+    // on Windows, Node's kill('SIGTERM') has no graceful effect at all, since
+    // Windows has no real POSIX signals and terminates the process abruptly,
+    // same as SIGKILL. Fall back to the signal only if stdin isn't usable.
+    const ids = [...this.#procs.keys()];
+    for (const [, proc] of this.#procs) {
+      if (proc.stdin?.writable) proc.stdin.write('q');
+      else proc.kill('SIGTERM');
+    }
     await new Promise(r => setTimeout(r, 400));
-    for (const [, proc] of this.#procs) if (!proc.killed) proc.kill('SIGKILL');
+    // Anything still tracked after the wait didn't finish on its own: the
+    // exit handler removes an id the moment its process actually quits (see
+    // #spawn), so this checks real exit state rather than "was a kill sent".
+    for (const id of ids) this.#procs.get(id)?.kill('SIGKILL');
     this.#procs.clear();
   }
 }
