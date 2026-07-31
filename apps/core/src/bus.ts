@@ -65,8 +65,8 @@ export class EventBus {
   }
 
   /**
-   * Phase boundaries have to fire even when nothing else is happening —
-   * endgame lockdown and the auto-end marker are both time-driven, not
+   * Phase boundaries have to fire even when nothing else is happening.
+   * Endgame lockdown and the auto-end marker are both time-driven, not
    * event-driven. Called at 10Hz by the server.
    */
   advance(now = Date.now()): void {

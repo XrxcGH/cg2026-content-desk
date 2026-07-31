@@ -1,5 +1,5 @@
 /**
- * Match clock. The single continuous axis everything keys off — replay
+ * Match clock. The single continuous axis everything keys off: replay
  * scrubbing, auto markers, post-match cards. See docs/02-architecture.md.
  *
  *   -20 .. 0    AUTO
@@ -33,13 +33,13 @@ export const PHASE_LABEL: Record<Phase, string> = {
  * Shifts 1-4 they alternate.
  *
  * The alternation is the AUTO LOSER's hub on odd shifts and the winner's on
- * even shifts — verified against Cheesy Arena's `Hub.isShiftActive`, which
+ * even shifts, verified against Cheesy Arena's `Hub.isShiftActive`, which
  * returns `!WonAuto` for Shift1/Shift3 and `WonAuto` for Shift2/Shift4. It
  * reads backwards at first glance, which is exactly why it is worth stating:
  * winning auto buys you the LATER shifts, not the immediate ones.
  *
  * This is only a fallback, and a lossy one. Cheesy decides the auto winner on
- * AUTO FUEL COUNT ALONE — tower climbs don't count — and when auto ends level
+ * AUTO FUEL COUNT ALONE (tower climbs don't count), and when auto ends level
  * it flips a coin (`redWonAuto = rand.Intn(2) == 1`). So no local inference can
  * be right on a tied auto. When the bridge is up we take hub state straight
  * from the field (DeskState.hubAuthoritative); this exists only for desk-only

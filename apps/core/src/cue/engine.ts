@@ -5,7 +5,7 @@
  *
  *   1. Manual always wins. Every cue has its own autopilot toggle, so the
  *      producer can trust the parts that work and drive the parts that don't.
- *      A global on/off would be useless — on day one you trust nothing, and by
+ *      A global on/off would be useless: on day one you trust nothing, and by
  *      Sunday you trust most of it.
  *
  *   2. A disabled cue still reports that it WOULD have fired. That is what
@@ -41,7 +41,7 @@ export interface CueStatus {
   does: string;
   autopilot: boolean;
   firedAt: number | null;
-  /** Times it matched while switched off — "it would have been right N times". */
+  /** Times it matched while switched off ("it would have been right N times"). */
   wouldHaveFired: number;
   lastError: string | null;
 }
@@ -76,8 +76,8 @@ export function defaultCues(): Cue[] {
     {
       id: 'armed',
       name: 'Armed',
-      does: 'Cut to the field and bring the score bar in at prestart.',
-      when: ev => ev.type === 'match.prestart' || ev.type === 'match.armed',
+      does: 'Cut to the field and bring the score bar in when the field goes ready, before the countdown.',
+      when: ev => ev.type === 'match.armed',
       run: async ctx => {
         ctx.bus.emit({ type: 'screen.change', source: 'cue', payload: { screen: 'match' } });
         await ctx.scene('match');
@@ -114,7 +114,7 @@ export function defaultCues(): Cue[] {
     {
       id: 'result',
       name: 'Score reveal',
-      does: 'Reveal the final score, RP pips, and ranking movement.',
+      does: 'Reveal the final score, RP badges, and ranking movement.',
       when: ev => ev.type === 'match.score_posted',
       run: async ctx => {
         ctx.bus.emit({ type: 'screen.change', source: 'cue', payload: { screen: 'score' } });
@@ -226,6 +226,16 @@ export class CueEngine {
       state: this.#bus.state,
       scene: async name => {
         const sceneName = this.#scenes[name];
+        // The community's #1 production rule: program never cuts away from
+        // the full-field shot while a match is LIVE. "Every close-up action
+        // stream ever missed the cool stuff." Autopilot honors the lock;
+        // operator-driven events (manual fire, the replay console) still win.
+        const live = this.#bus.state.matchStartedAt !== null;
+        const operatorDriven = event.source === 'manual' || event.source === 'replay';
+        if (live && !operatorDriven && name !== 'match') {
+          console.log(`[cue] held scene "${sceneName}": match live, wide-shot lock`);
+          return;
+        }
         this.#bus.emit({ type: 'scene.change', source: 'cue', payload: { scene: sceneName } });
         // A missing OBS is not a failure. The graphics still switch; only the
         // camera cut is lost, and the switcher operator covers that.

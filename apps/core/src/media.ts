@@ -1,10 +1,10 @@
 /**
- * Team media library — robot cutouts for the pre-match alliance overview.
+ * Team media library: robot cutouts for the pre-match alliance overview.
  * See docs/07-team-media.md.
  *
  * The validation here exists because of one specific, predictable failure:
  * most FRC robots are bare aluminium and white polycarbonate, shot on a white
- * backdrop, so an automated background remover eats holes in them — and you
+ * backdrop, so an automated background remover eats holes in them, and you
  * don't notice until it's on a screen at 1080p. Catching a bad cutout at
  * upload time on Friday is worth a lot more than catching it Sunday.
  */
@@ -27,8 +27,8 @@ export type Manifest = Record<number, RobotMedia>;
 const WIDTHS = [400, 800, 1600] as const;
 
 // ---------------------------------------------------------------------------
-// PNG header parsing. Pure JS so the single most important check — "does this
-// image even have an alpha channel" — works with no native dependency.
+// PNG header parsing. Pure JS so the single most important check ("does this
+// image even have an alpha channel") works with no native dependency.
 // ---------------------------------------------------------------------------
 
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -59,7 +59,7 @@ async function getSharp(): Promise<Sharp | null> {
     sharpMod = (await import('sharp')).default as unknown as Sharp;
   } catch {
     sharpMod = null;
-    console.warn('[media] sharp unavailable — uploads are stored as-is, without ' +
+    console.warn('[media] sharp unavailable: uploads are stored as-is, without ' +
       'trimming, resizing, or the opacity check. Run `npm i sharp` before the event.');
   }
   return sharpMod;
@@ -73,7 +73,7 @@ export class MediaLibrary {
 
   get manifest(): Manifest { return this.#manifest; }
 
-  /** Rebuild from disk on boot — the manifest file is a cache, not the truth. */
+  /** Rebuild from disk on boot: the manifest file is a cache, not the truth. */
   async scan(): Promise<void> {
     const teamsDir = join(this.#root, 'teams');
     await mkdir(teamsDir, { recursive: true });
@@ -88,7 +88,7 @@ export class MediaLibrary {
           await readFile(join(teamsDir, entry.name, 'meta.json'), 'utf8'),
         ) as RobotMedia;
         next[team] = meta;
-      } catch { /* no meta yet — team dir exists but nothing usable in it */ }
+      } catch { /* no meta yet: team dir exists but nothing usable in it */ }
     }
 
     this.#manifest = next;
@@ -106,7 +106,7 @@ export class MediaLibrary {
 
     if (!header) {
       throw new Error('Not a PNG. The robot photo needs its background removed ' +
-        'and saved as a PNG with transparency — a JPEG can\'t hold one.');
+        'and saved as a PNG with transparency. A JPEG can\'t hold one.');
     }
     if (!header.hasAlpha) {
       throw new Error('This PNG has no alpha channel, so the background hasn\'t ' +
@@ -128,7 +128,7 @@ export class MediaLibrary {
       const img = sharp(buf, { failOn: 'none' });
 
       // Trim to the alpha bounding box, then record real dimensions so the
-      // overview can normalise by HEIGHT — normalising by width puts a robot
+      // overview can normalise by HEIGHT: normalising by width puts a robot
       // the size of a bus next to one the size of a shoebox.
       const trimmed = await img.trim({ threshold: 1 }).png().toBuffer({ resolveWithObject: true });
       w = trimmed.info.width;
@@ -146,7 +146,7 @@ export class MediaLibrary {
           'dark background before trusting it.');
       } else if (area > 0.995) {
         warnings.push('Almost no transparency anywhere in this image. It may not ' +
-          'have been cut out — worth a second look.');
+          'have been cut out. Worth a second look.');
       }
 
       await writeFile(join(dir, `robot.v${version}.png`), trimmed.data);
@@ -157,7 +157,7 @@ export class MediaLibrary {
       }
     } else {
       await writeFile(join(dir, `robot.v${version}.png`), buf);
-      warnings.push('Stored without processing — sharp is not installed.');
+      warnings.push('Stored without processing because sharp is not installed.');
     }
 
     const media: RobotMedia = {
@@ -193,7 +193,7 @@ export class MediaLibrary {
       for (let x = 0; x < w; x++) {
         const onTop = y < band;
         const onSide = x < band || x >= w - band;
-        // Bottom edge deliberately excluded — a robot sits on its floor line.
+        // Bottom edge deliberately excluded, since a robot sits on its floor line.
         if (!onTop && !onSide) continue;
         ringTotal++;
         if (alphaAt(x, y) > OPAQUE) ring++;

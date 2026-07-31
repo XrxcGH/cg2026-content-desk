@@ -22,7 +22,7 @@ async function isExecutable(p: string): Promise<boolean> {
 }
 
 /**
- * Look on PATH first, then in winget's package directory — winget updates PATH
+ * Look on PATH first, then in winget's package directory: winget updates PATH
  * for *new* shells only, so a freshly-installed ffmpeg is invisible to a
  * long-running server until it restarts. Finding it anyway avoids a confusing
  * "not installed" error right after installing it.
@@ -47,7 +47,7 @@ export async function findFfmpeg(explicitDir?: string): Promise<FfmpegTools | nu
         }
       }
       candidates.push(join(local, 'Microsoft', 'WinGet', 'Links'));
-    } catch { /* no winget packages — fine */ }
+    } catch { /* no winget packages, fine */ }
   }
 
   for (const dir of candidates) {
@@ -76,7 +76,7 @@ export function run(bin: string, args: string[], timeoutMs = 60_000): Promise<Ru
 
 /**
  * Actually encode two frames with the named encoder. Returns null on success,
- * or the reason it failed — which is worth surfacing verbatim, because
+ * or the reason it failed, which is worth surfacing verbatim, because
  * "Driver does not support the required nvenc API version" tells an operator
  * exactly what to do and "encoder unavailable" does not.
  */
@@ -118,7 +118,7 @@ export async function chooseEncoder(ffmpeg: string, preferred?: string): Promise
       console.log(`[ffmpeg] encoder: ${c.encoder} (${c.reason})`);
       return c;
     }
-    console.warn(`[ffmpeg] ${c.encoder} unavailable — ${failure}`);
+    console.warn(`[ffmpeg] ${c.encoder} unavailable: ${failure}`);
   }
 
   // Nothing worked, which shouldn't happen since libx264 is in every build.

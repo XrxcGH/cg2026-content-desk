@@ -71,3 +71,18 @@ test('a set is decided at best-of-three', () => {
   assert.equal(setWinner({ ...base, scores: [2, 1] }, 5), null);
   assert.equal(setWinner({ ...base, scores: [3, 1] }, 5)?.id, 'p1');
 });
+
+test('a free-for-all never auto-completes; a versus set still does', () => {
+  const ffa = {
+    id: 's1', game: 'pacman' as const, round: 'Party 1',
+    players: ['a', 'b', 'c', 'd'].map(id => ({ id, name: id })),
+    scores: [9, 2, 5, 2],
+    state: 'live' as const, scoreConfidence: 'authoritative' as const,
+  };
+  // 9 is far past any best-of threshold, but with 4 players nobody "wins" a
+  // set automatically: a Pac-Man party ends when the operator ends it.
+  assert.equal(setWinner(ffa), null);
+
+  const versus = { ...ffa, players: ffa.players.slice(0, 2), scores: [2, 0] };
+  assert.equal(setWinner(versus)?.id, 'a');
+});

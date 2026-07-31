@@ -125,7 +125,7 @@ export class Recorder {
       // but one that is coming back should be picked up quickly.
       const wait = Math.min(15_000, (this.#backoff.get(src.id) ?? 500) * 2);
       this.#backoff.set(src.id, wait);
-      console.warn(`[rec] ${src.id} stopped (${st.lastError}) — retrying in ${wait}ms`);
+      console.warn(`[rec] ${src.id} stopped (${st.lastError}), retrying in ${wait}ms`);
 
       const t = setTimeout(() => { this.#timers.delete(t); this.#spawn(src); }, wait);
       this.#timers.add(t);

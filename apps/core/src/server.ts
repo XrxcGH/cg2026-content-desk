@@ -6,13 +6,14 @@
  */
 
 import { createReadStream } from 'node:fs';
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { EventBus, EmitInit } from './bus.ts';
 import type { MediaLibrary } from './media.ts';
 import type { Recorder } from './recorder.ts';
+import { chapterText, chaptersFrom } from './chapters.ts';
 import { matchCut, type ClipStore, type Range } from './clips.ts';
 import { markersSince } from './markers.ts';
 import type { PublishQueue } from './publish/queue.ts';
@@ -22,6 +23,7 @@ import { ALLOWED_PATHS, ALLOWED_SOCKETS } from './ingest/cheesy/client.ts';
 import type { CueEngine } from './cue/engine.ts';
 import type { ObsClient } from './cue/obs.ts';
 import type { ArcadeStore } from './arcade/store.ts';
+import type { TriviaStore } from './trivia/store.ts';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -32,18 +34,24 @@ const MIME: Record<string, string> = {
   '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.ico': 'image/x-icon',
 };
 
-/** Surfaces, in the order they appear on the index page. */
+/** Surfaces, grouped the way an operator thinks about them. */
 export const SURFACES = [
-  { id: 'program', name: 'Program overlay', note: 'OBS Browser Source, 1920x1080. Overview, match, and final score in one — screens switch on state, so the switcher never changes sources.' },
-  { id: 'desk',    name: 'Desk console',    note: 'Keyboard-first. Runs the whole show with every integration dead.' },
-  { id: 'media',   name: 'Team media',      note: 'Upload robot cutouts for the alliance overview.' },
-  { id: 'draw',    name: 'Telestrator pad', note: 'Tablet + stylus. Draws on the frozen frame the audience is seeing.' },
-  { id: 'tele',    name: 'Telestrator render', note: 'OBS Browser Source, layered over the replay. Strokes only, transparent.' },
-  { id: 'replay',  name: 'Replay console',  note: 'Match-clock timeline with automatic markers. Cut, preview, send to the analyst.' },
-  { id: 'arcade',  name: 'Arcade overlay',  note: 'OBS Browser Source. Smash sets and Mario Kart standings for the gaps.' },
-  { id: 'arcadedesk', name: 'Arcade console', note: 'Run the side tournament. Operator-authoritative scoring.' },
-  { id: 'side',    name: 'Side screen',     note: 'Venue TVs. On deck and rankings, rotating on a timer. Venue scale by default.' },
-  { id: 'cards',   name: 'Post-match cards', note: '1080x1080 result graphics, auto-built when the score posts. Download or save to the desk.' },
+  { id: 'program', group: 'On air', name: 'Program overlay', note: 'The broadcast graphic. One OBS Browser Source, 1920x1080. Holds every screen: alliance overview, live match, final score, alliance selection board, the how-to-watch explainer loop, analysis strap and arcade bumper. They switch on their own, or take one by hand from the desk.' },
+  { id: 'tele',    group: 'On air', name: 'Telestrator render', note: 'The analyst\'s drawings, transparent. Layer it over the replay in OBS.' },
+  { id: 'arcade',  group: 'On air', name: 'Arcade overlay',  note: 'Game sets and standings for the gaps between matches.' },
+  { id: 'trivia',  group: 'On air', name: 'Trivia overlay',  note: 'Crowd trivia: question, countdown, answers, leaderboard.' },
+  { id: 'side',    group: 'On air', name: 'Side screen',     note: 'For the venue TVs: who plays next, current rankings. Rotates on its own.' },
+  { id: 'desk',    group: 'Run the show', name: 'Desk console', note: 'The main control panel. Runs everything, keyboard-first, even with no field connection.' },
+  { id: 'talent',  group: 'Run the show', name: 'Talent view', note: 'The announcer\'s tablet: teams, ranks, live RP progress in words, local pronunciation notes.' },
+  { id: 'replay',  group: 'Run the show', name: 'Replay console', note: 'Cut replays off the match timeline. Interesting moments are already marked.' },
+  { id: 'draw',    group: 'Run the show', name: 'Telestrator pad', note: 'For the analyst\'s tablet. Draw on the frame the audience is seeing.' },
+  { id: 'arcadedesk', group: 'Run the show', name: 'Arcade console', note: 'Score the game sets by hand. 2 players versus, 3-4 free-for-all.' },
+  { id: 'triviadesk', group: 'Run the show', name: 'Trivia host', note: 'Open a question, reveal the answer, next. That\'s the whole job.' },
+  { id: 'var',     group: 'Run the show', name: 'Head referee review', note: 'Frame-step the recording. Read-only: no cut, no air, no publish, no route to the field.' },
+  { id: 'media',   group: 'Before the event', name: 'Team media', note: 'Upload robot photos for the pre-match overview. Missing photos fall back gracefully.' },
+  { id: 'cards',   group: 'Before the event', name: 'Post-match cards', note: 'Square result graphics for social. They build themselves when a score posts.' },
+  { id: 'quiz',    group: 'For the audience', name: 'Trivia play', note: 'The phone page the crowd joins from. The trivia overlay shows this URL.' },
+  { id: 'next',    group: 'For the audience', name: 'When do we play?', note: 'Per-team schedule on any phone, with honest drift-adjusted start estimates. Side screens show its QR.' },
 ] as const;
 
 export interface ServerOpts {
@@ -52,7 +60,7 @@ export interface ServerOpts {
   root: string;
   port: number;
   host: string;
-  /** Absent when ffmpeg isn't installed — everything else still runs. */
+  /** Absent when ffmpeg isn't installed. Everything else still runs. */
   recorder?: Recorder | null;
   clips?: ClipStore | null;
   publish?: PublishQueue | null;
@@ -62,12 +70,40 @@ export interface ServerOpts {
   cues?: CueEngine | null;
   obs?: ObsClient | null;
   arcade?: ArcadeStore | null;
+  trivia?: TriviaStore | null;
+  /** LAN-reachable base URL, e.g. "http://10.0.100.23:8720", for QR codes. */
+  lanBase?: string | null;
 }
 
 export function startServer(opts: ServerOpts) {
   const { bus, media, root, port, host, recorder = null, clips = null,
           publish = null, config = null, cheesy = null, cues = null, obs = null,
-          arcade = null } = opts;
+          arcade = null, trivia = null, lanBase = null } = opts;
+
+  /**
+   * Write the question bank back to `data/trivia.json`.
+   *
+   * Same atomic write the publish queue uses: a torn bank file after a power
+   * cut at a venue would lose the whole set. Returns its argument so the
+   * endpoints can save and respond in one expression.
+   */
+  async function saveBank<T>(result: T): Promise<T> {
+    if (!trivia) return result;
+    const file = join(root, 'data', 'trivia.json');
+    // Strip the transient `live` flag; the file is a plain question array.
+    const bank = trivia.bank().map(({ live, ...q }) => q);
+    try {
+      await mkdir(join(root, 'data'), { recursive: true });
+      const tmp = `${file}.tmp`;
+      await writeFile(tmp, JSON.stringify(bank, null, 2));
+      await rename(tmp, file);
+    } catch (err) {
+      // The edit is already live in memory; losing the file is not worth
+      // failing the request the host just made mid-show.
+      console.warn('[trivia] could not save the bank:', (err as Error).message);
+    }
+    return result;
+  }
 
   /** Never let a path escape its mount point. */
   function safeJoin(base: string, urlPath: string): string | null {
@@ -121,6 +157,9 @@ export function startServer(opts: ServerOpts) {
     try {
       // ---- API ----------------------------------------------------------
       if (path === '/api/state') return json(res, 200, bus.state);
+      // The LAN-reachable base URL: what phone-facing QR codes must encode
+      // (a surface's own location.host may be localhost on the desk box).
+      if (path === '/api/urls') return json(res, 200, { base: lanBase });
       if (path === '/api/media/manifest') return json(res, 200, media.manifest);
       if (path === '/api/events/recent') return json(res, 200, bus.recent.slice(-200));
 
@@ -133,9 +172,9 @@ export function startServer(opts: ServerOpts) {
       }
 
       // Extract a clip. Used by the replay console for replays, and later by
-      // the publish queue for match videos — same operation, different bounds.
+      // the publish queue for match videos: same operation, different bounds.
       if (path === '/api/clips' && req.method === 'POST') {
-        if (!clips) return json(res, 503, { error: 'Recording is not available — ffmpeg not found.' });
+        if (!clips) return json(res, 503, { error: 'Recording is not available: ffmpeg not found.' });
         try {
           const body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8')) as {
             sourceId?: string; fromMs?: number; toMs?: number;
@@ -161,10 +200,10 @@ export function startServer(opts: ServerOpts) {
       /**
        * Cut the current (or just-finished) match as a broadcast-framed video:
        * pre-roll over the announcer's countdown, the match, then a jump to the
-       * score reveal — skipping however long the referees spent on fouls.
+       * score reveal, skipping however long the referees spent on fouls.
        */
       if (path === '/api/clips/match' && req.method === 'POST') {
-        if (!clips) return json(res, 503, { error: 'Recording is not available — ffmpeg not found.' });
+        if (!clips) return json(res, 503, { error: 'Recording is not available: ffmpeg not found.' });
         try {
           const body = JSON.parse((await readBody(req, 8 * 1024)).toString('utf8')) as
             { sourceId?: string } | null;
@@ -227,6 +266,60 @@ export function startServer(opts: ServerOpts) {
         }
       }
 
+      // ---- crowd trivia ----------------------------------------------------
+      // The answer to an open question never appears in any of these payloads;
+      // scoring is entirely server-side. See trivia/store.ts.
+      if (path === '/api/trivia') return json(res, 200, trivia?.snapshot() ?? null);
+
+      // The bank with answers, for the host console's editor only. The phone
+      // view is served by /api/trivia/play, which never carries an unrevealed
+      // answer, so nothing here widens what a player can see.
+      if (path === '/api/trivia/bank') {
+        if (!trivia) return json(res, 503, { error: 'Trivia is not available.' });
+        return json(res, 200, trivia.bank());
+      }
+
+      if (path === '/api/trivia/play') {
+        if (!trivia) return json(res, 503, { error: 'Trivia is not available.' });
+        return json(res, 200, trivia.playView(url.searchParams.get('player') ?? undefined));
+      }
+
+      if (path.startsWith('/api/trivia/') && req.method === 'POST') {
+        if (!trivia) return json(res, 503, { error: 'Trivia is not available.' });
+        const action = path.slice('/api/trivia/'.length);
+        try {
+          const raw = await readBody(req, 16 * 1024);
+          const body = raw.length ? JSON.parse(raw.toString('utf8')) as Record<string, unknown> : {};
+          switch (action) {
+            case 'join':
+              return json(res, 200, trivia.join(String(body['name'] ?? ''), Number(body['team']) || undefined));
+            case 'answer':
+              return json(res, 200, trivia.answer(String(body['playerId'] ?? ''), Number(body['choice'])));
+            case 'open':   return json(res, 200, trivia.open(Number(body['seconds']) || 20));
+            case 'pick':   return json(res, 200, trivia.pick());
+            // Editing the bank. Every one of these persists, because a host
+            // who fixes a typo between matches should not lose it to a
+            // restart, and restarts happen at events.
+            case 'question/add':
+              return json(res, 200, await saveBank(trivia.addQuestion(body)));
+            case 'question/edit':
+              return json(res, 200,
+                await saveBank(trivia.editQuestion(Number(body['index']), body)));
+            case 'question/remove':
+              return json(res, 200, await saveBank(trivia.removeQuestion(Number(body['index']))));
+            case 'question/move':
+              return json(res, 200, await saveBank(
+                trivia.moveQuestion(Number(body['index']), Number(body['delta']) || 0)));
+            case 'reveal': return json(res, 200, trivia.reveal());
+            case 'next':   return json(res, 200, trivia.next());
+            case 'reset':  return json(res, 200, trivia.reset(body['hard'] === true));
+            default: return json(res, 404, { error: `Unknown trivia action "${action}"` });
+          }
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
       // ---- show automation -------------------------------------------------
       if (path === '/api/cues') {
         return json(res, 200, {
@@ -251,7 +344,7 @@ export function startServer(opts: ServerOpts) {
           return json(res, ok ? 200 : 404, ok ? { cues: cues.status } : { error: `No cue "${id}"` });
         }
         if (action === 'fire') {
-          // Manual always wins — fires regardless of the autopilot setting.
+          // Manual always wins, firing regardless of the autopilot setting.
           const ok = await cues.fire(id);
           return json(res, ok ? 200 : 404, ok ? { ok: true } : { error: `No cue "${id}"` });
         }
@@ -284,7 +377,7 @@ export function startServer(opts: ServerOpts) {
       }
 
       // ---- publishing ----------------------------------------------------
-      // Never returns a credential — only whether each one is present.
+      // Never returns a credential, only whether each one is present.
       if (path === '/api/publish') {
         return json(res, 200, {
           available: !!publish,
@@ -302,10 +395,28 @@ export function startServer(opts: ServerOpts) {
           if (action === 'match') {
             const item = await publish.queueMatch();
             return json(res, item ? 200 : 409,
-              item ?? { error: 'Nothing to queue — no match has started, or it is already queued.' });
+              item ?? { error: 'Nothing to queue: no match has started, or it is already queued.' });
           }
           if (action === 'release') {
             return json(res, 200, { released: await publish.release() });
+          }
+          // The parts of the day that are not matches: alliance selection, the
+          // awards ceremony, a single award. The operator marks the bounds,
+          // because nothing on the bus knows when a ceremony started.
+          if (action === 'segment') {
+            const body = JSON.parse((await readBody(req, 8 * 1024)).toString('utf8')) as {
+              segment?: string; fromMs?: number; toMs?: number; note?: string; sourceId?: string;
+            };
+            if (!body.segment || !body.fromMs || !body.toMs) {
+              return json(res, 400, { error: 'segment, fromMs and toMs are required' });
+            }
+            return json(res, 200, await publish.queueSegment({
+              segment: body.segment,
+              fromMs: body.fromMs,
+              toMs: body.toMs,
+              note: body.note,
+              sourceId: body.sourceId,
+            }));
           }
           if (action.startsWith('retry/')) {
             await publish.retry(action.slice('retry/'.length));
@@ -317,6 +428,31 @@ export function startServer(opts: ServerOpts) {
         }
       }
 
+      /**
+       * Day-VOD chapters, as text to paste into a YouTube description.
+       *
+       * `startedAt` is when the recording began, which only the operator
+       * knows: the stream starts before the desk does, and often before the
+       * first match of the day is even loaded. Defaults to the first event we
+       * still hold, which is right when the desk was started with the stream.
+       */
+      if (path === '/api/chapters') {
+        const startedAt = Number(url.searchParams.get('startedAt'))
+          || bus.recent[0]?.ts || Date.now();
+        const list = chaptersFrom(bus.recent, startedAt, {
+          openingTitle: url.searchParams.get('title') || undefined,
+        });
+        const text = chapterText(list);
+        return json(res, 200, {
+          startedAt,
+          chapters: list,
+          text,
+          // An honest empty: YouTube silently ignores a list this short, so
+          // saying "not enough yet" beats handing over something inert.
+          usable: text !== '',
+        });
+      }
+
       if (path === '/api/markers') {
         const since = Number(url.searchParams.get('since') || 0)
           || (bus.lastMatchStartedAt ?? Date.now() - 20 * 60_000) - 60_000;
@@ -325,7 +461,7 @@ export function startServer(opts: ServerOpts) {
 
       // Grab a frame and hand it to the telestrator as its backdrop.
       if (path === '/api/frame' && req.method === 'POST') {
-        if (!clips) return json(res, 503, { error: 'Recording is not available — ffmpeg not found.' });
+        if (!clips) return json(res, 503, { error: 'Recording is not available: ffmpeg not found.' });
         try {
           const body = JSON.parse((await readBody(req, 8 * 1024)).toString('utf8')) as
             { sourceId?: string; atMs?: number; analyst?: string; send?: boolean };
@@ -374,8 +510,8 @@ export function startServer(opts: ServerOpts) {
         const name = (raw.replace(/[^\w.-]+/g, '_').slice(0, 80) || 'match');
         try {
           const body = await readBody(req, 8 * 1024 * 1024);
-          // Reject anything that isn't actually a PNG — the byte we serve back
-          // as image/png must be one.
+          // Reject anything that isn't actually a PNG, since the byte we serve
+          // back as image/png must be one.
           if (body.length < 8 || body.readUInt32BE(0) !== 0x89504e47) {
             return json(res, 422, { error: 'Body is not a PNG.' });
           }
@@ -430,27 +566,33 @@ export function startServer(opts: ServerOpts) {
   });
 
   function sendIndex(res: ServerResponse): void {
-    const rows = SURFACES.map(s =>
-      `<a class="row" href="/s/${s.id}"><b>${s.name}</b><code>/s/${s.id}</code><i>${s.note}</i></a>`,
-    ).join('');
-    const html = `<!doctype html><html data-surface="light"><head><meta charset="utf-8">
+    const groups = [...new Set(SURFACES.map(s => s.group))];
+    const sections = groups.map(g =>
+      `<h2>${g}</h2>` + SURFACES.filter(s => s.group === g).map(s =>
+        `<a class="row" href="/s/${s.id}"><b>${s.name}</b><code>/s/${s.id}</code><i>${s.note}</i></a>`,
+      ).join('')).join('');
+    const html = `<!doctype html><html lang="en" data-surface="console"><head><meta charset="utf-8">
 <title>CalGames 2026 Content Desk</title>
 <link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
 <style>
 body{padding:48px;max-width:860px;margin:0 auto;font-size:var(--font-ui-body)}
 h1{font-size:38px;font-variation-settings:"wdth" 118;margin:0 0 4px}
-p.sub{color:var(--text-dim);margin:0 0 32px}
+p.sub{color:var(--text-dim);margin:0 0 26px}
+h2{font-family:var(--font-cond);font-weight:700;font-size:13px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--accent);margin:30px 0 10px}
 .row{display:grid;grid-template-columns:1fr auto;gap:4px 16px;padding:16px 20px;
   margin-bottom:10px;background:var(--surface-raised);text-decoration:none;color:var(--text);
   clip-path:var(--chamfer);--ch:12px;transition:background var(--dur-tap) linear}
-.row:hover{background:var(--surface-sunken)}
+.row:hover{background:var(--btn-hover)}
+.row:focus-visible{outline:3px solid var(--focus-ring)}
 .row b{font-size:19px}
 .row code{font-family:var(--font-mono);color:var(--accent);font-size:13px}
 .row i{grid-column:1/-1;color:var(--text-dim);font-style:normal;font-size:13px}
 </style></head><body>
 <h1>CalGames 2026 Content Desk</h1>
 <p class="sub">Core is running. Open a surface below, or point an OBS Browser Source at it.</p>
-${rows}</body></html>`;
+${sections}</body></html>`;
     res.writeHead(200, { 'Content-Type': MIME['.html']!, 'Cache-Control': 'no-store' });
     res.end(html);
   }
@@ -469,7 +611,7 @@ ${rows}</body></html>`;
       let msg: { t?: string; init?: EmitInit; channel?: string; data?: unknown };
       try { msg = JSON.parse(String(raw)) as typeof msg; } catch { return; }
 
-      // Surfaces may inject events. Source is forced to 'manual' — a surface
+      // Surfaces may inject events. Source is forced to 'manual', so a surface
       // can never claim to be the field.
       if (msg.t === 'emit' && msg.init?.type) {
         bus.emit({ ...msg.init, source: 'manual' });

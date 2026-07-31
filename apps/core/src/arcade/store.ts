@@ -11,7 +11,8 @@
 import type { EventBus } from '../bus.ts';
 import {
   standings, setWinner,
-  type ArcadeGame, type ArcadePlayer, type ArcadeSet, type GrandPrix, type Standing,
+  type ArcadeGame, type ArcadePlayer, type ArcadeSet, type BracketSet,
+  type GrandPrix, type Standing,
 } from './model.ts';
 
 export interface ArcadeSnapshot {
@@ -20,6 +21,8 @@ export interface ArcadeSnapshot {
   standings: Standing[];
   /** Drives the "up next" line during a break. */
   upNext: string;
+  /** Bracket metadata from start.gg: round labels and entrants, never scores. */
+  bracket: BracketSet[];
 }
 
 export class ArcadeStore {
@@ -27,6 +30,7 @@ export class ArcadeStore {
   #set: ArcadeSet | null = null;
   #gp: GrandPrix | null = null;
   #upNext = '';
+  #bracket: BracketSet[] = [];
 
   constructor(bus: EventBus) { this.#bus = bus; }
 
@@ -36,16 +40,33 @@ export class ArcadeStore {
       gp: this.#gp,
       standings: this.#gp ? standings(this.#gp) : [],
       upNext: this.#upNext,
+      bracket: this.#bracket,
     };
   }
 
-  #publish(type: 'arcade.set_start' | 'arcade.score' | 'arcade.set_end' | 'arcade.bracket_updated'): void {
-    this.#bus.emit({ type, source: 'manual', payload: this.snapshot });
+  /**
+   * Replace the bracket metadata (from the start.gg adapter). External data,
+   * not operator state; `clear()` leaves it alone, and it never touches the
+   * live set or its scores.
+   */
+  setBracket(sets: BracketSet[]): void {
+    this.#bracket = sets;
+    this.#publish('arcade.bracket_updated', 'startgg');
+  }
+
+  #publish(
+    type: 'arcade.set_start' | 'arcade.score' | 'arcade.set_end' | 'arcade.bracket_updated',
+    source: 'manual' | 'startgg' = 'manual',
+  ): void {
+    this.#bus.emit({ type, source, payload: this.snapshot });
   }
 
   startSet(init: {
     game: ArcadeGame; round: string; players: ArcadePlayer[];
   }): ArcadeSet {
+    if (init.players.length < 2 || init.players.length > 4) {
+      throw new Error('A set takes 2 to 4 players.');
+    }
     this.#set = {
       id: `s${Date.now().toString(36)}`,
       game: init.game,
@@ -59,7 +80,7 @@ export class ArcadeStore {
     return this.#set;
   }
 
-  /** Operator adjusts a score. Clamped at zero — negatives are always a typo. */
+  /** Operator adjusts a score. Clamped at zero (negatives are always a typo). */
   score(playerIndex: number, delta: number): ArcadeSet | null {
     if (!this.#set) return null;
     const current = this.#set.scores[playerIndex];

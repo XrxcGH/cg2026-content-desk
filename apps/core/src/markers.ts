@@ -2,7 +2,7 @@
  * Automatic replay markers. See docs/04-replay-and-telestrator.md.
  *
  * The replay operator should never hunt. Automation catches the scoring; a
- * human catches the *interesting*. This module is the first half — it watches
+ * human catches the *interesting*. This module is the first half: it watches
  * the bus and drops a marker whenever something happened that someone might
  * want to see again.
  *
@@ -86,7 +86,7 @@ export function attachMarkers(bus: EventBus): () => void {
         const p = ev.payload as { alliance: Alliance; field: string; amount: number };
         if (!p || (p.alliance !== 'red' && p.alliance !== 'blue')) break;
 
-        // A climb is worth its own marker regardless of timing — it's the
+        // A climb is worth its own marker regardless of timing: it's the
         // single most replayable thing in REBUILT.
         if (p.field === 'tower' && p.amount > 0) {
           const level = p.amount >= REBUILT.TOWER_TELEOP[3] ? 3
@@ -125,8 +125,8 @@ export function attachMarkers(bus: EventBus): () => void {
       }
 
       case 'arena.status': {
-        // "What happened to 846?" — the marker nobody thinks to hit manually
-        // because it happens while everyone is watching the other end.
+        // "What happened to 846?" This is the marker nobody thinks to hit
+        // manually because it happens while everyone is watching the other end.
         const p = ev.payload as { down?: number[] } | undefined;
         for (const team of p?.down ?? []) {
           mark({ kind: 'robot_down', label: `${team} lost comms`, priority: 2 }, ev.ts);

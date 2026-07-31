@@ -6,7 +6,7 @@
  *
  * Uses the loopback redirect flow (Google retired the out-of-band flow), so it
  * spins a local server, you approve in a browser, and it prints the token. The
- * token is NOT written to config.json automatically — you paste it, so nothing
+ * token is NOT written to config.json automatically. You paste it, so nothing
  * here ever writes a secret to disk on its own.
  */
 
@@ -45,7 +45,7 @@ authUrl.search = new URLSearchParams({
   scope: `${UPLOAD_SCOPE} ${MANAGE_SCOPE}`,
   access_type: 'offline',
   // Without this, Google only returns a refresh token the FIRST time an
-  // account authorises the app — re-running the helper would silently give
+  // account authorises the app. Re-running the helper would silently give
   // you nothing.
   prompt: 'consent',
 }).toString();

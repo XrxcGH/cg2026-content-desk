@@ -7,7 +7,7 @@
  * camera is always recording.
  *
  * The same operation produces replay clips (short, mid-match) and match videos
- * for upload (long, intro through score reveal) — different bounds, one
+ * for upload (long, intro through score reveal). Different bounds, one
  * implementation. See docs/04 and docs/11.
  */
 
@@ -29,8 +29,8 @@ export interface ClipRequest {
   /**
    * One or more ranges, concatenated in order. Multiple ranges exist because a
    * match video is not one continuous pull: the gap between the buzzer and the
-   * score being posted is unbounded — referees deliberating fouls and cards
-   * routinely run minutes — and nobody wants to watch that. See matchCut().
+   * score being posted is unbounded (referees deliberating fouls and cards
+   * routinely run minutes), and nobody wants to watch that. See matchCut().
    */
   ranges: Range[];
   /** Used for the output filename and returned to the caller. */
@@ -41,8 +41,8 @@ export interface ClipRequest {
 
 /**
  * How a match video is framed. Defaults are a starting point to tune against
- * the real venue on Friday — the announcer's cadence and the field's light
- * timing vary.
+ * the real venue on Friday, since the announcer's cadence and the field's
+ * light timing vary.
  */
 export const CUT = {
   /**
@@ -59,7 +59,7 @@ export const CUT = {
   revealMs: 15_000,
   /**
    * If the dead time between the two parts is shorter than this, don't bother
-   * cutting — a jump cut over four seconds looks like a glitch, not an edit.
+   * cutting: a jump cut over four seconds looks like a glitch, not an edit.
    */
   mergeGapMs: 8_000,
 } as const;
@@ -88,8 +88,8 @@ export function matchCut(t: MatchTimes, cfg = CUT): Range[] {
     toMs: t.scorePostedAt + cfg.revealMs,
   };
 
-  // Scoring came through fast enough that the join would be invisible anyway —
-  // run it straight through instead of cutting.
+  // Scoring came through fast enough that the join would be invisible anyway,
+  // so run it straight through instead of cutting.
   if (reveal.fromMs - action.toMs <= cfg.mergeGapMs) {
     return [{ fromMs: action.fromMs, toMs: reveal.toMs }];
   }
@@ -151,7 +151,7 @@ export class ClipStore {
         seconds = cached.seconds;
       } else {
         const probed = await duration(this.#tools.ffprobe, file);
-        // A segment still being written probes as null — skip it rather than
+        // A segment still being written probes as null. Skip it rather than
         // guessing, and pick it up on the next index.
         if (probed === null) continue;
         seconds = probed;
@@ -182,8 +182,8 @@ export class ClipStore {
         `Is the recorder running, and is that window still on disk?`);
     }
 
-    // Trim relative to the first covering segment — the recording almost never
-    // starts exactly on the boundary we want.
+    // Trim relative to the first covering segment, since the recording almost
+    // never starts exactly on the boundary we want.
     const offset = Math.max(0, (fromMs - segs[0]!.startMs) / 1000);
     const wanted = (toMs - fromMs) / 1000;
 
@@ -267,7 +267,7 @@ export class ClipStore {
       await this.#extractRange(sourceId, first, outFile, speed);
     } else {
       // Render each part separately with an accurate seek, then join. All parts
-      // share encoder settings, so the join is a stream copy — no re-encode,
+      // share encoder settings, so the join is a stream copy: no re-encode,
       // no generation loss, and the cut lands exactly where we asked.
       const parts: string[] = [];
       for (const [i, range] of ranges.entries()) {

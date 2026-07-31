@@ -7,7 +7,7 @@
  * Quota note: videos.insert cost dropped from ~1600 units to ~100 in December
  * 2025, so the default 10,000/day project quota supports ~100 uploads a day
  * rather than six. The limit that actually bites is the per-CHANNEL daily
- * upload cap, which is separate and low for unverified channels — use an
+ * upload cap, which is separate and low for unverified channels, so use an
  * established, verified channel.
  */
 
@@ -159,7 +159,7 @@ export class YouTubeClient {
           attempt--;                               // progress isn't a failure
           continue;
         }
-        // 404 means the session expired — start a fresh one and try again.
+        // 404 means the session expired, so start a fresh one and try again.
         if (res.status === 404) {
           sessionUrl = await this.#startSession(meta, size);
           opts.onSession?.(sessionUrl);
@@ -177,7 +177,7 @@ export class YouTubeClient {
     throw new Error('Upload did not complete');
   }
 
-  /** Flip privacy — used to publish only once TBA linking has succeeded. */
+  /** Flip privacy, used to publish only once TBA linking has succeeded. */
   async setPrivacy(videoId: string, privacyStatus: VideoMeta['privacyStatus']): Promise<void> {
     const token = await this.#accessToken();
     const res = await fetch(`${API_URL}/videos?part=status`, {

@@ -7,7 +7,7 @@
  * Saturday.
  *
  * Protocol: Hello(0) -> Identify(1) -> Identified(2), then Request(6) /
- * RequestResponse(7). Events arrive as op 5 and we ignore them — the cue
+ * RequestResponse(7). Events arrive as op 5 and we ignore them: the cue
  * engine drives OBS, not the other way round.
  */
 
@@ -21,7 +21,7 @@ interface Pending { resolve: (data: unknown) => void; reject: (err: Error) => vo
 export interface ObsOpts {
   /** e.g. "127.0.0.1:4455" */
   host: string;
-  /** Read from the environment, never a CLI arg — argv is visible in `ps`. */
+  /** Read from the environment, never a CLI arg (argv is visible in `ps`). */
   password?: string;
   onStatus?: (connected: boolean, detail: string) => void;
 }
@@ -57,7 +57,7 @@ export class ObsClient {
         };
         if (auth) {
           if (!this.#opts.password) {
-            this.#opts.onStatus?.(false, 'OBS requires a password — set OBS_PASSWORD');
+            this.#opts.onStatus?.(false, 'OBS requires a password, set OBS_PASSWORD');
             ws.close();
             return;
           }
@@ -124,6 +124,37 @@ export class ObsClient {
 
   setScene(sceneName: string): Promise<unknown> {
     return this.request('SetCurrentProgramScene', { sceneName });
+  }
+
+  /**
+   * ONE overlay system on air. Sweep every OBS scene and switch off any
+   * source whose name says it renders Cheesy Arena's own overlay pages,
+   * otherwise both scorebugs composite and clip whenever someone drags the
+   * field's audience display into a scene "just to check something".
+   *
+   * The contract is the NAME, because a source name is all OBS exposes:
+   * anything showing a Cheesy page must carry "cheesy" (or "audience
+   * display") in its source name, and the desk keeps it off the program.
+   * Runs at connect and on a slow patrol (see index.ts).
+   */
+  async suppressCheesySources(pattern = /cheesy|audience[ _-]?display/i): Promise<string[]> {
+    const { scenes } = await this.request<{ scenes?: { sceneName?: string }[] }>('GetSceneList');
+    const disabled: string[] = [];
+    for (const scene of scenes ?? []) {
+      if (!scene?.sceneName) continue;
+      const { sceneItems } = await this.request<{
+        sceneItems?: { sceneItemId?: number; sourceName?: string; sceneItemEnabled?: boolean }[];
+      }>('GetSceneItemList', { sceneName: scene.sceneName });
+      for (const item of sceneItems ?? []) {
+        if (item?.sceneItemId === undefined || !item.sourceName) continue;
+        if (!pattern.test(item.sourceName) || item.sceneItemEnabled === false) continue;
+        await this.request('SetSceneItemEnabled', {
+          sceneName: scene.sceneName, sceneItemId: item.sceneItemId, sceneItemEnabled: false,
+        });
+        disabled.push(`${scene.sceneName} / ${item.sourceName}`);
+      }
+    }
+    return disabled;
   }
 
   close(): void {

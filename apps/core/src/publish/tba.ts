@@ -5,7 +5,7 @@
  *
  *   Cheesy Arena owns match data on TBA. We own video only.
  *
- * The match/ranking/award endpoints require the FULL dataset — a partial write
+ * The match/ranking/award endpoints require the FULL dataset: a partial write
  * doesn't merely conflict, it DELETES everything not included. Cheesy Arena
  * publishes those natively, so calling them from here would silently destroy
  * the event's results. Hence a hard path allowlist rather than a convention.
@@ -36,7 +36,7 @@ export type AllowedOp = typeof ALLOWED[number];
 export function assertAllowed(op: string): asserts op is AllowedOp {
   if (!(ALLOWED as readonly string[]).includes(op)) {
     throw new Error(
-      `Refusing to call TBA "${op}". Only ${ALLOWED.join(', ')} are permitted — ` +
+      `Refusing to call TBA "${op}". Only ${ALLOWED.join(', ')} are permitted. ` +
       `Cheesy Arena owns match data on TBA, and the match/ranking/award endpoints ` +
       `require the full dataset, so a partial write would delete everything not included.`,
     );
@@ -49,7 +49,7 @@ export interface TbaAuth { authId: string; authSecret: string }
  * X-TBA-Auth-Sig = md5(authSecret + requestPath + requestBody)
  *
  * The signature covers the path AND the exact body bytes, so the body must be
- * serialised once and both signed and sent — serialise twice and you get
+ * serialised once and both signed and sent; serialise twice and you get
  * intermittent 401s that look like a credentials problem and aren't.
  */
 export function signature(authSecret: string, path: string, body: string): string {
@@ -78,7 +78,7 @@ export class TbaClient {
     if (!this.configured) throw new Error('TBA credentials are not configured (see config.json).');
 
     const path = this.#path(op);
-    // Serialise exactly once — this string is both signed and sent.
+    // Serialise exactly once (this string is both signed and sent).
     const body = JSON.stringify(payload);
 
     const res = await fetch(BASE + path, {
@@ -117,7 +117,7 @@ export class TbaClient {
 }
 
 /**
- * Match keys live in ./naming.ts alongside the title formatting — one place
+ * Match keys live in ./naming.ts alongside the title formatting. One place
  * translates a field-management display name into official naming and its TBA
  * key, so the two can never disagree.
  */

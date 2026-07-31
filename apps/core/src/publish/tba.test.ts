@@ -14,7 +14,7 @@ test('signature matches TBA\'s published test vector', () => {
 
 test('refuses every endpoint outside the video allowlist', () => {
   // Cheesy Arena owns match data on TBA. These endpoints require the FULL
-  // dataset, so calling one would delete every result not included — which is
+  // dataset, so calling one would delete every result not included, which is
   // why this is a hard guard rather than a code-review convention.
   for (const op of ['matches/update', 'matches/delete', 'rankings/update', 'awards/update',
     'alliance_selections/update', 'team_list/update', 'info/update']) {

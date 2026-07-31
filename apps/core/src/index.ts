@@ -1,5 +1,5 @@
 /**
- * CalGames 2026 Content Desk — core.
+ * CalGames 2026 Content Desk, core.
  *
  *   npm run dev                       start, watch, demo driver off
  *   npm start -- --demo               simulated match, for building graphics
@@ -8,15 +8,20 @@
 
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import os from 'node:os';
 import { EventBus, logPathFor } from './bus.ts';
 import { MediaLibrary } from './media.ts';
 import { startServer } from './server.ts';
 import { startDemo } from './demo.ts';
 import { attachMarkers } from './markers.ts';
+import { attachPace } from './pace.ts';
 import { CheesyAdapter } from './ingest/cheesy/adapter.ts';
+import { StartggAdapter } from './ingest/startgg/adapter.ts';
 import { CueEngine } from './cue/engine.ts';
 import { ObsClient } from './cue/obs.ts';
 import { ArcadeStore } from './arcade/store.ts';
+import { TriviaStore } from './trivia/store.ts';
+import { DEFAULT_QUESTIONS } from './trivia/questions.ts';
 import { loadConfig, publishReadiness } from './config.ts';
 import { PublishQueue } from './publish/queue.ts';
 import { chooseEncoder, findFfmpeg } from './ffmpeg.ts';
@@ -47,6 +52,10 @@ await bus.openLog(logPathFor(join(ROOT, 'data', 'events')));
 // The replay operator should never hunt.
 attachMarkers(bus);
 
+// Schedule pace: actual cycle time + behind-schedule estimate, so the side
+// screens can print an honest "est. start" instead of the printed fiction.
+attachPace(bus);
+
 // ---- recording ------------------------------------------------------------
 // Optional. Everything else runs without ffmpeg; only recording and replay
 // need it.
@@ -56,7 +65,7 @@ let clips: ClipStore | null = null;
 
 const tools = await findFfmpeg(arg('ffmpeg-dir') || undefined);
 if (!tools) {
-  console.warn('[core] ffmpeg not found — recording and replay disabled. ' +
+  console.warn('[core] ffmpeg not found, recording and replay disabled. ' +
     '`winget install Gyan.FFmpeg`, then restart this shell.');
 } else {
   const encoder = await chooseEncoder(tools.ffmpeg, arg('encoder') || undefined);
@@ -109,45 +118,119 @@ if (has('cheesy')) {
   console.log(`[cheesy] bridging ${arg('cheesy-host') || '10.0.100.5:8080'} ` +
     `as display "${arg('display-id') || 'contentdesk1'}"`);
 } else {
-  console.log('[cheesy] bridge off — pass --cheesy to connect to the field');
+  console.log('[cheesy] bridge off, pass --cheesy to connect to the field');
 }
 
-// Side-tournament state for the gaps between matches. Always on — it costs
+// Side-tournament state for the gaps between matches. Always on: it costs
 // nothing when unused and there is no sensible reason to make it a flag.
 const arcade = new ArcadeStore(bus);
 
+// Crowd trivia, the other gap-filler, played from the audience's phones.
+// A per-event bank in data/trivia.json replaces the default questions.
+const trivia = new TriviaStore(bus, await loadTriviaBank(join(ROOT, 'data', 'trivia.json')));
+trivia.setJoinUrl(`http://${lanAddress() ?? 'localhost'}:${port}/s/quiz`);
+
+async function loadTriviaBank(path: string) {
+  try {
+    const { readFile } = await import('node:fs/promises');
+    const bank = JSON.parse(await readFile(path, 'utf8'));
+    if (Array.isArray(bank) && bank.length) {
+      console.log(`[trivia] ${bank.length} questions from data/trivia.json`);
+      return bank;
+    }
+  } catch { /* no per-event bank, use the built-in one */ }
+  return DEFAULT_QUESTIONS;
+}
+
+/** First non-internal IPv4: what a phone on the venue wifi can reach. */
+function lanAddress(): string | null {
+  const nets = os.networkInterfaces();
+  for (const list of Object.values(nets)) {
+    for (const net of list ?? []) {
+      if (net.family === 'IPv4' && !net.internal) return net.address;
+    }
+  }
+  return null;
+}
+
 // ---- show automation --------------------------------------------------------
-// OBS password comes from the environment, never a CLI arg — argv is visible
+// OBS password comes from the environment, never a CLI arg: argv is visible
 // in `ps` and in the shell history of whoever launched it.
 //
 //   --obs [--obs-host 127.0.0.1:4455]   OBS_PASSWORD=…
 //   --autopilot                          arm every cue at boot (default: off)
 let obs: ObsClient | null = null;
 if (has('obs')) {
-  obs = new ObsClient({
+  const client: ObsClient = new ObsClient({
     host: arg('obs-host') || '127.0.0.1:4455',
     ...(process.env['OBS_PASSWORD'] ? { password: process.env['OBS_PASSWORD'] } : {}),
-    onStatus: (up, detail) => console.log(`[obs] ${up ? 'connected' : 'down'} — ${detail}`),
+    onStatus: (up, detail) => {
+      console.log(`[obs] ${up ? 'connected' : 'down'}: ${detail}`);
+      if (up) void suppressCheesy(client);
+    },
   });
+  obs = client;
   obs.connect();
+
+  // One overlay system on air: ours. Any OBS source named for a Cheesy Arena
+  // page gets switched off, at connect, and on a slow patrol in case someone
+  // re-enables one mid-show. See ObsClient.suppressCheesySources.
+  const suppressCheesy = async (c: ObsClient): Promise<void> => {
+    try {
+      const disabled = await c.suppressCheesySources();
+      if (disabled.length) {
+        console.warn(`[obs] disabled Cheesy overlay source(s) so the scorebugs can't double up: ` +
+          disabled.join(', '));
+      }
+    } catch (err) {
+      console.warn('[obs] cheesy-overlay sweep failed:', (err as Error).message);
+    }
+  };
+  setInterval(() => { if (client.connected) void suppressCheesy(client); }, 60_000);
 }
 
 // Cues start disarmed. Nobody should discover automation by having it happen
-// to them mid-match — the producer arms each cue after watching it be right.
+// to them mid-match: the producer arms each cue after watching it be right.
 const cues = new CueEngine(bus, obs, { autopilot: has('autopilot') });
 cues.attach();
 console.log(`[cue] ${cues.status.length} cues loaded, autopilot ` +
-  `${has('autopilot') ? 'ARMED' : 'off'} — arm per-cue from the desk`);
+  `${has('autopilot') ? 'ARMED' : 'off'}, arm per-cue from the desk`);
 
 // ---- publishing -----------------------------------------------------------
 const config = await loadConfig(ROOT);
+
+// What each bonus RP costs, straight from config. On the bus rather than read
+// directly by the reducer, so the reducer stays pure and a replayed event log
+// carries the thresholds the match was actually scored against.
+bus.emit({
+  type: 'game.thresholds',
+  source: 'manual',
+  payload: {
+    energizedFuel: config.game.rpEnergizedFuel,
+    superchargedFuel: config.game.rpSuperchargedFuel,
+    traversalTower: config.game.rpTraversalTower,
+  },
+});
+
+// ---- start.gg side-tournament bracket --------------------------------------
+// Metadata only: round labels and entrants for the arcade console's pre-fill.
+// The live score stays operator-authoritative (docs/05-arcade.md). Unlike the
+// field bridge there is no safety concern, so config alone switches it on.
+let startgg: StartggAdapter | null = null;
+if (config.startgg.token && config.startgg.eventSlug) {
+  startgg = new StartggAdapter({ arcade, token: config.startgg.token, eventSlug: config.startgg.eventSlug });
+  startgg.start();
+  console.log(`[startgg] polling bracket metadata for ${config.startgg.eventSlug}`);
+} else {
+  console.log('[startgg] off, set startgg.token and startgg.eventSlug in config.json');
+}
 const publish = new PublishQueue(ROOT, config, bus, clips);
 await publish.load();
 
 {
   const missing = publishReadiness(config);
   if (!config.publish.enabled) {
-    console.log('[publish] disabled — set publish.enabled in config.json to turn it on');
+    console.log('[publish] disabled, set publish.enabled in config.json to turn it on');
   } else if (missing.youtube.length || missing.tba.length) {
     console.warn('[publish] enabled but incomplete: missing ' +
       [...missing.youtube, ...missing.tba].join(', '));
@@ -156,7 +239,7 @@ await publish.load();
   }
 }
 
-// A match video is queued when the score is posted, not at the buzzer — the
+// A match video is queued when the score is posted, not at the buzzer: the
 // cut needs the score-reveal timestamp to know where its second part starts.
 if (config.publish.autoQueueMatches) {
   bus.subscribe(ev => {
@@ -168,10 +251,12 @@ if (config.publish.autoQueueMatches) {
 }
 
 const server = startServer({
-  bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs, arcade,
+  bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
+  arcade, trivia,
+  lanBase: `http://${lanAddress() ?? 'localhost'}:${port}`,
 });
 
-// Phase boundaries are time-driven, not event-driven — endgame lockdown and
+// Phase boundaries are time-driven, not event-driven: endgame lockdown and
 // the auto-end marker have to land even if nothing else is happening.
 const ticker = setInterval(() => bus.advance(), 100);
 
@@ -180,17 +265,20 @@ if (replayFile) {
   const speed = Number(process.argv[process.argv.indexOf('--replay') + 2] || 1);
   void bus.replay(resolve(ROOT, replayFile), Number.isFinite(speed) ? speed : 1);
 } else if (has('demo')) {
-  startDemo(bus);
+  // The demo also seeds dummy standings, schedule, arcade, and trivia so
+  // every surface can be judged aesthetically without a field.
+  startDemo(bus, { arcade, trivia });
 }
 
 const shutdown = (): void => {
   console.log('\n[core] shutting down');
   clearInterval(ticker);
   cheesy?.stop();
+  startgg?.stop();
   cues.detach();
   obs?.close();
   server.close();
-  // Give ffmpeg a moment to finalise the segment it's mid-way through —
+  // Give ffmpeg a moment to finalise the segment it's mid-way through:
   // SIGKILL would leave the most recent file unplayable, which is exactly the
   // one you'd want after a crash.
   void recorder?.stop().finally(() => process.exit(0));

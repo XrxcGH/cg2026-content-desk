@@ -3,7 +3,7 @@
  * See docs/05-arcade.md.
  *
  * CalGames 2025's schedule had a one-hour lunch on both competition days, a
- * ~30-minute alliance selection window, plus the gaps around awards — roughly
+ * ~30-minute alliance selection window, plus the gaps around awards, roughly
  * three hours of dead air across the weekend. A stream that goes to a slate for
  * three hours loses its audience and doesn't get it back.
  *
@@ -14,7 +14,13 @@
 
 import type { Alliance } from '../types.ts';
 
-export type ArcadeGame = 'smash' | 'mariokart' | 'other';
+/**
+ * The lineup: head-to-head Smash, split-screen Mario Kart (4-up), and the
+ * classic multiplayer shelf: Pac-Man (4-player party rules) and Tetris
+ * (battle royale style, scored by placement or lines). 'other' covers
+ * whatever a team brings on Saturday.
+ */
+export type ArcadeGame = 'smash' | 'mariokart' | 'pacman' | 'tetris' | 'other';
 
 export interface ArcadePlayer {
   id: string;
@@ -35,6 +41,7 @@ export interface ArcadeSet {
   game: ArcadeGame;
   /** "Winners Semifinal", "Grand Final", "Race 3 of 4". */
   round: string;
+  /** 2 for a versus set; 3-4 for split-screen free-for-alls (MK runs 4-up). */
   players: ArcadePlayer[];
   /** Index-aligned with `players`. */
   scores: number[];
@@ -45,6 +52,19 @@ export interface ArcadeSet {
    * the live score is not, unless an operator has confirmed it.
    */
   scoreConfidence: 'authoritative' | 'estimated';
+}
+
+/**
+ * One set's worth of bracket METADATA from start.gg (round label, entrants,
+ * coarse state). Deliberately scoreless: start.gg reflects what a TO has typed
+ * in, which lags reality by up to a full round, so the live score never comes
+ * from here. See docs/05-arcade.md.
+ */
+export interface BracketSet {
+  id: string;
+  round: string;
+  state: 'upcoming' | 'live' | 'complete';
+  players: ArcadePlayer[];
 }
 
 /**
@@ -87,7 +107,7 @@ export function standings(gp: GrandPrix): Standing[] {
       const row = table.get(id) ?? (byId.has(id)
         ? { player: byId.get(id)!, points: 0, positions: [] }
         : null);
-      if (!row) return;                    // unknown racer id — ignore rather than crash
+      if (!row) return;                    // unknown racer id, ignore rather than crash
       row.points += MK_POINTS[index] ?? 0;
       row.positions.push(index + 1);
       table.set(id, row);
@@ -102,8 +122,14 @@ export function standings(gp: GrandPrix): Standing[] {
   });
 }
 
-/** A set is decided when someone reaches the win threshold (best of N). */
+/**
+ * A VERSUS set is decided when someone reaches the win threshold (best of N).
+ * Free-for-alls (3+ players) never auto-complete: a Pac-Man party or a
+ * 4-up Kart lobby ends when the operator says it does, and the leader at
+ * that moment is the winner.
+ */
 export function setWinner(set: ArcadeSet, bestOf = 3): ArcadePlayer | null {
+  if (set.players.length > 2) return null;
   const needed = Math.floor(bestOf / 2) + 1;
   const top = set.scores.indexOf(Math.max(...set.scores));
   return set.scores[top] !== undefined && set.scores[top]! >= needed

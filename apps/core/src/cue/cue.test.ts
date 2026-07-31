@@ -85,6 +85,44 @@ test('cue-emitted events never re-trigger cues', () => {
   assert.equal(sceneChanges, 1);
 });
 
+test('autopilot never cuts away from a live match; operators still can', async () => {
+  const bus = new EventBus();
+  const engine = new CueEngine(bus, null, {
+    cues: [
+      ...defaultCues(),
+      // A hypothetical autopilot cue that would cut to the arcade mid-match.
+      { id: 'rogue', name: 'Rogue', does: 'cuts away mid-match',
+        when: ev => ev.type === 'graphic.show',
+        run: async ctx => { await ctx.scene('arcade'); } },
+    ],
+  });
+  engine.attach();
+  engine.setAll(true);
+
+  const scenes: string[] = [];
+  bus.subscribe(ev => {
+    if (ev.type === 'scene.change') scenes.push((ev.payload as { scene: string }).scene);
+  });
+
+  loadMatch(bus);
+  bus.emit({ type: 'match.start', source: 'cheesy' });
+  scenes.length = 0;
+
+  // Autopilot tries to leave the field while the match is live: held.
+  bus.emit({ type: 'graphic.show', source: 'cheesy', payload: {} });
+  assert.deepEqual(scenes, [], 'wide-shot lock holds autopilot cuts');
+
+  // The replay console (operator-driven) still wins mid-match.
+  bus.emit({ type: 'replay.play', source: 'replay', payload: {} });
+  assert.deepEqual(scenes, ['CG_REPLAY'], 'operator-driven events bypass the lock');
+
+  // After the buzzer the lock releases.
+  bus.emit({ type: 'match.end', source: 'cheesy' });
+  scenes.length = 0;
+  bus.emit({ type: 'graphic.show', source: 'cheesy', payload: {} });
+  assert.deepEqual(scenes, ['CG_ARCADE'], 'lock lifts once the match ends');
+});
+
 test('a cue can be fired by hand while its autopilot is off', async () => {
   const bus = new EventBus();
   const engine = new CueEngine(bus, null);
@@ -135,7 +173,7 @@ test('a throwing cue is recorded and does not stop the others', () => {
 
 test('obs-websocket v5 auth follows the documented four steps', () => {
   // obs-websocket's protocol.md publishes the password, salt and challenge but
-  // NOT the expected output — it defers to the client libraries. So rather
+  // NOT the expected output; it defers to the client libraries. So rather
   // than assert a constant we cannot source, walk the four documented steps
   // independently and compare. This catches the failure modes that actually
   // happen: wrong digest, hex instead of base64, and reversed concatenation.
