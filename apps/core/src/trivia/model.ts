@@ -115,3 +115,28 @@ export function standings(players: Iterable<TriviaPlayer>): Standing[] {
     b.score - a.score || b.correct - a.correct || a.joinedAt - b.joinedAt);
   return sorted.map((player, i) => ({ rank: i + 1, player }));
 }
+
+/**
+ * A standings row as it may leave the server. `Standing` carries the whole
+ * player, id included, and the id is the only credential `answer()` checks:
+ * publishing it on the open /api/trivia snapshot once let anyone in the gym
+ * read a leader's id and burn their single answer with a wrong choice.
+ * Project before the snapshot is built, never in the surfaces.
+ */
+export interface PublicStanding {
+  rank: number;
+  name: string;
+  team?: number;
+  score: number;
+  correct: number;
+}
+
+export function publicStandings(players: Iterable<TriviaPlayer>): PublicStanding[] {
+  return standings(players).map(({ rank, player }) => ({
+    rank,
+    name: player.name,
+    ...(player.team ? { team: player.team } : {}),
+    score: player.score,
+    correct: player.correct,
+  }));
+}

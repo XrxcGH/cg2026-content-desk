@@ -62,17 +62,21 @@ export class ArcadeStore {
   }
 
   startSet(init: {
-    game: ArcadeGame; round: string; players: ArcadePlayer[];
+    game: ArcadeGame; round: string; players: ArcadePlayer[]; bestOf?: number;
   }): ArcadeSet {
-    if (init.players.length < 2 || init.players.length > 4) {
+    if (!Array.isArray(init.players) || init.players.length < 2 || init.players.length > 4) {
       throw new Error('A set takes 2 to 4 players.');
     }
+    // The route casts the body through unchecked, so validate here.
+    const bestOf = Number(init.bestOf ?? 3);
+    if (bestOf !== 3 && bestOf !== 5) throw new Error('A set is best of 3 or best of 5.');
     this.#set = {
       id: `s${Date.now().toString(36)}`,
       game: init.game,
       round: init.round,
       players: init.players,
       scores: init.players.map(() => 0),
+      bestOf,
       state: 'live',
       scoreConfidence: 'estimated',
     };
@@ -93,7 +97,7 @@ export class ArcadeStore {
     this.#set.scores[playerIndex] = Math.max(0, current + delta);
     this.#set.scoreConfidence = 'authoritative';   // a human just confirmed it
 
-    const winner = setWinner(this.#set);
+    const winner = setWinner(this.#set, this.#set.bestOf);
     if (winner) {
       this.#set.state = 'complete';
       this.#publish('arcade.set_end');
@@ -110,6 +114,13 @@ export class ArcadeStore {
   }
 
   startGrandPrix(name: string, racers: ArcadePlayer[], raceCount = 4): GrandPrix {
+    // The route casts the request body straight through, so the shape has to
+    // be checked at runtime: a malformed grand prix makes standings() throw
+    // on every later snapshot, taking the whole /api/arcade surface with it.
+    if (!Array.isArray(racers)
+        || racers.some(r => typeof r?.id !== 'string' || typeof r?.name !== 'string')) {
+      throw new Error('Racers must be objects with an id and a name.');
+    }
     this.#gp = { game: 'mariokart', name, racers, races: [], raceCount };
     this.#publish('arcade.bracket_updated');
     return this.#gp;
@@ -118,6 +129,12 @@ export class ArcadeStore {
   /** Record a race result as racer ids in finishing order. */
   recordRace(order: string[]): GrandPrix | null {
     if (!this.#gp) return null;
+    // Validate before the push. A bad entry used to go into `races` first and
+    // then blow up inside standings(), poisoning every snapshot, publish and
+    // bracket update until the entry itself was popped.
+    if (!Array.isArray(order) || order.some(id => typeof id !== 'string')) {
+      throw new Error('A race result is racer ids in finishing order.');
+    }
     this.#gp.races.push(order);
     this.#publish('arcade.score');
     return this.#gp;

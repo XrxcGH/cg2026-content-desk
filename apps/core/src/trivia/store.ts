@@ -10,8 +10,8 @@
 
 import type { EventBus } from '../bus.ts';
 import {
-  award, pickQuestion, resolvePick, standings,
-  type Standing, type TriviaAnswer, type TriviaPhase, type TriviaPlayer, type TriviaQuestion,
+  award, pickQuestion, publicStandings, resolvePick, standings,
+  type PublicStanding, type TriviaAnswer, type TriviaPhase, type TriviaPlayer, type TriviaQuestion,
 } from './model.ts';
 import { DEFAULT_QUESTIONS } from './questions.ts';
 
@@ -35,7 +35,7 @@ export interface TriviaSnapshot {
     distribution: number[];
     answers: number;
   } | null;
-  standings: Standing[];
+  standings: PublicStanding[];
   asked: number;
   joinUrl: string | null;
 }
@@ -105,7 +105,24 @@ export class TriviaStore {
 
   // ---- players --------------------------------------------------------------
 
+  /**
+   * The ceiling alone made the open join a denial of service: 500 scripted
+   * joins filled the room for the day, and the only way to free a slot was a
+   * hard reset that also dropped every real player. Under pressure the
+   * longest-idle player with no points and no answer locked gives up their
+   * slot; a rejoin restores everything they had, which is nothing.
+   */
+  #evictOneIdle(): void {
+    let idle: TriviaPlayer | null = null;
+    for (const p of this.#players.values()) {
+      if (p.score > 0 || p.correct > 0 || this.#answers.has(p.id)) continue;
+      if (!idle || p.joinedAt < idle.joinedAt) idle = p;
+    }
+    if (idle) this.#players.delete(idle.id);
+  }
+
   join(rawName: string, team?: number): { playerId: string; name: string } {
+    if (this.#players.size >= MAX_PLAYERS) this.#evictOneIdle();
     if (this.#players.size >= MAX_PLAYERS) throw new Error('Trivia is full: 500 players.');
     const name = String(rawName ?? '').trim().slice(0, MAX_NAME);
     if (!name) throw new Error('A name is required.');
@@ -162,7 +179,12 @@ export class TriviaStore {
    * it wants the pre-match gap, not the middle of auto.
    */
   pick(): TriviaSnapshot {
-    if (this.#phase === 'open') throw new Error('Reveal the open question first.');
+    // Idle only, not just not-open: splicing at the cursor while a revealed
+    // question is still on screen re-queued that question behind the pick,
+    // so it was asked and paid a second time.
+    if (this.#phase !== 'idle') {
+      throw new Error('A question is on the screen. Move on with Next first.');
+    }
     const match = this.#bus.state.match;
     const name = match?.displayName;
     if (!name) throw new Error('No match is loaded, so there is nothing to pick.');
@@ -172,7 +194,6 @@ export class TriviaStore {
       throw new Error(`${name} has already been picked.`);
     }
     this.#questions.splice(this.#index, 0, q);
-    this.#phase = 'idle';
     this.#publish();
     return this.snapshot();
   }
@@ -278,8 +299,13 @@ export class TriviaStore {
     if (!this.#questions[index] || !this.#questions[to]) return this.snapshot();
     this.#assertNotLive(index);
     this.#assertNotLive(to);
+    const live = this.#phase !== 'idle' ? this.#current() : null;
     const [q] = this.#questions.splice(index, 1);
     this.#questions.splice(to, 0, q!);
+    // A move that crosses the cursor shifts everything between its endpoints
+    // by one, which once swapped the on-screen question mid-round. The cursor
+    // follows its question, not its number.
+    if (live) this.#index = this.#questions.indexOf(live);
     this.#publish();
     return this.snapshot();
   }
@@ -298,7 +324,8 @@ export class TriviaStore {
       // The host can sit on an open prediction while the field moves on to a
       // later match, whose own score_posted would otherwise look like a valid
       // answer. Refuse rather than resolve a match's prediction against a
-      // different match's score.
+      // different match's score; next() is the way out, and discards the
+      // round unscored.
       if (q.matchId != null && this.#bus.state.match?.id !== q.matchId) {
         throw new Error(
           'The field has moved on to a different match, so this prediction cannot be '
@@ -324,7 +351,24 @@ export class TriviaStore {
 
   /** Advance to the next question and drop back to idle (leaderboard beat). */
   next(): TriviaSnapshot {
-    if (this.#phase === 'open') throw new Error('Reveal before moving on.');
+    if (this.#phase === 'open') {
+      // reveal() rightly refuses to resolve a prediction against a different
+      // match's score, but that once trapped the host: with the field moved
+      // on, every action threw and the only exit was a reset that wiped the
+      // room's scores. Next is the release: a prediction whose match the
+      // field has abandoned is discarded unscored, and nobody pays for it.
+      const q = this.#current();
+      const stale = q?.kind === 'match' && q.matchId != null
+        && this.#bus.state.match?.id !== q.matchId;
+      if (!stale) throw new Error('Reveal before moving on.');
+      this.#questions.splice(this.#index, 1);
+      this.#answers.clear();
+      if (this.#closeTimer) { clearTimeout(this.#closeTimer); this.#closeTimer = null; }
+      this.#index = Math.min(this.#index, this.#questions.length);
+      this.#phase = 'idle';
+      this.#publish();
+      return this.snapshot();
+    }
     if (this.#index < this.#questions.length - 1) this.#index++;
     else this.#index = this.#questions.length;      // bank exhausted
     this.#phase = 'idle';
@@ -367,7 +411,7 @@ export class TriviaStore {
         distribution,
         answers: this.#answers.size,
       } : null,
-      standings: standings(this.#players.values()).slice(0, 10),
+      standings: publicStandings(this.#players.values()).slice(0, 10),
       asked: this.#asked,
       joinUrl: this.#joinUrl,
     };

@@ -45,6 +45,12 @@ export interface ArcadeSet {
   players: ArcadePlayer[];
   /** Index-aligned with `players`. */
   scores: number[];
+  /**
+   * Win threshold for a versus set: best of 3 unless the bracket calls for 5
+   * (grand finals, usually). Without this, `setWinner`'s bestOf argument was
+   * unreachable and every Bo5 auto-completed and locked at two wins.
+   */
+  bestOf?: number;
   state: 'upcoming' | 'live' | 'complete';
   /**
    * start.gg reflects what a TO has typed in, which lags reality by anywhere

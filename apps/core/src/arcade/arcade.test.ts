@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MK_POINTS, setWinner, standings, type GrandPrix } from './model.ts';
+import { EventBus } from '../bus.ts';
+import { ArcadeStore } from './store.ts';
+import { MK_POINTS, setWinner, standings, type ArcadePlayer, type GrandPrix } from './model.ts';
 
 const racers = ['a', 'b', 'c', 'd'].map(id => ({ id, name: id.toUpperCase() }));
 const gp = (races: string[][]): GrandPrix =>
@@ -85,4 +87,37 @@ test('a free-for-all never auto-completes; a versus set still does', () => {
 
   const versus = { ...ffa, players: ffa.players.slice(0, 2), scores: [2, 0] };
   assert.equal(setWinner(versus)?.id, 'a');
+});
+
+test('a malformed race result is refused before it can poison the standings', () => {
+  const store = new ArcadeStore(new EventBus());
+  store.startGrandPrix('Pit Crew Cup', racers);
+  // These once pushed first and threw later, which left every subsequent
+  // snapshot throwing until the bad entry was popped by hand.
+  assert.throws(() => store.recordRace('a' as unknown as string[]), /finishing order/);
+  assert.throws(() => store.recordRace([1, 2] as unknown as string[]), /finishing order/);
+  store.recordRace(['a', 'b', 'c', 'd']);
+  assert.equal(store.snapshot.standings[0]?.points, 15, 'the store stays healthy');
+  assert.throws(
+    () => store.startGrandPrix('Bad', 'nope' as unknown as ArcadePlayer[]),
+    /id and a name/);
+});
+
+test('a best-of-5 set completes at three wins, not two', () => {
+  const store = new ArcadeStore(new EventBus());
+  const players = [{ id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }];
+  store.startSet({ game: 'smash', round: 'Grand Final', players, bestOf: 5 });
+  store.score(0, 1);
+  store.score(0, 1);
+  assert.equal(store.snapshot.set?.state, 'live', 'two wins do not end a Bo5');
+  store.score(0, 1);
+  assert.equal(store.snapshot.set?.state, 'complete');
+
+  assert.throws(
+    () => store.startSet({ game: 'smash', round: 'Bad', players, bestOf: 4 }),
+    /best of 3 or best of 5/);
+  store.startSet({ game: 'smash', round: 'Winners Final', players });
+  store.score(1, 1);
+  store.score(1, 1);
+  assert.equal(store.snapshot.set?.state, 'complete', 'the default is still best of 3');
 });

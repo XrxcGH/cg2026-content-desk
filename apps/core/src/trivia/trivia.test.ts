@@ -97,6 +97,39 @@ test('standings rank by score, then correct count, then commitment', () => {
   assert.deepEqual(rows.map(r => r.rank), [1, 2, 3]);
 });
 
+test('published standings never carry the player id', () => {
+  const store = new TriviaStore(new EventBus(), BANK);
+  store.join('Ana', 846);
+  store.join('Ben');
+  const rows = store.snapshot().standings;
+  assert.equal(rows.length, 2);
+  for (const row of rows) {
+    // The id is the only credential answer() checks, and /api/trivia is open:
+    // leaking it lets a stranger burn someone's one answer.
+    assert.ok(!('player' in row) && !('id' in row), 'no id, no player object');
+  }
+  assert.deepEqual(rows[0], { rank: 1, name: 'Ana', team: 846, score: 0, correct: 0 });
+});
+
+test('a full room evicts the longest-idle zero-score player, never a scorer', () => {
+  const store = new TriviaStore(new EventBus(), BANK);
+  const ana = store.join('Ana', 846).playerId;
+  store.open(20);
+  store.answer(ana, 1);
+  store.reveal();
+  store.next();
+
+  const squatter = store.join('Squatter 0').playerId;
+  for (let i = 1; i < 499; i++) store.join(`Squatter ${i}`);
+  assert.equal(store.snapshot().players, 500);
+
+  const late = store.join('Late Arrival');
+  assert.ok(late.playerId, 'the crowd is not locked out for the day');
+  assert.equal(store.snapshot().players, 500, 'the ceiling holds');
+  assert.ok(store.playView(ana).me, 'a player with points keeps their slot');
+  assert.equal(store.playView(squatter).me, null, 'the oldest idle slot is reclaimed');
+});
+
 test('join validation: names required and clipped, junk teams dropped', () => {
   const store = new TriviaStore(new EventBus(), BANK);
   assert.throws(() => store.join('   '), /name is required/i);
@@ -191,6 +224,58 @@ test('a tie pays the people who said tie, and never the undecided', () => {
   assert.equal(store.playView(hedger).me!.score, 0, 'not committing pays nothing');
 });
 
+test('next() discards a prediction the field has abandoned, scoring nobody', () => {
+  const bus = new EventBus();
+  bus.emit({
+    type: 'match.loaded', source: 'cheesy',
+    payload: { id: 'q42', displayName: 'Qualification 42', red: [], blue: [] },
+  });
+  const store = new TriviaStore(bus, []);
+  const ana = store.join('Ana').playerId;
+  store.pick();
+  store.open(20);
+  store.answer(ana, PICK_BLUE);
+  assert.throws(() => store.next(), /Reveal before/, 'no skipping a live prediction');
+
+  // The host sits on it and the field moves on. match.loaded resets
+  // scorePostedAt, so reveal refuses both before and after the next score,
+  // and Next has to be the way out.
+  bus.emit({ type: 'match.score_posted', source: 'cheesy' });
+  bus.emit({
+    type: 'match.loaded', source: 'cheesy',
+    payload: { id: 'q43', displayName: 'Qualification 43', red: [], blue: [] },
+  });
+  assert.throws(() => store.reveal(), /not posted yet/);
+  bus.emit({ type: 'match.score_posted', source: 'cheesy' });
+  assert.throws(() => store.reveal(), /moved on/);
+
+  const s = store.next();
+  assert.equal(s.phase, 'idle');
+  assert.equal(store.playView(ana).me?.score, 0, 'an abandoned prediction pays nobody');
+  assert.ok(!store.bank().some(q => q.id === 'pick-qualification-42'),
+    'the dead question leaves the bank');
+  store.pick();   // and the new match can be picked straight away
+});
+
+test('a pick cannot cut in front of the question still on screen', () => {
+  const bus = new EventBus();
+  bus.emit({
+    type: 'match.loaded', source: 'cheesy',
+    payload: { id: 'q45', displayName: 'Qualification 45', red: [], blue: [] },
+  });
+  const store = new TriviaStore(bus, [BANK[0]!]);
+  store.open(20);
+  assert.throws(() => store.pick(), /Next first/);
+  store.reveal();
+  // Splicing here would re-queue the revealed question behind the pick, and
+  // it would be asked and paid a second time.
+  assert.throws(() => store.pick(), /Next first/);
+  store.next();
+  store.pick();
+  assert.deepEqual(store.bank().map(q => q.id), ['q1', 'pick-qualification-45']);
+  assert.equal(store.snapshot().questionIndex, 1, 'the pick is up next, not the used question');
+});
+
 test('the same match cannot be picked twice', () => {
   const bus = new EventBus();
   bus.emit({
@@ -273,4 +358,20 @@ test('reordering moves a question without disturbing the rest', () => {
 
   store.moveQuestion(0, -1);   // off the top: a no-op, not a crash
   assert.deepEqual(store.bank().map(q => q.text), ['One', 'Three', 'Two']);
+});
+
+test('a long move across the open question keeps the cursor on it', () => {
+  const store = new TriviaStore(new EventBus(), []);
+  for (const text of ['A', 'B', 'C', 'D']) {
+    store.addQuestion({ text, options: ['a', 'b', 'c', 'd'], answer: 0 });
+  }
+  store.open(20); store.reveal(); store.next();
+  store.open(20); store.reveal(); store.next();
+  store.open(20);                                   // C is live at index 2
+  assert.equal(store.snapshot().question?.text, 'C');
+
+  store.moveQuestion(3, -3);                        // D jumps over the cursor
+  assert.deepEqual(store.bank().map(q => q.text), ['D', 'A', 'B', 'C']);
+  assert.equal(store.snapshot().question?.text, 'C', 'the room still answers C');
+  assert.equal(store.bank().findIndex(q => q.live), 3);
 });
