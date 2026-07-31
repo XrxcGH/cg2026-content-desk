@@ -302,6 +302,17 @@ export interface DeskState {
   confidence: Confidence;
   /** Which surface screen is live: overview, match, score, blank... */
   screen: string;
+  /**
+   * True once an operator has taken a screen by hand.
+   *
+   * Match lifecycle events move the screen on their own, which is what makes
+   * the show run unattended. It also means a manual take used to be undone by
+   * the next thing the field did: pick the arcade bumper during a gap and
+   * `match.loaded` would yank it back to the overview a moment later. While
+   * this is set, automatic changes are ignored and the operator's choice
+   * stands until they hand it back with the Auto button.
+   */
+  screenHold: boolean;
   lowerThird: LowerThird | null;
   telestrator: TelestratorState;
   /** Drives the venue side screens. Polled from Cheesy, empty when desk-only. */
@@ -338,6 +349,7 @@ export const initialState = (): DeskState => ({
   score: { red: emptyAllianceScore(), blue: emptyAllianceScore() },
   confidence: 'estimated',
   screen: 'blank',
+  screenHold: false,
   lowerThird: null,
   telestrator: { analyst: '', frame: null, hidden: false },
   rankings: [],

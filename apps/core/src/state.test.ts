@@ -93,3 +93,50 @@ test('changing a threshold mid-event re-scores what is already on the board', ()
   assert.equal(s.thresholds.traversalTower, 75);
   assert.equal(s.thresholds.energizedFuel, 100, 'a partial update leaves the rest alone');
 });
+
+test('a manual take holds through the match lifecycle', () => {
+  let s = initialState();
+
+  // Operator puts the arcade bumper up during a gap.
+  s = reduce(s, ev('screen.change', T0, { screen: 'arcade' }));
+  assert.equal(s.screen, 'arcade');
+  assert.equal(s.screenHold, true);
+
+  // Everything the field does next used to stomp it.
+  s = reduce(s, ev('match.loaded', T0 + 1, { displayName: 'Q43', red: [], blue: [] }));
+  assert.equal(s.screen, 'arcade', 'loading a match must not yank the screen back');
+  s = reduce(s, ev('match.armed', T0 + 2));
+  assert.equal(s.screen, 'arcade');
+  s = reduce(s, ev('match.start', T0 + 3));
+  assert.equal(s.screen, 'arcade');
+  s = reduce(s, ev('match.score_posted', T0 + 4));
+  assert.equal(s.screen, 'arcade');
+
+  // The match data still landed; only the screen was left alone.
+  assert.equal(s.match?.displayName, 'Q43');
+  assert.equal(s.matchStartedAt, T0 + 3);
+  assert.equal(s.scorePostedAt, T0 + 4);
+});
+
+test('Auto hands the screen back without changing what is on air', () => {
+  let s = initialState();
+  s = reduce(s, ev('screen.change', T0, { screen: 'analysis' }));
+  s = reduce(s, ev('screen.change', T0 + 1, { screen: 'auto' }));
+
+  assert.equal(s.screenHold, false, 'auto releases the hold');
+  assert.equal(s.screen, 'analysis', 'and leaves what is on air alone until the next event');
+
+  // Automatic switching resumes from here.
+  s = reduce(s, ev('match.armed', T0 + 2));
+  assert.equal(s.screen, 'match');
+});
+
+test('with no hold, the show still runs itself', () => {
+  let s = initialState();
+  s = reduce(s, ev('match.loaded', T0, { displayName: 'Q44', red: [], blue: [] }));
+  assert.equal(s.screen, 'overview');
+  s = reduce(s, ev('match.armed', T0 + 1));
+  assert.equal(s.screen, 'match');
+  s = reduce(s, ev('match.score_posted', T0 + 2));
+  assert.equal(s.screen, 'score');
+});

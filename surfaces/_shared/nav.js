@@ -34,6 +34,8 @@ const SCREENS = [
   { id: 'analysis', label: 'Analysis' },
   { id: 'arcade', label: 'Arcade' },
   { id: 'blank', label: 'Blank' },
+  // Not a screen: hands control back to the match lifecycle.
+  { id: 'auto', label: 'Auto' },
 ];
 
 const CSS = `
@@ -99,10 +101,16 @@ export function mountNav(current, opts = {}) {
   ws.addEventListener('message', ev => {
     try {
       const msg = JSON.parse(ev.data);
-      const screen = msg?.state?.screen ?? msg?.payload?.screen;
+      const state = msg?.state;
+      const screen = state?.screen ?? msg?.payload?.screen;
       if (!screen) return;
       for (const b of nav.querySelectorAll('button[data-screen]')) {
-        b.classList.toggle('live', b.dataset.screen === screen);
+        // 'Auto' lights when nothing is being held, so the strip always says
+        // whether the screen is following the match or an operator.
+        const on = b.dataset.screen === 'auto'
+          ? state?.screenHold === false
+          : b.dataset.screen === screen;
+        b.classList.toggle('live', !!on);
       }
     } catch { /* not a state frame */ }
   });

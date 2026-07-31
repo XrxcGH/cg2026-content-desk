@@ -77,6 +77,13 @@ function retime(state: DeskState, now: number): DeskState {
   };
 }
 
+/**
+ * Apply an automatic screen change, unless an operator is holding the screen.
+ * Every other part of the event still lands; only the screen is left alone.
+ */
+const auto = (state: DeskState, screen: string): string =>
+  state.screenHold ? state.screen : screen;
+
 export function reduce(state: DeskState, ev: DeskEvent): DeskState {
   const next = ((): DeskState => {
     switch (ev.type) {
@@ -94,12 +101,12 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
           hubAuthoritative: null,
           score: { red: emptyAllianceScore(), blue: emptyAllianceScore() },
           confidence: ev.confidence,
-          screen: 'overview',
+          screen: auto(state, 'overview'),
         };
       }
 
       case 'match.preview':
-        return { ...state, screen: 'overview' };
+        return { ...state, screen: auto(state, 'overview') };
 
       // Field reset between matches. Deliberately no screen change: the next
       // match's `match.loaded` owns the transition back to the overview.
@@ -110,10 +117,10 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       // hand it to the announcer. Flip to the score bar NOW, so the graphic is
       // already in place when the countdown starts, never mid-"3, 2, 1".
       case 'match.armed':
-        return { ...state, screen: 'match' };
+        return { ...state, screen: auto(state, 'match') };
 
       case 'match.start':
-        return { ...state, matchStartedAt: ev.ts, lastMatchStartedAt: ev.ts, screen: 'match' };
+        return { ...state, matchStartedAt: ev.ts, lastMatchStartedAt: ev.ts, screen: auto(state, 'match') };
 
       case 'match.auto_end': {
         // HEURISTIC, and only used when running desk-only. Cheesy Arena decides
@@ -132,7 +139,7 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       }
 
       case 'match.aborted':
-        return { ...state, matchStartedAt: null, screen: 'match' };
+        return { ...state, matchStartedAt: null, screen: auto(state, 'match') };
 
       // Keep matchStartedAt so the clip cutter can still map the match onto
       // wall clock after the buzzer. The clock itself stops via matchEndedAt.
@@ -140,7 +147,7 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
         return { ...state, matchEndedAt: ev.ts, matchStartedAt: null };
 
       case 'match.score_posted':
-        return { ...state, scorePostedAt: ev.ts, screen: 'score', confidence: ev.confidence };
+        return { ...state, scorePostedAt: ev.ts, screen: auto(state, 'score'), confidence: ev.confidence };
 
       // A full snapshot can restore authority: it replaces every number.
       case 'score.realtime': {
@@ -206,8 +213,17 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       case 'telestrator.hide':
         return { ...state, telestrator: { ...state.telestrator, hidden: true } };
 
-      case 'screen.change':
-        return { ...state, screen: (ev.payload as { screen: string }).screen };
+      /**
+       * A take from an operator, or the release back to automatic.
+       *
+       * "auto" is not a screen: it hands control back and leaves whatever is
+       * on air alone until the next lifecycle event moves it.
+       */
+      case 'screen.change': {
+        const wanted = (ev.payload as { screen: string }).screen;
+        if (wanted === 'auto') return { ...state, screenHold: false };
+        return { ...state, screen: wanted, screenHold: true };
+      }
 
       case 'rankings.updated': {
         const p = ev.payload as { rankings?: DeskState['rankings']; highestPlayedMatch?: string };
