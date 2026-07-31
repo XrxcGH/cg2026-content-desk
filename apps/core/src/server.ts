@@ -9,7 +9,6 @@ import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { networkInterfaces } from 'node:os';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { EventBus, EmitInit } from './bus.ts';
@@ -27,6 +26,7 @@ import type { CueEngine } from './cue/engine.ts';
 import type { ObsClient } from './cue/obs.ts';
 import type { ArcadeStore } from './arcade/store.ts';
 import type { TriviaStore } from './trivia/store.ts';
+import type { DeskEvent, DeskEventType } from './types.ts';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -69,22 +69,11 @@ export const SURFACES = [
   { id: 'watch', path: '/s/watch?screen=next', group: 'On a pit monitor', name: 'When do we play?',
     note: 'Per-team schedule with drift-adjusted start times. Also fine on a phone.' },
   { id: 'next',    group: 'For the audience', name: 'When do we play?', note: 'Per-team schedule on any phone, with honest drift-adjusted start estimates. Side screens show its QR.' },
-  { id: 'remote',  group: 'Run the show', name: 'Phone remote', note: 'Run the show from a phone. Big targets, PIN-gated when REMOTE_PIN is set.' },
+  { id: 'remote',  group: 'Run the show', name: 'Phone remote', note: 'Run the show from a phone. Big targets, asks for the event PIN.' },
 ] as const;
 
 /** Where a surface actually lives. Most are /s/{id}; some carry a query. */
 export const surfacePath = (s: { id: string; path?: string }): string => s.path ?? `/s/${s.id}`;
-
-/** Every IPv4 the desk is reachable on, so the remote can print a real URL. */
-export function lanAddresses(): string[] {
-  const out: string[] = [];
-  for (const addrs of Object.values(networkInterfaces())) {
-    for (const a of addrs ?? []) {
-      if (a.family === 'IPv4' && !a.internal) out.push(a.address);
-    }
-  }
-  return out;
-}
 
 export interface ServerOpts {
   bus: EventBus;
@@ -111,6 +100,13 @@ export function startServer(opts: ServerOpts) {
   const { bus, media, root, port, host, recorder = null, clips = null,
           publish = null, config = null, cheesy = null, cues = null, obs = null,
           arcade = null, trivia = null, lanBase = null } = opts;
+
+  // Last resort. The desk runs unattended for three days, so a throw nobody
+  // anticipated must log and keep the show running, never exit. index.ts
+  // covers unhandled rejections; sync throws in socket callbacks land here.
+  process.on('uncaughtException', err => {
+    console.error('[core] uncaught exception, continuing:', err);
+  });
 
   /**
    * Write the question bank back to `data/trivia.json`.
@@ -139,7 +135,11 @@ export function startServer(opts: ServerOpts) {
 
   /** Never let a path escape its mount point. */
   function safeJoin(base: string, urlPath: string): string | null {
-    const rel = normalize(decodeURIComponent(urlPath)).replace(/^([/\\])+/, '');
+    // A malformed percent escape is an unfindable file, not a server error:
+    // decoding /theme/%zz used to throw and answer 500 instead of 404.
+    let decoded: string;
+    try { decoded = decodeURIComponent(urlPath); } catch { return null; }
+    const rel = normalize(decoded).replace(/^([/\\])+/, '');
     const full = resolve(base, rel);
     return full === base || full.startsWith(base + sep) ? full : null;
   }
@@ -154,7 +154,18 @@ export function startServer(opts: ServerOpts) {
         // Surfaces are edited live during rehearsal; never cache them.
         'Cache-Control': 'no-store',
       });
-      createReadStream(path).pipe(res);
+      // pipe() only guards the destination. A source that fails after the
+      // stat (deleted, or held open by another process, which Windows does)
+      // emits 'error' on a later tick, and with no listener that took the
+      // whole process down.
+      const rs = createReadStream(path);
+      rs.on('error', err => {
+        console.error('[http] read failed:', path, err.message);
+        res.destroy();
+      });
+      // A browser walking away mid-clip must not leak the descriptor.
+      res.on('close', () => rs.destroy());
+      rs.pipe(res);
       return true;
     } catch { return false; }
   }
@@ -183,13 +194,76 @@ export function startServer(opts: ServerOpts) {
     });
 
   /**
-   * The shared event PIN, from REMOTE_PIN.
+   * Chapter landmarks, kept for the whole day.
    *
-   * Unset means the desk is wide open, which is right for a laptop on a
-   * kitchen table in March and wrong for a venue. Startup warns when it is
-   * missing, so nobody discovers it at the event.
+   * bus.recent is a 5000-event ring, and realtime score traffic alone
+   * overflows it by mid-afternoon, which silently dropped the morning's
+   * matches from /api/chapters. The moments a chapter can point at number a
+   * few hundred a day, so every one of them is kept here instead. A restart
+   * still loses the earlier landmarks; the NDJSON log replay recovers them.
    */
-  const REMOTE_PIN = process.env['REMOTE_PIN'] ?? '';
+  const CHAPTER_EVENTS = new Set<DeskEventType>(
+    ['match.loaded', 'match.start', 'award.presented', 'alliance_selection.update']);
+  const chapterLog: DeskEvent[] = bus.recent.filter(ev => CHAPTER_EVENTS.has(ev.type));
+  // Fallback for "when did the recording begin": the oldest event held at
+  // boot, captured once. The oldest event still in the ring drifts all day.
+  const firstSeenTs = bus.recent[0]?.ts ?? Date.now();
+  const unsubChapters = bus.subscribe(ev => {
+    if (CHAPTER_EVENTS.has(ev.type)) chapterLog.push(ev);
+  });
+
+  /**
+   * The shipped default PIN. It is in the repo, so anyone who has read the
+   * code knows it: every event should set its own REMOTE_PIN.
+   */
+  const DEFAULT_PIN = '0864';
+
+  /**
+   * The shared event PIN.
+   *
+   * Unset falls back to the shipped default, so a deployment that forgets
+   * the variable is gated rather than wide open. An explicit REMOTE_PIN=""
+   * still turns the gate off: that is the escape hatch for a laptop on a
+   * kitchen table with no network. `??` gives exactly that split, because an
+   * empty string is not nullish. Do not tidy it into ||.
+   */
+  const REMOTE_PIN = process.env['REMOTE_PIN'] ?? DEFAULT_PIN;
+
+  /** Trivia joins per source address, for the mint-loop guard on /api/trivia/join. */
+  const joinsByAddress = new Map<string, number>();
+
+  /**
+   * Brute-force damper for the PIN.
+   *
+   * The PIN is four digits and the venue network is full of phones, so
+   * unlimited guessing falls in minutes. Failures are counted per source
+   * address across both entry points, HTTP /api/auth and the socket auth
+   * frame, so neither offers a cheaper channel than the other. Past the
+   * limit the address waits out a lockout that doubles with every further
+   * failure. A correct PIN clears the slate.
+   */
+  const FAIL_LIMIT = 5;
+  const LOCKOUT_BASE_MS = 60_000;
+  const LOCKOUT_MAX_MS = 15 * 60_000;
+  // Below the limit, every miss still waits this long for its verdict, so
+  // even a spread-out attack is capped at a few guesses a second.
+  const FAIL_DELAY_MS = 250;
+  const authFails = new Map<string, { count: number; blockedUntil: number }>();
+
+  const authBlocked = (addr: string): boolean =>
+    (authFails.get(addr)?.blockedUntil ?? 0) > Date.now();
+
+  function noteAuthFail(addr: string): void {
+    const rec = authFails.get(addr) ?? { count: 0, blockedUntil: 0 };
+    rec.count += 1;
+    if (rec.count >= FAIL_LIMIT) {
+      const ms = Math.min(LOCKOUT_BASE_MS * 2 ** (rec.count - FAIL_LIMIT), LOCKOUT_MAX_MS);
+      rec.blockedUntil = Date.now() + ms;
+      console.warn(`[auth] ${addr} locked out for ${Math.round(ms / 1000)}s ` +
+        `after ${rec.count} failed PINs`);
+    }
+    authFails.set(addr, rec);
+  }
 
   /**
    * One session token per process, handed out on a correct PIN.
@@ -205,7 +279,16 @@ export function startServer(opts: ServerOpts) {
     !REMOTE_PIN || cookie(req.headers.cookie, AUTH_COOKIE) === SESSION;
 
   const http = createServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+    // Host is client-supplied junk until proven otherwise. `??` keeps an
+    // empty string, and new URL against a base of 'http://' throws; this once
+    // sat above the try below, where the throw became an unhandled rejection
+    // that killed the process. Fall back until parsing cannot fail.
+    let url: URL;
+    try { url = new URL(req.url ?? '/', `http://${req.headers.host || 'localhost'}`); }
+    catch {
+      try { url = new URL(req.url ?? '/', 'http://localhost'); }
+      catch { url = new URL('http://localhost/'); }
+    }
     const path = url.pathname;
 
     try {
@@ -214,13 +297,20 @@ export function startServer(opts: ServerOpts) {
       // query string would write it into the server log and the browser
       // history, on a machine several volunteers share.
       if (path === '/api/auth' && req.method === 'POST') {
+        const addr = req.socket.remoteAddress ?? 'unknown';
+        if (authBlocked(addr)) {
+          return json(res, 429, { error: 'Too many wrong PINs. Wait a minute, then try again.' });
+        }
         const body = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8')) as
           { pin?: string };
         const ok = !!REMOTE_PIN && safeEqual(String(body.pin ?? ''), REMOTE_PIN);
         if (!ok) {
-          console.warn('[auth] rejected PIN attempt');
+          noteAuthFail(addr);
+          console.warn(`[auth] rejected PIN attempt from ${addr}`);
+          await new Promise<void>(r => setTimeout(r, FAIL_DELAY_MS));
           return json(res, 401, { error: 'That PIN was not accepted.' });
         }
+        authFails.delete(addr);
         res.setHeader('Set-Cookie',
           `${AUTH_COOKIE}=${SESSION}; Path=/; HttpOnly; SameSite=Lax; Max-Age=57600`);
         return json(res, 200, { ok: true });
@@ -270,15 +360,6 @@ export function startServer(opts: ServerOpts) {
         });
       }
 
-      // Lets the remote show a PIN prompt only when one is actually required.
-      // Never reveals the PIN itself.
-      if (path === '/api/remote') {
-        return json(res, 200, {
-          needsPin: !!process.env['REMOTE_PIN'],
-          addresses: lanAddresses(),
-          port,
-        });
-      }
       if (path === '/api/media/manifest') return json(res, 200, media.manifest);
       if (path === '/api/events/recent') return json(res, 200, bus.recent.slice(-200));
 
@@ -410,8 +491,20 @@ export function startServer(opts: ServerOpts) {
           const raw = await readBody(req, 16 * 1024);
           const body = raw.length ? JSON.parse(raw.toString('utf8')) as Record<string, unknown> : {};
           switch (action) {
-            case 'join':
+            case 'join': {
+              // The store already evicts idle players at its ceiling; this
+              // guards the other end, one caller minting players in a loop.
+              // Generous on purpose: a NAT in front of the venue AP collapses
+              // many phones onto one address, so single digits would lock out
+              // a whole section of the gym.
+              const from = req.socket.remoteAddress ?? 'unknown';
+              const joins = (joinsByAddress.get(from) ?? 0) + 1;
+              joinsByAddress.set(from, joins);
+              if (joins > 50) {
+                return json(res, 429, { error: 'Too many joins from this connection. Find a volunteer if this is a mistake.' });
+              }
               return json(res, 200, trivia.join(String(body['name'] ?? ''), Number(body['team']) || undefined));
+            }
             case 'answer':
               return json(res, 200, trivia.answer(String(body['playerId'] ?? ''), Number(body['choice'])));
             case 'open':   return json(res, 200, trivia.open(Number(body['seconds']) || 20));
@@ -503,7 +596,11 @@ export function startServer(opts: ServerOpts) {
           config: config ? redacted(config) : null,
           missing: config ? publishReadiness(config) : null,
           ready: publish?.ready ?? null,
-          items: publish?.items ?? [],
+          // The resumable sessionUrl is a bearer credential: YouTube accepts
+          // writes to it with no Authorization header at all. It stays in the
+          // queue's own state; the wire only learns a resume is in progress.
+          items: (publish?.items ?? []).map(({ sessionUrl, ...rest }) =>
+            ({ ...rest, resuming: sessionUrl !== null })),
         });
       }
 
@@ -552,13 +649,13 @@ export function startServer(opts: ServerOpts) {
        *
        * `startedAt` is when the recording began, which only the operator
        * knows: the stream starts before the desk does, and often before the
-       * first match of the day is even loaded. Defaults to the first event we
-       * still hold, which is right when the desk was started with the stream.
+       * first match of the day is even loaded. Defaults to the first event
+       * the desk saw, which is right when it was started with the stream.
        */
       if (path === '/api/chapters') {
         const startedAt = Number(url.searchParams.get('startedAt'))
-          || bus.recent[0]?.ts || Date.now();
-        const list = chaptersFrom(bus.recent, startedAt, {
+          || firstSeenTs;
+        const list = chaptersFrom(chapterLog, startedAt, {
           openingTitle: url.searchParams.get('title') || undefined,
         });
         const text = chapterText(list);
@@ -734,24 +831,61 @@ ${sections}</body></html>`;
   const authed = new WeakSet<WebSocket>();
   const mayWrite = (ws: WebSocket): boolean => !REMOTE_PIN || authed.has(ws);
 
+  // App-level heartbeat. Between matches the bus can go quiet for minutes,
+  // and a silently dropped path (a Wi-Fi roam, an unplugged switch port)
+  // leaves a surface's socket looking open with nothing to disprove it. A
+  // tiny frame every 10s turns that silence into a close event the client's
+  // reconnect logic can act on. Clients ignore unknown frame types.
+  const heartbeat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (ws.readyState === ws.OPEN) ws.send('{"t":"hb"}');
+    }
+  }, 10_000);
+
   wss.on('connection', (ws, req) => {
-    const who = new URL(req.url ?? '/', 'http://x').searchParams.get('surface') ?? 'anon';
+    const addr = req.socket.remoteAddress ?? 'unknown';
+    // The surface tag ends up in log lines, and searchParams percent-decodes,
+    // so a handshake query could once inject newlines and forge entries in
+    // the only record of failed PIN attempts. Strip to id characters.
+    const who = (new URL(req.url ?? '/', 'http://x').searchParams.get('surface') ?? 'anon')
+      .replace(/[^\w-]/g, '').slice(0, 24) || 'anon';
     // A console that signed in over HTTP arrives with the session cookie, so
     // it is never asked twice. The phone remote, which can be opened straight
     // to its own page, still authenticates over the socket below.
     if (cookie(req.headers.cookie, AUTH_COOKIE) === SESSION) authed.add(ws);
     send(ws, { t: 'snapshot', state: bus.state, media: media.manifest, needsPin: !!REMOTE_PIN });
 
+    // Guesses on this one socket. The per-address damper already counts them;
+    // this closes the socket too, so a guessing loop cannot even keep its
+    // connection.
+    let pinFails = 0;
+
     ws.on('message', raw => {
       let msg: { t?: string; init?: EmitInit; channel?: string; data?: unknown; pin?: string };
       try { msg = JSON.parse(String(raw)) as typeof msg; } catch { return; }
 
       if (msg.t === 'auth') {
+        if (authBlocked(addr)) {
+          send(ws, { t: 'auth', ok: false });
+          return;
+        }
         // Constant-time-ish: compare full strings, and never echo the PIN back.
         const ok = !!REMOTE_PIN && safeEqual(String(msg.pin ?? ''), REMOTE_PIN);
-        if (ok) authed.add(ws);
-        send(ws, { t: 'auth', ok });
-        if (!ok) console.warn(`[ws:${who}] rejected PIN attempt`);
+        if (ok) {
+          authed.add(ws);
+          authFails.delete(addr);
+          send(ws, { t: 'auth', ok: true });
+          return;
+        }
+        pinFails += 1;
+        noteAuthFail(addr);
+        console.warn(`[ws:${who}] rejected PIN attempt from ${addr}`);
+        // Delay the verdict, same as HTTP, so back-to-back frames cannot
+        // walk the keyspace.
+        setTimeout(() => {
+          send(ws, { t: 'auth', ok: false });
+          if (pinFails >= FAIL_LIMIT) ws.close(1008, 'too many attempts');
+        }, FAIL_DELAY_MS);
         return;
       }
 
@@ -788,6 +922,17 @@ ${sections}</body></html>`;
     for (const ws of wss.clients) send(ws, { t: 'event', ev, state });
   });
 
+  // A taken port must read as "close the other desk", not a stack trace.
+  // Double-launching is a normal Saturday event.
+  http.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[core] port ${port} is already in use. Is the desk already running? ` +
+        `Close it, or start again with --port <other>.`);
+      process.exit(1);
+    }
+    console.error('[http] server error:', err);
+  });
+
   http.listen(port, host, () => {
     console.log(`[core] http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
     for (const s of SURFACES) console.log(`         ${surfacePath(s).padEnd(24)} ${s.name}`);
@@ -795,16 +940,21 @@ ${sections}</body></html>`;
     // Said at startup rather than left to be discovered. At a venue the desk
     // is reachable by every phone in the building, and the trivia QR code
     // puts its address on a projector in front of the whole gym.
-    if (REMOTE_PIN) {
+    if (!REMOTE_PIN) {
+      console.warn('[auth] REMOTE_PIN is empty: the gate is OFF, and anyone who can reach ' +
+        'this desk can run the show.');
+      console.warn('[auth] Only run this way on a machine nobody else can reach.');
+    } else if (REMOTE_PIN === DEFAULT_PIN) {
       console.log('[auth] control surfaces are PIN-gated; audience surfaces are open');
+      console.warn(`[auth] Using the shipped default PIN (${DEFAULT_PIN}). Anyone with a copy ` +
+        'of this code knows it. Set REMOTE_PIN for the event.');
     } else {
-      console.warn('[auth] NO PIN SET: anyone who can reach this desk can run the show.');
-      console.warn('[auth] Set REMOTE_PIN before putting it on the venue network.');
+      console.log('[auth] control surfaces are PIN-gated; audience surfaces are open');
     }
   });
 
   return {
-    close: () => { unsubscribe(); wss.close(); http.close(); },
+    close: () => { clearInterval(heartbeat); unsubscribe(); unsubChapters(); wss.close(); http.close(); },
     broadcastCount: () => wss.clients.size,
   };
 }

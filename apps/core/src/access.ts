@@ -65,8 +65,15 @@ const OPEN_POST = new Set([
   '/api/trivia/answer',
 ]);
 
-/** Static assets a surface pulls in. Gating these would break the open pages. */
-const OPEN_PREFIXES = ['/theme/', '/shared/', '/media/', '/clips/', '/frames/'];
+/**
+ * Static assets a surface pulls in. Gating these would break the open pages.
+ *
+ * /clips/ is deliberately absent: it holds pre-publication match cuts and the
+ * head referee's review frames, no open surface reads it, and the gated ones
+ * send the session cookie with every subresource request. /frames/ was an
+ * exemption for a mount that never existed.
+ */
+const OPEN_PREFIXES = ['/theme/', '/shared/', '/media/'];
 
 export interface AccessQuery {
   method: string;
@@ -112,7 +119,13 @@ export function cookie(header: string | undefined, name: string): string | null 
   for (const part of (header ?? '').split(';')) {
     const eq = part.indexOf('=');
     if (eq < 0) continue;
-    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
+    if (part.slice(0, eq).trim() === name) {
+      const raw = part.slice(eq + 1).trim();
+      // A malformed percent escape (Cookie: desk_auth=%zz) once threw out of
+      // the /ws handshake and took the whole process down, no PIN needed.
+      // Junk in, junk out, but never throw.
+      try { return decodeURIComponent(raw); } catch { return raw; }
+    }
   }
   return null;
 }

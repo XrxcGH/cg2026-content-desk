@@ -79,6 +79,21 @@ test('cookies parse without a library, including junk headers', () => {
   assert.equal(cookie('malformed;;;', 'desk_auth'), null);
   // A cookie value that was percent-encoded on the way out.
   assert.equal(cookie('desk_auth=a%20b', 'desk_auth'), 'a b');
+  // A malformed percent escape must come back raw, never throw: this once
+  // reached the /ws handshake with no try around it and killed the process.
+  assert.equal(cookie('desk_auth=%zz', 'desk_auth'), '%zz');
+  assert.equal(cookie('desk_auth=100%', 'desk_auth'), '100%');
+});
+
+test('recorded footage is gated even though it is only static files', () => {
+  // /clips/ holds pre-publication match cuts and the head referee's review
+  // frames. No open surface reads it; the consoles that do are gated and
+  // send the session cookie with every subresource request. /frames/ never
+  // had a mount at all, and an exemption for it would pre-open whatever gets
+  // mounted there next.
+  for (const p of ['/clips/match42.mp4', '/clips/frame-program-1.jpg', '/frames/x.jpg']) {
+    assert.equal(get(p), true, `${p} must require the PIN`);
+  }
 });
 
 test('the comparison does not short-circuit on the first wrong character', () => {

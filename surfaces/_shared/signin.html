@@ -27,7 +27,10 @@ button { margin-top: 14px; width: 100%; padding: 13px; border: 0; cursor: pointe
   font-family: var(--font-cond); font-weight: 700; font-size: 15px;
   letter-spacing: .1em; text-transform: uppercase; }
 button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
-.err { color: #FF6B6B; font-size: 14px; min-height: 20px; margin-top: 10px; }
+/* --st-bad (#C13030) is only 3.17:1 on this panel. Errors are the one
+   thing an operator must be able to read at a glance, so this uses the
+   lightened console red the rest of the dark surfaces use. */
+.err { color: var(--st-bad-text); font-size: 14px; min-height: 20px; margin-top: 10px; }
 .open { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--surface-sunken);
   font-size: 13px; }
 .open a { color: var(--accent); }
@@ -53,7 +56,12 @@ button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px
 
 <script type="module">
 const $ = id => document.getElementById(id);
-const next = new URLSearchParams(location.search).get('next') || '/';
+// Only a same-origin path may follow a successful PIN. The server only ever
+// generates plain paths here; anything else in ?next= is someone else's
+// link. `//host` and `/\host` are protocol-relative redirects off-site, and
+// a full URL or javascript: scheme is worse, so they all fall back to root.
+const raw = new URLSearchParams(location.search).get('next') || '/';
+const next = raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : '/';
 
 $('form').addEventListener('submit', async e => {
   e.preventDefault();
