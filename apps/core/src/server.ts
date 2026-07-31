@@ -5,6 +5,7 @@
  * to be debuggable at 11pm on a Saturday by whoever is still awake.
  */
 
+import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -14,6 +15,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { EventBus, EmitInit } from './bus.ts';
 import type { MediaLibrary } from './media.ts';
 import type { Recorder } from './recorder.ts';
+import { cookie, needsAuth, safeEqual } from './access.ts';
 import { chapterText, chaptersFrom } from './chapters.ts';
 import { matchCut, type ClipStore, type Range } from './clips.ts';
 import { markersSince } from './markers.ts';
@@ -52,6 +54,7 @@ export const SURFACES = [
   { id: 'media',   group: 'Before the event', name: 'Team media', note: 'Upload robot photos for the pre-match overview. Missing photos fall back gracefully.' },
   { id: 'cards',   group: 'Before the event', name: 'Post-match cards', note: 'Square result graphics for social. They build themselves when a score posts.' },
   { id: 'quiz',    group: 'For the audience', name: 'Trivia play', note: 'The phone page the crowd joins from. The trivia overlay shows this URL.' },
+  { id: 'watch',   group: 'For the audience', name: 'Watch on a monitor', note: 'Put any public screen on a pit TV. Composites the field feed under the overlay, so no OBS is needed. No PIN.' },
   { id: 'next',    group: 'For the audience', name: 'When do we play?', note: 'Per-team schedule on any phone, with honest drift-adjusted start estimates. Side screens show its QR.' },
   { id: 'remote',  group: 'Run the show', name: 'Phone remote', note: 'Run the show from a phone. Big targets, PIN-gated when REMOTE_PIN is set.' },
 ] as const;
@@ -163,16 +166,93 @@ export function startServer(opts: ServerOpts) {
       req.on('error', fail);
     });
 
+  /**
+   * The shared event PIN, from REMOTE_PIN.
+   *
+   * Unset means the desk is wide open, which is right for a laptop on a
+   * kitchen table in March and wrong for a venue. Startup warns when it is
+   * missing, so nobody discovers it at the event.
+   */
+  const REMOTE_PIN = process.env['REMOTE_PIN'] ?? '';
+
+  /**
+   * One session token per process, handed out on a correct PIN.
+   *
+   * Regenerated on restart, which signs everyone out. That is the right
+   * trade: the alternative is persisting a secret to disk on a machine that
+   * gets passed between volunteers all weekend.
+   */
+  const SESSION = randomUUID();
+  const AUTH_COOKIE = 'desk_auth';
+
+  const isAuthed = (req: IncomingMessage): boolean =>
+    !REMOTE_PIN || cookie(req.headers.cookie, AUTH_COOKIE) === SESSION;
+
   const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const path = url.pathname;
 
     try {
+      // ---- access control -------------------------------------------------
+      // Sign in. The PIN is only ever read from a POST body: putting it in a
+      // query string would write it into the server log and the browser
+      // history, on a machine several volunteers share.
+      if (path === '/api/auth' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8')) as
+          { pin?: string };
+        const ok = !!REMOTE_PIN && safeEqual(String(body.pin ?? ''), REMOTE_PIN);
+        if (!ok) {
+          console.warn('[auth] rejected PIN attempt');
+          return json(res, 401, { error: 'That PIN was not accepted.' });
+        }
+        res.setHeader('Set-Cookie',
+          `${AUTH_COOKIE}=${SESSION}; Path=/; HttpOnly; SameSite=Lax; Max-Age=57600`);
+        return json(res, 200, { ok: true });
+      }
+
+      if (path === '/api/auth/status') {
+        return json(res, 200, { required: !!REMOTE_PIN, authed: isAuthed(req) });
+      }
+
+      if (needsAuth({ method: req.method ?? 'GET', path }) && !isAuthed(req)) {
+        // A page gets the sign-in screen, so an operator opening a bookmark
+        // lands somewhere useful. An API call gets a plain 401, because a
+        // fetch can do nothing with a login page.
+        if (path.startsWith('/s/')) {
+          res.writeHead(302, {
+            Location: `/signin?next=${encodeURIComponent(url.pathname + url.search)}`,
+          });
+          return res.end();
+        }
+        return json(res, 401, { error: 'PIN required' });
+      }
+
+      // Answered here so it can never fall through to a handler that only
+      // matches on path. Every route below dispatches on `path`, and most do
+      // not check the verb, so an unanswered OPTIONS would run the GET body.
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, { Allow: 'GET, HEAD, POST, OPTIONS' });
+        return res.end();
+      }
+
+      if (path === '/signin') {
+        if (await sendFile(res, join(root, 'surfaces', '_shared', 'signin.html'))) return;
+        res.writeHead(404).end('No sign-in page');
+        return;
+      }
+
       // ---- API ----------------------------------------------------------
       if (path === '/api/state') return json(res, 200, bus.state);
       // The LAN-reachable base URL: what phone-facing QR codes must encode
       // (a surface's own location.host may be localhost on the desk box).
-      if (path === '/api/urls') return json(res, 200, { base: lanBase });
+      // Open, because every QR code and every pit monitor needs it, and it
+      // discloses only what the network already shows.
+      if (path === '/api/urls') {
+        return json(res, 200, {
+          base: lanBase,
+          fieldStream: config?.kiosk?.fieldStreamUrl ?? '',
+        });
+      }
 
       // Lets the remote show a PIN prompt only when one is actually required.
       // Never reveals the PIN itself.
@@ -207,7 +287,7 @@ export function startServer(opts: ServerOpts) {
 
           const ranges = body.ranges?.length
             ? body.ranges
-            : (body.fromMs && body.toMs ? [{ fromMs: body.fromMs, toMs: body.toMs }] : null);
+            : (body.fromMs != null && body.toMs != null ? [{ fromMs: body.fromMs, toMs: body.toMs }] : null);
           if (!ranges) return json(res, 400, { error: 'ranges, or fromMs and toMs, are required' });
 
           const clip = await clips.extract({
@@ -232,7 +312,7 @@ export function startServer(opts: ServerOpts) {
             { sourceId?: string } | null;
           const st = bus.state;
           const startedAt = st.matchStartedAt ?? bus.lastMatchStartedAt;
-          if (!startedAt) return json(res, 409, { error: 'No match has started yet.' });
+          if (startedAt == null) return json(res, 409, { error: 'No match has started yet.' });
 
           const ranges = matchCut({
             startedAt,
@@ -430,7 +510,7 @@ export function startServer(opts: ServerOpts) {
             const body = JSON.parse((await readBody(req, 8 * 1024)).toString('utf8')) as {
               segment?: string; fromMs?: number; toMs?: number; note?: string; sourceId?: string;
             };
-            if (!body.segment || !body.fromMs || !body.toMs) {
+            if (!body.segment || body.fromMs == null || body.toMs == null) {
               return json(res, 400, { error: 'segment, fromMs and toMs are required' });
             }
             return json(res, 200, await publish.queueSegment({
@@ -488,7 +568,7 @@ export function startServer(opts: ServerOpts) {
         try {
           const body = JSON.parse((await readBody(req, 8 * 1024)).toString('utf8')) as
             { sourceId?: string; atMs?: number; analyst?: string; send?: boolean };
-          if (!body.atMs) return json(res, 400, { error: 'atMs is required' });
+          if (body.atMs == null) return json(res, 400, { error: 'atMs is required' });
 
           const frame = await clips.frameAt(body.sourceId ?? 'program', body.atMs);
           if (body.send !== false) {
@@ -627,20 +707,23 @@ ${sections}</body></html>`;
   };
 
   /**
-   * Optional shared PIN, from REMOTE_PIN.
+   * Who may write on the socket.
    *
-   * The read path is always open, because overlays and pit TVs must never need a
-   * credential, and they can only observe. Anything that CHANGES the show
-   * (emit, relay) requires the PIN once one is set. That matters the moment a
-   * phone can reach the desk: without it, anyone on the same Wi-Fi can take
-   * the broadcast.
+   * The read path is always open, because overlays and pit TVs must never need
+   * a credential and can only observe. Anything that CHANGES the show (emit,
+   * relay) requires the PIN once one is set. That matters the moment a phone
+   * can reach the desk: without it, anyone on the same Wi-Fi can take the
+   * broadcast.
    */
-  const REMOTE_PIN = process.env['REMOTE_PIN'] ?? '';
   const authed = new WeakSet<WebSocket>();
   const mayWrite = (ws: WebSocket): boolean => !REMOTE_PIN || authed.has(ws);
 
   wss.on('connection', (ws, req) => {
     const who = new URL(req.url ?? '/', 'http://x').searchParams.get('surface') ?? 'anon';
+    // A console that signed in over HTTP arrives with the session cookie, so
+    // it is never asked twice. The phone remote, which can be opened straight
+    // to its own page, still authenticates over the socket below.
+    if (cookie(req.headers.cookie, AUTH_COOKIE) === SESSION) authed.add(ws);
     send(ws, { t: 'snapshot', state: bus.state, media: media.manifest, needsPin: !!REMOTE_PIN });
 
     ws.on('message', raw => {
@@ -649,7 +732,7 @@ ${sections}</body></html>`;
 
       if (msg.t === 'auth') {
         // Constant-time-ish: compare full strings, and never echo the PIN back.
-        const ok = !!REMOTE_PIN && msg.pin === REMOTE_PIN;
+        const ok = !!REMOTE_PIN && safeEqual(String(msg.pin ?? ''), REMOTE_PIN);
         if (ok) authed.add(ws);
         send(ws, { t: 'auth', ok });
         if (!ok) console.warn(`[ws:${who}] rejected PIN attempt`);
@@ -692,6 +775,16 @@ ${sections}</body></html>`;
   http.listen(port, host, () => {
     console.log(`[core] http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
     for (const s of SURFACES) console.log(`         /s/${s.id.padEnd(9)} ${s.name}`);
+
+    // Said at startup rather than left to be discovered. At a venue the desk
+    // is reachable by every phone in the building, and the trivia QR code
+    // puts its address on a projector in front of the whole gym.
+    if (REMOTE_PIN) {
+      console.log('[auth] control surfaces are PIN-gated; audience surfaces are open');
+    } else {
+      console.warn('[auth] NO PIN SET: anyone who can reach this desk can run the show.');
+      console.warn('[auth] Set REMOTE_PIN before putting it on the venue network.');
+    }
   });
 
   return {

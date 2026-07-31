@@ -1,0 +1,132 @@
+/**
+ * Who may drive the show.
+ *
+ * The desk runs on the venue network, and at an event that network has a few
+ * hundred phones on it. Anyone who can reach the desk can currently load the
+ * control consoles and take the program screen, abort a publish, or clear the
+ * telestrator. That is not a hypothetical: the trivia QR code puts the desk's
+ * address on a projector in front of the whole gym.
+ *
+ * So control is gated and viewing is not. The split matters more than the
+ * mechanism:
+ *
+ *   OPEN    the overlays OBS renders, the venue TVs, and the two audience
+ *           phone pages, plus exactly the reads they need. These have no
+ *           credential and never will: a Browser Source cannot type a PIN,
+ *           and a spectator should not have to.
+ *
+ *   GATED   every operator console, and every request that changes something.
+ *
+ * One shared PIN rather than accounts. The people who need it are a handful
+ * of volunteers who arrive on the day, and anything requiring a password
+ * reset at 8am on a Saturday will be worked around by propping the door open.
+ */
+
+/** Surfaces anyone may load. Everything else under /s/ needs the PIN. */
+export const OPEN_SURFACES: ReadonlySet<string> = new Set([
+  'program',   // OBS Browser Source
+  'side',      // venue TVs
+  'tele',      // OBS Browser Source, telestrator render
+  'arcade',    // OBS Browser Source
+  'trivia',    // OBS Browser Source
+  'quiz',      // the audience plays on their own phones
+  'next',      // "when do we play?", the whole point is that anyone can open it
+  'watch',     // kiosk wrapper: composites the open screens for a pit monitor
+]);
+
+/**
+ * Reads an open surface genuinely needs.
+ *
+ * Deliberately a list rather than "all GETs": `/api/publish` reports queue
+ * state and credential readiness, `/api/cheesy/audit` is the bridge's request
+ * log, and neither belongs to the audience even though both are reads.
+ */
+const OPEN_GET = new Set([
+  '/api/state',        // every overlay renders from this
+  '/api/urls',         // the LAN base a QR code has to encode
+  '/api/media/manifest',
+  '/api/trivia',       // the overlay's snapshot: never carries an unrevealed answer
+  '/api/trivia/play',  // a player's own view
+  // The arcade overlay is open, and this is the only way it learns the set in
+  // progress: the state snapshot carries no arcade fields. Gating it left the
+  // overlay permanently blank after any reload, which is a bad way to find out.
+  '/api/arcade',
+]);
+
+/**
+ * Writes the audience must be able to make.
+ *
+ * Joining and answering are the game. They are rate-limited by the store
+ * (one answer per player, names clipped, a 500-player ceiling) rather than by
+ * a credential nobody in the stands could have.
+ */
+const OPEN_POST = new Set([
+  '/api/trivia/join',
+  '/api/trivia/answer',
+]);
+
+/** Static assets a surface pulls in. Gating these would break the open pages. */
+const OPEN_PREFIXES = ['/theme/', '/shared/', '/media/', '/clips/', '/frames/'];
+
+export interface AccessQuery {
+  method: string;
+  path: string;
+}
+
+/**
+ * Does this request need the PIN?
+ *
+ * Written as an allowlist in both directions: anything not explicitly opened
+ * is closed. A new endpoint added later is private until someone decides
+ * otherwise, which is the safe direction for a mistake to fall.
+ */
+export function needsAuth({ method, path }: AccessQuery): boolean {
+  if (OPEN_PREFIXES.some(p => path.startsWith(p))) return false;
+
+  // The surface pages themselves.
+  if (path === '/' ) return false;                       // the index just lists them
+  if (path.startsWith('/s/')) {
+    const id = path.slice(3).split('/')[0] ?? '';
+    return !OPEN_SURFACES.has(id);
+  }
+
+  // Auth endpoints, and the page that posts to them, must be reachable
+  // to authenticate at all. Gating /signin would mean nobody redirected
+  // there for lacking a PIN could ever load the form that lets them enter one.
+  if (path === '/api/auth' || path === '/api/auth/status' || path === '/signin') return false;
+
+  // Anything that only reads is judged against the read list. OPTIONS belongs
+  // here and NOT in a blanket exemption: this once returned false for every
+  // OPTIONS request, and because the route handlers dispatch on path alone,
+  // `curl -X OPTIONS /s/desk` served the whole operator console and
+  // `-X OPTIONS /api/trivia/bank` handed out unrevealed answers. A verb is not
+  // a permission.
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    return !OPEN_GET.has(path);
+  }
+  return !OPEN_POST.has(path);
+}
+
+/** Read one cookie without pulling in a parser. */
+export function cookie(header: string | undefined, name: string): string | null {
+  for (const part of (header ?? '').split(';')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
+  }
+  return null;
+}
+
+/**
+ * Compare without leaking length or position through timing.
+ *
+ * The threat is mild (a volunteer network, a short PIN) but this costs
+ * nothing, and a naive === on a secret is the kind of thing that gets copied
+ * into somewhere it matters.
+ */
+export function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
