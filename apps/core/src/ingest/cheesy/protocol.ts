@@ -3,12 +3,12 @@
  *
  * Field names are Go struct fields serialised with default JSON marshalling,
  * so they are PascalCase. Everything here is `Partial`-ish and read
- * defensively — an off-season FMS build may differ slightly, and a missing
+ * defensively: an off-season FMS build may differ slightly, and a missing
  * field must degrade rather than crash the broadcast.
  */
 
 /**
- * field/arena.go — serialised as an integer.
+ * field/arena.go, serialised as an integer.
  *
  * A const object rather than an `enum`: enums emit runtime code, and this
  * project runs TypeScript through Node's type stripping, which requires every
@@ -44,7 +44,7 @@ export interface ScoreSummary {
   PlayoffDq?: boolean;
 }
 
-/** field/arena_notifiers.go — audienceAllianceScoreFields */
+/** field/arena_notifiers.go (audienceAllianceScoreFields) */
 export interface AllianceScoreFields {
   Score?: unknown;
   ScoreSummary?: ScoreSummary;
@@ -80,6 +80,17 @@ export interface CheesyMatch {
   ShortName?: string;
   Red1?: number; Red2?: number; Red3?: number;
   Blue1?: number; Blue2?: number; Blue3?: number;
+  /**
+   * Seed numbers, playoffs only, 0 during qualification.
+   *
+   * Only three robots ever take the field, so these slots stay at three. A
+   * playoff alliance of four carries a backup, and the fourth member is only
+   * knowable by joining these seeds against the alliance rosters from
+   * selection. That join is what lets a playoff graphic name the whole
+   * alliance rather than just whoever is on the field this match.
+   */
+  PlayoffRedAlliance?: number;
+  PlayoffBlueAlliance?: number;
 }
 
 export interface MatchLoadMessage {
@@ -116,6 +127,28 @@ export interface ScorePostedMessage {
   BlueRankingPoints?: number;
 }
 
+/**
+ * field/arena_notifiers.go, generateAllianceSelectionMessage.
+ *
+ * Read-only, and it arrives on the audience display socket we already
+ * subscribe to. The alliance selection websocket itself accepts picks and a
+ * finalize command, which is why it sits on the forbidden list in
+ * docs/10-field-bridge.md: the scorekeeper runs selection, we only draw it.
+ */
+export interface AllianceSelectionMessage {
+  /** model.Alliance. `TeamIds` fills pick by pick as the segment runs. */
+  Alliances?: {
+    Id?: number;
+    TeamIds?: number[];
+    /** Set on finalize: captain in the middle, first pick left. */
+    Lineup?: number[];
+  }[];
+  ShowTimer?: boolean;
+  /** Counts down once a second while the pick clock runs. */
+  TimeRemainingSec?: number;
+  RankedTeams?: { Rank?: number; TeamId?: number; Picked?: boolean }[];
+}
+
 // ---------------------------------------------------------------------------
 // REST shapes. Transcribed from web/api.go, model/match.go and
 // game/ranking_fields.go in the 2026 source.
@@ -145,7 +178,7 @@ export interface RankingsResponse {
   HighestPlayedMatch?: string;
 }
 
-/** GET /api/matches/{type} — MatchWithResult[] */
+/** GET /api/matches/{type} (MatchWithResult[]) */
 export interface MatchWithResult {
   Match?: CheesyMatch & {
     Time?: string;
@@ -167,7 +200,7 @@ export const MatchStatus = {
   Scheduled: 0, Hidden: 1, RedWon: 2, BlueWon: 3, Tie: 4,
 } as const;
 
-/** Points, not counts — REBUILT fuel is 1 point each into an active hub. */
+/** Points, not counts: REBUILT fuel is 1 point each into an active hub. */
 export const fuelPoints = (s: ScoreSummary | undefined): number =>
   (s?.AutoFuelPoints ?? 0) + (s?.TeleopFuelPoints ?? 0);
 

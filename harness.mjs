@@ -3,7 +3,7 @@
  * Cheesy Arena so a real match runs with real scoring, and the content desk
  * bridge can be observed end to end.
  *
- * The bridge itself never touches these control endpoints — this is a separate
+ * The bridge itself never touches these control endpoints. This is a separate
  * client standing in for the volunteers who would normally drive them.
  *
  *   node harness.mjs

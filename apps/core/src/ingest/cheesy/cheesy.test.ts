@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { assertPathAllowed, assertSocketAllowed, ALLOWED_SOCKETS } from './client.ts';
 import { fuelPoints, towerPoints, MatchState, MatchStatus } from './protocol.ts';
-import { CheesyAdapter, mapRankings, mapUpcoming } from './adapter.ts';
+import { CheesyAdapter, mapRankings, mapSelection, mapUpcoming } from './adapter.ts';
 import { EventBus } from '../../bus.ts';
 import type { DeskEvent } from '../../types.ts';
 
@@ -169,7 +169,7 @@ test('the field decides the auto winner, on fuel alone', () => {
   });
 
   // Null, not "red". On a tie Cheesy flips a coin, so there is nothing to
-  // derive — and `autoWinnerKnown` stops the local heuristic overwriting it.
+  // derive, and `autoWinnerKnown` stops the local heuristic overwriting it.
   assert.equal(bus.state.autoWinner, null);
   assert.equal(bus.state.autoWinnerKnown, true);
 });
@@ -254,10 +254,15 @@ test('on deck skips matches that have been played', () => {
     m(1, MatchStatus.RedWon), m(2, MatchStatus.Tie),
     m(3, MatchStatus.Scheduled), m(4, MatchStatus.Scheduled),
     m(5, MatchStatus.Scheduled), m(6, MatchStatus.Scheduled),
-    m(7, MatchStatus.Scheduled),
+    m(7, MatchStatus.Scheduled), m(8, MatchStatus.Scheduled),
+    m(9, MatchStatus.Scheduled), m(10, MatchStatus.Scheduled),
+    m(11, MatchStatus.Scheduled), m(12, MatchStatus.Scheduled),
   ]);
 
-  assert.deepEqual(out.map(u => u.shortName), ['Q3', 'Q4', 'Q5', 'Q6'], 'limit of four');
+  // Eight on deck: the side screens render four; the phone schedule view
+  // needs the longer horizon.
+  assert.deepEqual(out.map(u => u.shortName),
+    ['Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10'], 'limit of eight');
   assert.deepEqual(out[0]?.red, [846, 1868, 253]);
   assert.deepEqual(out[0]?.blue, [100, 115, 670]);
 });
@@ -287,3 +292,180 @@ test('reports robots that have lost their driver station link', () => {
   assert.deepEqual(status.down, [1868]);
 });
 
+test('arms once when every fielded robot links, before the countdown', () => {
+  const bus = new EventBus();
+  const seen: string[] = [];
+  bus.subscribe(ev => seen.push(ev.type));
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  const stations = (r2Linked: boolean) => ({
+    AllianceStations: {
+      R1: { Team: { Id: 846 }, Ds: { RobotLinked: true } },
+      R2: { Team: { Id: 1868 }, Ds: { RobotLinked: r2Linked } },
+      R3: { Team: { Id: 253 }, Ds: { RobotLinked: false }, Bypass: true },
+      B1: { Team: { Id: 100 }, Ds: { RobotLinked: true } },
+    },
+  });
+
+  // No match loaded yet: a green field between matches must not arm.
+  adapter.ingest('arenaStatus', stations(true));
+  assert.equal(seen.filter(t => t === 'match.armed').length, 0);
+
+  adapter.ingest('matchLoad', { Match: { Id: 7, LongName: 'Qualification 7' } });
+
+  // One robot still unlinked: not armed. Bypassed 253 must not block arming.
+  adapter.ingest('arenaStatus', stations(false));
+  assert.equal(seen.filter(t => t === 'match.armed').length, 0);
+
+  // Everyone links: armed, exactly once. This is what flips program to the
+  // score bar before the announcer starts counting down.
+  adapter.ingest('arenaStatus', stations(true));
+  adapter.ingest('arenaStatus', stations(true));
+  assert.equal(seen.filter(t => t === 'match.armed').length, 1);
+  assert.equal(bus.state.screen, 'match');
+
+  // A drop and relink during the same pre-match must not re-fire it.
+  adapter.ingest('arenaStatus', stations(false));
+  adapter.ingest('arenaStatus', stations(true));
+  assert.equal(seen.filter(t => t === 'match.armed').length, 1);
+
+  // The next match load re-latches.
+  adapter.ingest('matchLoad', { Match: { Id: 8, LongName: 'Qualification 8' } });
+  assert.equal(bus.state.screen, 'overview');
+  adapter.ingest('arenaStatus', stations(true));
+  assert.equal(seen.filter(t => t === 'match.armed').length, 2);
+});
+
+test('a station with no DS data yet blocks arming but is not "down"', () => {
+  const bus = new EventBus();
+  const seen: DeskEvent[] = [];
+  bus.subscribe(ev => seen.push(ev));
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  adapter.ingest('matchLoad', { Match: { Id: 9, LongName: 'Qualification 9' } });
+  adapter.ingest('arenaStatus', {
+    AllianceStations: {
+      R1: { Team: { Id: 846 }, Ds: { RobotLinked: true } },
+      R2: { Team: { Id: 1868 }, Ds: null },   // nothing heard yet: unknown, not down
+    },
+  });
+
+  assert.equal(seen.filter(e => e.type === 'match.armed').length, 0);
+  const status = seen.filter(e => e.type === 'arena.status').at(-1)?.payload as { down: number[] };
+  assert.deepEqual(status.down, []);
+});
+
+test('prestart no longer steals the screen; armed owns the flip', () => {
+  const bus = new EventBus();
+  bus.emit({
+    type: 'match.loaded', source: 'cheesy',
+    payload: { id: 'q1', displayName: 'Qualification 1', red: [], blue: [] },
+  });
+  assert.equal(bus.state.screen, 'overview');
+
+  // Field reset (PostMatch -> PreMatch) emits prestart; the overview must
+  // survive it, since the audience is still reading the alliance overview.
+  bus.emit({ type: 'match.prestart', source: 'cheesy' });
+  assert.equal(bus.state.screen, 'overview');
+
+  bus.emit({ type: 'match.armed', source: 'cheesy' });
+  assert.equal(bus.state.screen, 'match');
+});
+
+
+test('alliance selection maps across, and empty captain slots stay empty', () => {
+  // Fired before selection starts: the board is sized but nothing is picked.
+  const early = mapSelection({
+    Alliances: [{ Id: 1, TeamIds: [] }, { Id: 2, TeamIds: [] }],
+    RankedTeams: [{ Rank: 1, TeamId: 254, Picked: false }],
+    ShowTimer: false,
+    TimeRemainingSec: 0,
+  });
+  assert.deepEqual(early.alliances, [{ id: 1, teams: [] }, { id: 2, teams: [] }]);
+  assert.equal(early.showTimer, false);
+
+  const live = mapSelection({
+    Alliances: [
+      { Id: 1, TeamIds: [254, 846, 1678] },
+      { Id: 2, TeamIds: [100] },
+    ],
+    RankedTeams: [
+      { Rank: 1, TeamId: 254, Picked: true },
+      { Rank: 2, TeamId: 846, Picked: true },
+      { Rank: 3, TeamId: 604, Picked: false },
+    ],
+    ShowTimer: true,
+    TimeRemainingSec: 42,
+  });
+  assert.deepEqual(live.alliances[1], { id: 2, teams: [100] });
+  assert.equal(live.ranked.filter(r => !r.picked).length, 1);
+  assert.equal(live.timeRemainingSec, 42);
+  assert.equal(live.showTimer, true);
+});
+
+test('a garbled selection message degrades instead of putting team 0 on air', () => {
+  const sel = mapSelection({
+    Alliances: [{ TeamIds: [254, 0, undefined as unknown as number] }],
+    RankedTeams: [{ Rank: 1, TeamId: 0 }, { Rank: 2, TeamId: 846 }],
+    TimeRemainingSec: -5,
+  });
+  assert.deepEqual(sel.alliances, [{ id: 1, teams: [254] }], 'zeroes are holes, not teams');
+  assert.deepEqual(sel.ranked.map(r => r.team), [846]);
+  assert.equal(sel.timeRemainingSec, 0, 'a negative clock never counts up');
+});
+
+test('selection lands in state and every update replaces the whole board', () => {
+  const bus = new EventBus();
+  bus.emit({
+    type: 'alliance_selection.update', source: 'cheesy',
+    payload: mapSelection({ Alliances: [{ Id: 1, TeamIds: [254] }], ShowTimer: true, TimeRemainingSec: 60 }),
+  });
+  assert.deepEqual(bus.state.selection?.alliances, [{ id: 1, teams: [254] }]);
+
+  bus.emit({
+    type: 'alliance_selection.update', source: 'cheesy',
+    payload: mapSelection({ Alliances: [{ Id: 1, TeamIds: [254, 846] }], ShowTimer: true, TimeRemainingSec: 55 }),
+  });
+  assert.deepEqual(bus.state.selection?.alliances, [{ id: 1, teams: [254, 846] }]);
+  assert.equal(bus.state.selection?.timeRemainingSec, 55);
+});
+
+test('playoff seeds ride along, and qualification carries none', () => {
+  const bus = new EventBus();
+  const adapter = new CheesyAdapter({ bus, host: 'x', displayId: 'test' });
+
+  adapter.ingest('matchLoad', {
+    Match: { Id: 1, LongName: 'Qualification 42', Red1: 846, Red2: 1868, Red3: 253,
+             Blue1: 100, Blue2: 115, Blue3: 670, PlayoffRedAlliance: 0, PlayoffBlueAlliance: 0 },
+  });
+  assert.equal(bus.state.match?.redAlliance, undefined, 'a qual match has no seed');
+  assert.equal(bus.state.match?.blueAlliance, undefined);
+
+  adapter.ingest('matchLoad', {
+    Match: { Id: 2, LongName: 'Match 7 (R3)', Red1: 254, Red2: 846, Red3: 1678,
+             Blue1: 100, Blue2: 115, Blue3: 670, PlayoffRedAlliance: 1, PlayoffBlueAlliance: 4 },
+  });
+  assert.equal(bus.state.match?.redAlliance, 1);
+  assert.equal(bus.state.match?.blueAlliance, 4);
+  // Three robots take the field in a playoff match too; the fourth alliance
+  // member is a backup and is not on it.
+  assert.equal(bus.state.match?.red.length, 3);
+});
+
+test('surfaces can size off the alliance rather than a hard-coded three', () => {
+  const bus = new EventBus();
+  bus.emit({
+    type: 'match.loaded', source: 'cheesy',
+    payload: {
+      id: 'sf1m1', displayName: 'Match 7 (R3)',
+      red: [{ number: 254, name: 'A' }, { number: 846, name: 'B' },
+            { number: 1678, name: 'C' }, { number: 25801, name: 'D' }],
+      blue: [{ number: 100, name: 'E' }, { number: 115, name: 'F' }],
+    },
+  });
+  // A four-team roster and a short-handed alliance both survive the reducer
+  // untouched: nothing clamps, pads, or drops a team on the way through.
+  assert.equal(bus.state.match?.red.length, 4);
+  assert.equal(bus.state.match?.blue.length, 2);
+  assert.deepEqual(bus.state.match?.red.map(t => t.number), [254, 846, 1678, 25801]);
+});

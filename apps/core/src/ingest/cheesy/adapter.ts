@@ -10,10 +10,13 @@
  */
 
 import type { EmitInit, EventBus } from '../../bus.ts';
-import type { Alliance, MatchInfo, RankingRow, Team, UpcomingMatch } from '../../types.ts';
+import type {
+  Alliance, AllianceSelection, MatchInfo, RankingRow, Team, UpcomingMatch,
+} from '../../types.ts';
 import { CheesyClient, type CheesyClientOpts } from './client.ts';
 import {
-  MatchState, MatchStatus, fuelPoints, towerPoints,
+  MatchState, MatchStatus,
+  type AllianceSelectionMessage,
   type ArenaStatusMessage, type MatchLoadMessage, type MatchTimeMessage,
   type MatchWithResult, type RankingsResponse,
   type RealtimeScoreMessage, type ScorePostedMessage, type ScoreSummary,
@@ -43,7 +46,9 @@ export function mapRankings(res: RankingsResponse): {
   };
 }
 
-export function mapUpcoming(matches: MatchWithResult[], limit = 4): UpcomingMatch[] {
+// 8, not 4: the venue side screens show four, but the phone-facing per-team
+// schedule view needs a longer horizon to answer "when do WE play next".
+export function mapUpcoming(matches: MatchWithResult[], limit = 8): UpcomingMatch[] {
   return matches
     // Anything past "scheduled" has been played, so it isn't on deck.
     .filter(m => (m.Match?.Status ?? MatchStatus.Scheduled) === MatchStatus.Scheduled)
@@ -57,8 +62,38 @@ export function mapUpcoming(matches: MatchWithResult[], limit = 4): UpcomingMatc
     }));
 }
 
-interface Totals { fuel: number; tower: number; foulsAgainst: number }
-const zero = (): Totals => ({ fuel: 0, tower: 0, foulsAgainst: 0 });
+/**
+ * Alliance selection, straight across.
+ *
+ * Defensive about empties because this notifier fires before selection starts,
+ * with an alliance list already sized to the event and every `TeamIds` still
+ * empty. A captain slot that has not been filled yet is a hole in the board,
+ * not a team zero.
+ */
+export function mapSelection(msg: AllianceSelectionMessage): AllianceSelection {
+  return {
+    alliances: (msg.Alliances ?? []).map((a, i) => ({
+      id: a.Id ?? i + 1,
+      teams: (a.TeamIds ?? []).filter((n): n is number => typeof n === 'number' && n > 0),
+    })),
+    ranked: (msg.RankedTeams ?? [])
+      .filter(r => (r.TeamId ?? 0) > 0)
+      .map(r => ({ rank: r.Rank ?? 0, team: r.TeamId!, picked: r.Picked === true })),
+    showTimer: msg.ShowTimer === true,
+    timeRemainingSec: Math.max(0, msg.TimeRemainingSec ?? 0),
+    updatedAt: Date.now(),
+  };
+}
+
+interface Totals {
+  autoFuel: number; teleopFuel: number; autoTower: number; teleopTower: number;
+  foulsAgainst: number;
+}
+const zero = (): Totals => ({
+  autoFuel: 0, teleopFuel: 0, autoTower: 0, teleopTower: 0, foulsAgainst: 0,
+});
+const fuelOf = (t: Totals): number => t.autoFuel + t.teleopFuel;
+const towerOf = (t: Totals): number => t.autoTower + t.teleopTower;
 
 export interface CheesyAdapterOpts extends Omit<CheesyClientOpts, 'onEvent' | 'onStatus'> {
   bus: EventBus;
@@ -70,10 +105,14 @@ export class CheesyAdapter {
   #last: Record<Alliance, Totals> = { red: zero(), blue: zero() };
   #matchState: MatchState = MatchState.PreMatch;
   #started = false;
-  /** Auto fuel per alliance — the only thing that decides the auto winner. */
+  /** Auto fuel per alliance: the only thing that decides the auto winner. */
   #autoFuel: Record<Alliance, number> = { red: 0, blue: 0 };
   #autoWinnerSent = false;
+  #matchLoaded = false;
+  /** Latched per match: armed fires once, when the field first goes ready. */
+  #armedSent = false;
   #pollTimer: NodeJS.Timeout | null = null;
+  #refreshTimer: NodeJS.Timeout | null = null;
 
   constructor(opts: CheesyAdapterOpts) {
     this.#bus = opts.bus;
@@ -103,12 +142,33 @@ export class CheesyAdapter {
   stop(): void {
     if (this.#pollTimer) clearInterval(this.#pollTimer);
     this.#pollTimer = null;
+    if (this.#refreshTimer) clearTimeout(this.#refreshTimer);
+    this.#refreshTimer = null;
     this.#client.close();
   }
 
   /**
+   * Rankings change at exactly one moment: when a score is committed. Waiting
+   * out the 60s poll means the side screens can show last match's standings
+   * for a full minute while the room is looking at the new ones, so a posted
+   * score pulls them immediately.
+   *
+   * The delay is for Cheesy, not for us: `scorePosted` goes out to displays as
+   * part of committing, and the rankings table is written in the same handler.
+   * A moment's grace avoids reading the table mid-write and getting the old
+   * numbers, which would be worse than waiting.
+   */
+  #refreshSoon(): void {
+    if (this.#refreshTimer) return;
+    this.#refreshTimer = setTimeout(() => {
+      this.#refreshTimer = null;
+      void this.#poll();
+    }, 1500);
+  }
+
+  /**
    * Pull the schedule and rankings. Failures are logged once and retried on the
-   * next tick — a missing schedule degrades the side screens, it does not stop
+   * next tick. A missing schedule degrades the side screens, it does not stop
    * the broadcast, so there is nothing here worth throwing over.
    */
   async #poll(): Promise<void> {
@@ -133,7 +193,7 @@ export class CheesyAdapter {
 
   /**
    * Feed one Cheesy Arena notifier in. Public because the websocket is not the
-   * only thing that drives it — a recorded capture can be replayed through the
+   * only thing that drives it: a recorded capture can be replayed through the
    * same path to rehearse the whole pipeline without a field.
    */
   ingest(notifier: string, data: unknown): void {
@@ -143,7 +203,12 @@ export class CheesyAdapter {
       case 'realtimeScore': return this.#onRealtimeScore(data as RealtimeScoreMessage);
       case 'scorePosted': return this.#onScorePosted(data as ScorePostedMessage);
       case 'arenaStatus': return this.#onArenaStatus(data as ArenaStatusMessage);
-      default: return;   // lowerThird, playSound, etc. — the desk owns those
+      case 'allianceSelection':
+        return this.#emit({
+          type: 'alliance_selection.update',
+          payload: mapSelection(data as AllianceSelectionMessage),
+        });
+      default: return;   // lowerThird, playSound, etc.; the desk owns those
     }
   }
 
@@ -165,21 +230,27 @@ export class CheesyAdapter {
     const red = [teamAt('R1', m.Red1), teamAt('R2', m.Red2), teamAt('R3', m.Red3)].filter(Boolean) as Team[];
     const blue = [teamAt('B1', m.Blue1), teamAt('B2', m.Blue2), teamAt('B3', m.Blue3)].filter(Boolean) as Team[];
 
+    // Seeds are 0 through qualification, so they are carried only when real.
+    // A graphic that says "Alliance 0" is worse than one that says nothing.
     const match: MatchInfo = {
       id: String(m.Id ?? `${m.Type ?? 'm'}${m.TypeOrder ?? 0}`),
       displayName: m.LongName ?? m.ShortName ?? 'Match',
       red, blue,
+      ...((m.PlayoffRedAlliance ?? 0) > 0 ? { redAlliance: m.PlayoffRedAlliance } : {}),
+      ...((m.PlayoffBlueAlliance ?? 0) > 0 ? { blueAlliance: m.PlayoffBlueAlliance } : {}),
     };
 
     this.#last = { red: zero(), blue: zero() };
     this.#started = false;
     this.#autoFuel = { red: 0, blue: 0 };
     this.#autoWinnerSent = false;
+    this.#matchLoaded = true;
+    this.#armedSent = false;
     this.#emit({ type: 'match.loaded', payload: match });
   }
 
   /**
-   * Cheesy sends matchTime continuously. We only care about the transitions —
+   * Cheesy sends matchTime continuously. We only care about the transitions:
    * the desk derives its own clock from match.start, so a dropped frame or a
    * network hiccup can't make the countdown stutter.
    */
@@ -195,7 +266,7 @@ export class CheesyAdapter {
         if (!this.#started) { this.#started = true; this.#emit({ type: 'match.start' }); }
         break;
       case MatchState.PostMatch:
-        // Only a real match end — coming back from a timeout isn't one.
+        // Only a real match end (coming back from a timeout isn't one).
         if (previous === MatchState.TeleopPeriod || previous === MatchState.AutoPeriod
             || previous === MatchState.PausePeriod) {
           this.#emit({ type: 'match.end' });
@@ -216,12 +287,14 @@ export class CheesyAdapter {
 
   #totals(summary: ScoreSummary | undefined, opponent: ScoreSummary | undefined): Totals {
     return {
-      fuel: fuelPoints(summary),
-      tower: towerPoints(summary),
+      autoFuel: summary?.AutoFuelPoints ?? 0,
+      teleopFuel: summary?.TeleopFuelPoints ?? 0,
+      autoTower: summary?.AutoTowerPoints ?? 0,
+      teleopTower: summary?.TeleopTowerPoints ?? 0,
       // Our AllianceScore.fouls means "points this alliance conceded", because
       // the reducer computes total = fuel + tower + opponent.fouls. Cheesy's
       // FoulPoints are credited TO an alliance, so they belong on the other
-      // side of the ledger. Covered by a test — this is easy to get backwards.
+      // side of the ledger. Covered by a test: this is easy to get backwards.
       foulsAgainst: opponent?.FoulPoints ?? 0,
     };
   }
@@ -239,8 +312,8 @@ export class CheesyAdapter {
 
     // Synthesise the deltas Cheesy never sends.
     for (const side of ALLIANCES) {
-      for (const field of ['fuel', 'tower'] as const) {
-        const amount = next[side][field] - this.#last[side][field];
+      for (const [field, of] of [['fuel', fuelOf], ['tower', towerOf]] as const) {
+        const amount = of(next[side]) - of(this.#last[side]);
         // Only positive deltas: a score correction downward is not a highlight,
         // and emitting it would drop a bogus replay marker.
         if (amount > 0) {
@@ -250,12 +323,14 @@ export class CheesyAdapter {
     }
     this.#last = next;
 
+    const parts = (t: Totals) => ({
+      autoFuel: t.autoFuel, teleopFuel: t.teleopFuel,
+      autoTower: t.autoTower, teleopTower: t.teleopTower,
+      fouls: t.foulsAgainst,
+    });
     this.#emit({
       type: 'score.realtime',
-      payload: {
-        red: { fuel: next.red.fuel, tower: next.red.tower, fouls: next.red.foulsAgainst },
-        blue: { fuel: next.blue.fuel, tower: next.blue.tower, fouls: next.blue.foulsAgainst },
-      },
+      payload: { red: parts(next.red), blue: parts(next.blue) },
     });
 
     // Hub state, taken from the field rather than inferred. Cheesy reports a
@@ -270,7 +345,7 @@ export class CheesyAdapter {
       || state === MatchState.PausePeriod;
 
     // Track auto fuel while auto is running. Cheesy decides the auto winner on
-    // AUTO FUEL ALONE — `redWonAuto = redAutoFuel > blueAutoFuel` — so a climb
+    // AUTO FUEL ALONE (`redWonAuto = redAutoFuel > blueAutoFuel`), so a climb
     // worth 15 auto points does not win auto. Reporting the winner from total
     // score puts the wrong alliance on the hub indicator for the whole match.
     if (state === MatchState.AutoPeriod) {
@@ -283,7 +358,7 @@ export class CheesyAdapter {
       this.#autoWinnerSent = true;
       const { red, blue } = this.#autoFuel;
       // On a TIE Cheesy flips a coin (`redWonAuto = rand.Intn(2) == 1`), so
-      // there is no answer to derive — report null and let the authoritative
+      // there is no answer to derive: report null and let the authoritative
       // per-alliance active state carry the hub indicator. This is why the
       // field's answer is mandatory rather than merely preferable: a local
       // guess is wrong half the time whenever auto ends level.
@@ -322,17 +397,27 @@ export class CheesyAdapter {
         blue: { score: msg.BlueScoreSummary?.Score ?? 0, rp: msg.BlueRankingPoints ?? 0 },
       },
     });
+    // Standings and the remaining schedule both just changed. Pull them now
+    // instead of showing stale rankings until the next 60s tick.
+    this.#refreshSoon();
   }
 
   // ---- field health -------------------------------------------------------
 
   #onArenaStatus(msg: ArenaStatusMessage): void {
-    // "What happened to 846?" — the replay marker nobody thinks to hit,
+    // "What happened to 846?" is the replay marker nobody thinks to hit,
     // because it happens while everyone is watching the other end of the field.
     const down: number[] = [];
+    let fielded = 0;
+    let linked = 0;
     for (const station of Object.values(msg.AllianceStations ?? {})) {
       const team = station?.Team?.Id;
       if (!team || station?.Bypass) continue;
+      fielded++;
+      // Readiness needs a positive link: a station with no DS data yet is
+      // not linked, it is unknown. "Down" stays explicit-false only, so the
+      // dropped-robot marker never fires off missing data.
+      if (station?.Ds?.RobotLinked === true) linked++;
       if (station?.Ds && station.Ds.RobotLinked === false) down.push(team);
     }
 
@@ -346,5 +431,19 @@ export class CheesyAdapter {
         ftaReady: msg.IsFtaReady ?? null,
       },
     });
+
+    // The field going ready IS the pre-countdown moment: every non-bypassed
+    // robot linked, scorekeeper about to hand it to the announcer. Emitting
+    // `match.armed` here flips program to the score bar BEFORE anyone says
+    // "3, 2, 1". The graphic must never change mid-countdown. Latched so a
+    // robot dropping and relinking doesn't re-fire it.
+    const state = msg.MatchState ?? this.#matchState;
+    if (this.#matchLoaded && !this.#armedSent && !this.#started
+        && state === MatchState.PreMatch
+        && fielded > 0 && linked === fielded
+        && !(msg.FieldEStop ?? false)) {
+      this.#armedSent = true;
+      this.#emit({ type: 'match.armed' });
+    }
   }
 }

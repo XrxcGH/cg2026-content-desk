@@ -19,7 +19,7 @@
 
 import { WebSocket } from 'ws';
 
-/** WebSocket endpoints. Every one is HandleNotifiers-only — verified in source. */
+/** WebSocket endpoints. Every one is HandleNotifiers-only (verified in source). */
 export const ALLOWED_SOCKETS = [
   '/api/arena/websocket',
   '/displays/audience/websocket',
@@ -44,7 +44,7 @@ export type AllowedSocket = typeof ALLOWED_SOCKETS[number];
 export function assertSocketAllowed(path: string): asserts path is AllowedSocket {
   if (!(ALLOWED_SOCKETS as readonly string[]).includes(path)) {
     throw new Error(`Refusing to open "${path}". Only HandleNotifiers-only display sockets ` +
-      `are permitted — /match_play and /panels/* accept commands that can abort a match or ` +
+      `are permitted: /match_play and /panels/* accept commands that can abort a match or ` +
       `corrupt scoring.`);
   }
 }
@@ -147,7 +147,7 @@ export class CheesyClient {
   }
 
   /**
-   * GET, and only GET. The method is not a parameter — a typo cannot become a
+   * GET, and only GET. The method is not a parameter, so a typo cannot become a
    * POST to /setup/db/clear.
    */
   async get<T>(path: string, timeoutMs = 8000): Promise<T> {
