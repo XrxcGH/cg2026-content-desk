@@ -9,10 +9,14 @@ data/events/*.ndjson
 data/publish-queue.json
 data/publish-queue.json.tmp
 
-# Team media library. Robot cutouts are large and event-specific; the
-# manifest is regenerated from disk on boot.
+# The trivia question bank. Edits from the host console save back here
+# mid-show, and a fresh clone gets the same built-in set from questions.ts.
+data/trivia.json
+data/trivia.json.tmp
+
+# Team media library. Robot cutouts are large and event-specific. The manifest
+# lives in memory, rebuilt from each team's meta.json on boot.
 media/teams/*/
-media/manifest.json
 
 # Rolling record scratch. 4 cams x 1080p60 is ~22GB/hour, so never commit it.
 rec/
@@ -20,3 +24,7 @@ rec/
 # Credentials. config.example.json is the committed template.
 config.json
 *.log
+
+# The launcher build caches the Node runtime it embeds. 34MB, and reproducible
+# from the pinned version and checksum in tools/launcher/build.ps1.
+tools/launcher/.cache/
