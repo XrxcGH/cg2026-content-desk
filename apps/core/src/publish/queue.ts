@@ -3,7 +3,7 @@
  *
  * Deliberately boring. A JSON file, a state machine, exponential backoff, and
  * a panel showing what's stuck. It has to survive a crash, the venue internet
- * dropping, and the event ending — nobody should have to SSH into anything on
+ * dropping, and the event ending. Nobody should have to SSH into anything on
  * a Sunday.
  *
  * See docs/11-distribution.md.
@@ -15,7 +15,7 @@ import type { Config } from '../config.ts';
 import type { EventBus } from '../bus.ts';
 import { matchCut, type ClipStore, type Range } from '../clips.ts';
 import { TbaClient } from './tba.ts';
-import { description, identify, videoTitle } from './naming.ts';
+import { description, identify, segmentDescription, segmentName, videoTitle } from './naming.ts';
 import { YouTubeClient, watchUrl, type VideoMeta } from './youtube.ts';
 
 export type ItemKind = 'match' | 'analysis' | 'segment';
@@ -49,6 +49,32 @@ export interface QueueItem {
 }
 
 const MAX_ATTEMPTS = 6;
+
+/**
+ * Plausible durations, per kind of video.
+ *
+ * FIRST's own auto-uploader has shipped 11-second "match videos" and whole
+ * wrong matches, which is what this guards against. The bounds have to differ
+ * by kind: 15 minutes is far too long for a match and far too short for an
+ * awards ceremony, and one set of numbers would either wave through a broken
+ * match cut or hold every ceremony.
+ */
+export const QC_BOUNDS: Record<ItemKind, { minSec: number; maxSec: number }> = {
+  match: { minSec: 60, maxSec: 900 },
+  analysis: { minSec: 20, maxSec: 1800 },
+  segment: { minSec: 30, maxSec: 7200 },
+};
+
+/** The hold reason, or null when the cut looks like what it claims to be. */
+export function qcHold(kind: ItemKind, cutSeconds: number): string | null {
+  const { minSec, maxSec } = QC_BOUNDS[kind];
+  const seconds = Math.round(cutSeconds);
+  if (seconds < minSec || seconds > maxSec) {
+    return `QC hold: cut totals ${seconds}s, outside ${minSec}-${maxSec}s for a ${kind}. `
+      + 'Check the clip, then release';
+  }
+  return null;
+}
 
 export class PublishQueue {
   #file: string;
@@ -85,7 +111,7 @@ export class PublishQueue {
     } catch { this.#items = []; }
   }
 
-  /** Atomic write — a torn queue file on a power cut would be worse than none. */
+  /** Atomic write: a torn queue file on a power cut would be worse than none. */
   async #save(): Promise<void> {
     await mkdir(dirname(this.#file), { recursive: true });
     const tmp = `${this.#file}.tmp`;
@@ -98,7 +124,7 @@ export class PublishQueue {
     const item: QueueItem = {
       ...init,
       id: `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      // In deferred mode items are cut but parked — the live stream must never
+      // In deferred mode items are cut but parked. The live stream must never
       // compete with an upload for the venue uplink.
       state: 'pending',
       clipPath: null, videoId: null, sessionUrl: null,
@@ -133,7 +159,11 @@ export class PublishQueue {
     const teams = (side: 'red' | 'blue'): number[] =>
       (st.match?.[side] ?? []).map(t => t.number);
 
-    return this.add({
+    // A cut whose duration is implausible goes up HELD, not published. The
+    // operator eyeballs it and releases, reusing the deferred-mode go-ahead.
+    const hold = qcHold('match', ranges.reduce((s, r) => s + (r.toMs - r.fromMs) / 1000, 0));
+
+    const item = await this.add({
       kind: 'match',
       label: name,
       sourceId: this.#cfg.publish.sourceId,
@@ -151,6 +181,65 @@ export class PublishQueue {
         }),
       },
     });
+
+    if (hold) await this.#hold(item, hold);
+    return item;
+  }
+
+  /**
+   * Queue one of the parts of the day that is not a match: alliance selection,
+   * an awards ceremony, a single award. The operator marks the start and the
+   * end, because nothing on the bus knows when a ceremony began.
+   *
+   * These carry no TBA match key, so the queue links them to the event as
+   * media rather than to a match, which is the same path the analysis desk
+   * clips already take.
+   */
+  async queueSegment(opts: {
+    /** A `SEGMENTS` id, or any literal title such as an award name. */
+    segment: string;
+    fromMs: number;
+    toMs: number;
+    note?: string;
+    sourceId?: string;
+  }): Promise<QueueItem> {
+    if (!(opts.toMs > opts.fromMs)) {
+      throw new Error('The segment ends before it starts.');
+    }
+
+    const name = segmentName(opts.segment);
+    const title = videoTitle(name, this.#cfg.event.name);
+    const ranges: Range[] = [{ fromMs: opts.fromMs, toMs: opts.toMs }];
+
+    const item = await this.add({
+      kind: 'segment',
+      label: name,
+      sourceId: opts.sourceId ?? this.#cfg.publish.sourceId,
+      ranges,
+      matchKey: null,
+      meta: {
+        title,
+        description: segmentDescription({
+          title,
+          note: opts.note,
+          resultsUrl: this.#cfg.event.resultsUrl,
+          credit: this.#cfg.publish.credit,
+          copyright: this.#cfg.publish.copyright,
+        }),
+      },
+    });
+
+    const hold = qcHold('segment', (opts.toMs - opts.fromMs) / 1000);
+    if (hold) await this.#hold(item, hold);
+    return item;
+  }
+
+  async #hold(item: QueueItem, reason: string): Promise<void> {
+    item.state = 'held';
+    item.error = reason;
+    item.updatedAt = Date.now();
+    await this.#save();
+    console.warn(`[publish] ${item.label} held for QC`);
   }
 
   /** Nudge the worker. Safe to call from anywhere, any number of times. */
@@ -159,7 +248,7 @@ export class PublishQueue {
     this.#timer = setTimeout(() => { this.#timer = null; void this.#work(); }, 250);
   }
 
-  /** Release everything parked in deferred mode — "the venue is closed, go". */
+  /** Release everything parked in deferred mode: "the venue is closed, go". */
   async release(): Promise<number> {
     let n = 0;
     for (const item of this.#items) {
@@ -217,7 +306,7 @@ export class PublishQueue {
 
     try {
       if (item.state === 'pending') {
-        if (!this.#clips) throw new Error('Recording is unavailable — cannot cut.');
+        if (!this.#clips) throw new Error('Recording is unavailable, so nothing can be cut.');
         const clip = await this.#clips.extract({
           sourceId: item.sourceId, ranges: item.ranges, label: item.label,
         });

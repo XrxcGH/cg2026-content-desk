@@ -56,13 +56,13 @@ export function identify(displayName: string): MatchIdentity {
       : { name: `Final ${n}`, key: `f1m${n}` };
   }
 
-  // Match 7 (R3) — already in official form
+  // Match 7 (R3), already in official form
   const withRound = /^match\s*#?\s*(\d+)\s*\(\s*r\s*(\d+)\s*\)$/i.exec(s);
   if (withRound) {
     return { name: `Match ${Number(withRound[1])} (R${Number(withRound[2])})`, key: `sf${Number(withRound[1])}m1` };
   }
 
-  // Playoff 7 / Match 7 / P7 — derive the round from the match number.
+  // Playoff 7 / Match 7 / P7: derive the round from the match number.
   const playoff = /^(?:playoff|elimination|elim|match|p)\s*#?\s*(\d+)$/i.exec(s);
   if (playoff) {
     const n = Number(playoff[1]);
@@ -135,6 +135,52 @@ export function description(d: DescriptionInput): string {
     d.title,
     side('Red', d.red),
     side('Blue', d.blue),
+    ...(d.resultsUrl ? [d.resultsUrl] : []),
+    '',
+    d.credit,
+    d.copyright,
+  ].join('\n');
+}
+
+/**
+ * The parts of the day that are not matches.
+ *
+ * Teams ask for these specifically. Alliance selection decides the afternoon
+ * and is never rewatchable; families who leave before the ceremony never see
+ * their team's award. They are all one video each, cut from the program
+ * recording, and none of them is a match, so none of them gets a TBA match key.
+ */
+export const SEGMENTS = {
+  selection: 'Alliance Selection',
+  awards: 'Awards Ceremony',
+  opening: 'Opening Ceremony',
+  closing: 'Closing Ceremony',
+} as const;
+
+export type SegmentId = keyof typeof SEGMENTS;
+
+/**
+ * Title an event segment. A known id gets the standard name; anything else is
+ * taken as a literal, which is how a single award gets its own video
+ * ("Chairman's Award - CalGames").
+ */
+export const segmentName = (idOrName: string): string =>
+  SEGMENTS[idOrName as SegmentId] ?? idOrName.trim();
+
+export interface SegmentDescriptionInput {
+  title: string;
+  /** Optional line under the title, e.g. the winning team. */
+  note?: string;
+  resultsUrl?: string;
+  credit: string;
+  copyright: string;
+}
+
+/** Same layout as a match description, minus the alliances and the score. */
+export function segmentDescription(d: SegmentDescriptionInput): string {
+  return [
+    d.title,
+    ...(d.note ? [d.note] : []),
     ...(d.resultsUrl ? [d.resultsUrl] : []),
     '',
     d.credit,
