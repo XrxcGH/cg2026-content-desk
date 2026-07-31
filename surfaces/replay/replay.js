@@ -1,7 +1,7 @@
 /**
  * Replay console.
  *
- * The timeline is the MATCH CLOCK, phase-segmented — not a raw video scrubber.
+ * The timeline is the MATCH CLOCK, phase-segmented, not a raw video scrubber.
  * The operator thinks in "endgame", not "18:42:07", and every marker is already
  * placed, so the job is choosing rather than hunting.
  */
@@ -25,8 +25,15 @@ const PHASES = [
 
 $('phases').innerHTML = PHASES.map(([id, label, a, b]) =>
   `<div data-p="${id}" style="flex:${b - a}">${label}</div>`).join('');
-$('ticks').innerHTML = [-20, 0, 30, 60, 90, 120, 140]
-  .map(c => `<span style="left:${pct(c)}%">${clockDisplay(c)}</span>`).join('');
+
+const TICK_CLOCKS = [-20, 0, 30, 60, 90, 120, 140];
+// The first and last labels are anchored to the track's own edges (see CSS):
+// centering them, like the ones in between, would hang half the label past
+// the end of the timeline.
+$('ticks').innerHTML = TICK_CLOCKS.map((c, i) => {
+  const edge = i === 0 ? ' data-align="start"' : i === TICK_CLOCKS.length - 1 ? ' data-align="end"' : '';
+  return `<span style="left:${pct(c)}%"${edge}>${clockDisplay(c)}</span>`;
+}).join('');
 
 function pct(clock) { return ((clock - T0) / SPAN) * 100; }
 
@@ -50,7 +57,7 @@ function setBounds(a, b) {
 
 function paintSelection() {
   const sel = $('sel');
-  if (inClock === null) { sel.style.display = 'none'; $('bounds').textContent = 'in — · out — · —'; return; }
+  if (inClock === null) { sel.style.display = 'none'; $('bounds').textContent = 'in - · out - · -'; return; }
   sel.style.display = 'block';
   sel.style.left = `${pct(inClock)}%`;
   sel.style.width = `${Math.max(0.4, pct(outClock) - pct(inClock))}%`;
@@ -76,10 +83,24 @@ function paintMarkers() {
     if (m.alliance) el.dataset.a = m.alliance;
     el.dataset.label = m.label;
     el.style.left = `${pct(m.matchClock)}%`;
+    // Keyboard-reachable: an operator tabbing through the page (or a screen
+    // reader) can jump to a marker the same way a mouse click does.
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', `Frame ${m.label} at ${clockDisplay(m.matchClock)}`);
     // Frame the marker: enough lead-in to see the build-up, enough tail to see
     // the result. A human hits the button late, so the marker itself already
-    // sits 2s back — see the desk console.
-    el.onclick = ev => { ev.stopPropagation(); setBounds(m.matchClock - 6, m.matchClock + 4); };
+    // sits 2s back (see the desk console).
+    const frameMarker = () => setBounds(m.matchClock - 6, m.matchClock + 4);
+    el.onclick = ev => { ev.stopPropagation(); frameMarker(); };
+    el.addEventListener('keydown', ev => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      ev.preventDefault();
+      // Stop this Enter from also reaching the page-level shortcut (Enter = Cut
+      // clip): the marker's own Enter means "frame this marker", not "cut now".
+      ev.stopPropagation();
+      frameMarker();
+    });
     track.parentElement.appendChild(el);
   }
 
@@ -87,7 +108,7 @@ function paintMarkers() {
     ? [...markers].reverse().map(m =>
         `<div style="padding:4px 0;border-bottom:1px solid var(--surface-sunken)">
            <b>${m.label}</b>
-           <span class="mono"> ${m.matchClock === null ? '—' : clockDisplay(m.matchClock)}</span>
+           <span class="mono"> ${m.matchClock === null ? '-' : clockDisplay(m.matchClock)}</span>
          </div>`).join('')
     : '<i>None yet. They appear as the match runs.</i>';
 }
@@ -132,7 +153,7 @@ async function post(url, body) {
 async function cut() {
   if (inClock === null) return say('Pick an in-point on the timeline first.', true);
   const fromMs = wallAt(inClock), toMs = wallAt(outClock);
-  if (!fromMs) return say('No match start recorded yet — nothing to map the clock onto.', true);
+  if (!fromMs) return say('No match start recorded yet: nothing to map the clock onto.', true);
 
   say('Cutting…');
   try {
@@ -160,6 +181,7 @@ async function cutMatch() {
 function showClip(clip) {
   lastClip = clip;
   $('preview').src = clip.url;
+  $('clipsEmpty')?.remove();
   const row = document.createElement('div');
   row.innerHTML = `<a href="${clip.url}" target="_blank">${clip.label}</a>` +
     `<span class="mono">${clip.seconds.toFixed(1)}s${clip.speed !== 1 ? ` ${clip.speed}×` : ''}</span>`;

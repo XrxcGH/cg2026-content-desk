@@ -1,0 +1,121 @@
+/**
+ * Operator navigation, injected into every console page.
+ *
+ * The consoles used to be reachable only from the index page, so getting from
+ * the replay desk to the trivia host meant going back to `/` and picking
+ * again. At an event nobody does that: they leave six tabs open and lose track
+ * of which is which. One strip across the top of every console fixes both.
+ *
+ * The strip carries the program screen picker too, because "put the arcade
+ * bumper up" is the single most time-critical thing an operator does between
+ * matches, and it should not depend on which page they happen to be looking
+ * at. It writes the same `screen.change` event the desk console does.
+ */
+
+const CONSOLES = [
+  { id: 'desk', label: 'Desk' },
+  { id: 'replay', label: 'Replay' },
+  { id: 'draw', label: 'Telestrator' },
+  { id: 'talent', label: 'Talent' },
+  { id: 'arcadedesk', label: 'Arcade' },
+  { id: 'triviadesk', label: 'Trivia' },
+  { id: 'var', label: 'Ref review' },
+  { id: 'media', label: 'Media' },
+  { id: 'cards', label: 'Cards' },
+];
+
+/** Program screens, in the order the show actually uses them. */
+const SCREENS = [
+  { id: 'overview', label: 'Pre-match' },
+  { id: 'match', label: 'Match' },
+  { id: 'score', label: 'Final' },
+  { id: 'selection', label: 'Selection' },
+  { id: 'explain', label: 'Explainer' },
+  { id: 'analysis', label: 'Analysis' },
+  { id: 'arcade', label: 'Arcade' },
+  { id: 'blank', label: 'Blank' },
+];
+
+const CSS = `
+.opnav { position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 8px 14px; margin-bottom: 14px;
+  background: var(--surface-raised); border-bottom: 2px solid var(--surface-sunken); }
+.opnav a, .opnav button {
+  font-family: var(--font-cond); font-weight: 600; font-size: 14px;
+  letter-spacing: .06em; text-transform: uppercase; text-decoration: none;
+  padding: 7px 12px; cursor: pointer; border: 0;
+  clip-path: var(--chamfer); --ch: 6px;
+  background: var(--surface-sunken); color: var(--text); }
+.opnav a:hover, .opnav button:hover { background: var(--btn-hover); }
+.opnav a:focus-visible, .opnav button:focus-visible {
+  outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+/* Where you are, said twice: colour and a filled underline, so it is not
+   colour alone doing the work. */
+.opnav a[aria-current="page"] { background: var(--accent); color: var(--text-on-accent); }
+.opnav .sep { width: 1px; height: 22px; background: var(--surface-sunken); margin: 0 6px; }
+.opnav .lbl { font-family: var(--font-cond); font-size: 13px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-dim); }
+.opnav .take { background: var(--accent); color: var(--text-on-accent); }
+.opnav .live { background: var(--st-ok); color: #04120D; }
+@media (max-width: 900px) { .opnav .lbl { display: none; } }
+`;
+
+/**
+ * @param {string} current  surface id of the page mounting this
+ * @param {object} opts     { screens: boolean } screens default on
+ */
+export function mountNav(current, opts = {}) {
+  const withScreens = opts.screens !== false;
+
+  const style = document.createElement('style');
+  style.textContent = CSS;
+  document.head.appendChild(style);
+
+  const nav = document.createElement('nav');
+  nav.className = 'opnav';
+  nav.setAttribute('aria-label', 'Operator consoles');
+
+  nav.innerHTML =
+    CONSOLES.map(c =>
+      `<a href="/s/${c.id}"${c.id === current ? ' aria-current="page"' : ''}>${c.label}</a>`).join('')
+    + (withScreens
+      ? '<span class="sep" aria-hidden="true"></span><span class="lbl">On air</span>'
+        + SCREENS.map(s =>
+          `<button type="button" data-screen="${s.id}" title="Take the ${s.label} screen">${s.label}</button>`).join('')
+      : '');
+
+  document.body.prepend(nav);
+
+  if (!withScreens) return nav;
+
+  // The take buttons drive the bus directly rather than going through a page's
+  // own desk client, so this works identically on a console that has no other
+  // reason to hold a socket open.
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?surface=nav`);
+  let ready = false;
+  ws.addEventListener('open', () => { ready = true; });
+
+  ws.addEventListener('message', ev => {
+    try {
+      const msg = JSON.parse(ev.data);
+      const screen = msg?.state?.screen ?? msg?.payload?.screen;
+      if (!screen) return;
+      for (const b of nav.querySelectorAll('button[data-screen]')) {
+        b.classList.toggle('live', b.dataset.screen === screen);
+      }
+    } catch { /* not a state frame */ }
+  });
+
+  for (const b of nav.querySelectorAll('button[data-screen]')) {
+    b.onclick = () => {
+      if (!ready) return;
+      ws.send(JSON.stringify({
+        t: 'emit',
+        init: { type: 'screen.change', payload: { screen: b.dataset.screen } },
+      }));
+    };
+  }
+
+  return nav;
+}

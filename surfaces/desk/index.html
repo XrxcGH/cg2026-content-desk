@@ -1,14 +1,14 @@
 <!doctype html>
-<html lang="en" data-surface="light">
+<html lang="en" data-surface="console">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Desk console — CalGames 2026</title>
+<title>Desk console · CalGames 2026</title>
 <link rel="stylesheet" href="/theme/tokens.css">
 <link rel="stylesheet" href="/shared/fonts.css">
 <style>
 /* Operator surface: viewed at 2 feet, exempt from the broadcast type floors.
-   Keyboard-first — the producer must be able to run the whole show from here
+   Keyboard-first. The producer must be able to run the whole show from here
    with every integration dead. */
 body { font-size: var(--font-ui-body); }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 24px 64px; }
@@ -16,7 +16,7 @@ body { font-size: var(--font-ui-body); }
 header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; }
 h1 { font-size: 26px; font-variation-settings: "wdth" 118; margin: 0; }
 .link { margin-left: auto; display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
+  font-family: var(--font-mono); font-size: 14px; color: var(--text-dim); }
 .dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px; background: var(--st-bad); }
 .dot[data-up="true"] { background: var(--st-ok); }
 
@@ -32,34 +32,52 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
   clip-path: var(--chamfer); --ch: 10px; }
 .now .side { font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-weight: 900; font-size: 38px; line-height: 1; }
-.now .side.red { color: var(--alliance-red); }
-.now .side.blue { color: var(--alliance-blue); text-align: right; }
+/* Official alliance red/blue fail 4.5:1 on a dark console background (docs/03-brand.md).
+   Lightened console-only variants keep the alliance color legible as text here;
+   broadcast surfaces keep the exact official hex values as fills. */
+.now .side.red { color: #FF6B6B; }
+.now .side.blue { color: #6FB6FF; text-align: right; }
 .now .mid { text-align: center; }
 .now .clock { font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-weight: 900; font-size: 30px; line-height: 1; }
-.now .phase { font-family: var(--font-cond); font-weight: 600; font-size: 12px;
-  letter-spacing: .16em; text-transform: uppercase; color: var(--text-dim); }
-.teams { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+.now .phase { font-family: var(--font-cond); font-weight: 600; font-size: 14px;
+  /* Tracking adds a trailing space to every glyph, so centered tracked text
+     sits half a track left of center. The indent puts it back. */
+  letter-spacing: .16em; text-indent: .16em; text-transform: uppercase; color: var(--text-dim); }
+.teams { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); margin-top: 4px; }
 
 .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.btn { font-size: 12px; padding: 9px 14px; }
-.btn kbd { font-family: var(--font-mono); font-size: 10px; opacity: .6; margin-left: 7px; }
+.btn { font-size: 14px; padding: 9px 14px; }
+.btn kbd { font-family: var(--font-mono); font-size: 12px; opacity: .6; margin-left: 7px; }
 
-label { display: block; font-family: var(--font-cond); font-weight: 600; font-size: 12px;
+label { display: block; font-family: var(--font-cond); font-weight: 600; font-size: 14px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); margin: 10px 0 4px; }
 input, select { width: 100%; box-sizing: border-box; padding: 9px 12px;
   font-family: var(--font-display); font-size: 14px;
   background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
+input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+/* Chapter output is pasteable, technical text: mono earns its keep here, and
+   it needs the same padding as inputs so lines don't sit on the border. */
+textarea { box-sizing: border-box; padding: 9px 12px;
+  font-family: var(--font-mono); font-size: 14px; line-height: 1.6;
+  background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
+textarea:focus { outline: none; border-color: var(--accent); }
+textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
-#log { font-family: var(--font-mono); font-size: 11px; line-height: 1.65;
-  max-height: 340px; overflow-y: auto; }
-#log div { display: grid; grid-template-columns: 58px 1fr; gap: 8px;
+#log { font-family: var(--font-mono); font-size: 13px; line-height: 1.65;
+  max-height: 340px; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+#log li { display: grid; grid-template-columns: 58px 1fr; gap: 8px;
   padding: 2px 0; border-bottom: 1px solid var(--surface-sunken); }
 #log .t { color: var(--text-dim); }
 #log .ty { color: var(--accent); }
-.hint { color: var(--text-dim); font-size: 11px; line-height: 1.6; }
+.hint { color: var(--text-dim); font-size: 13px; line-height: 1.6; }
 .hint b { color: var(--text); font-weight: 600; }
+/* Visually hidden but announced: gives screen readers the alliance word that
+   sighted operators get for free from position and the alliance color. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 </style>
 </head>
 <body>
@@ -67,7 +85,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   <header>
     <h1>Desk console</h1>
     <span class="hint">Keyboard-first. This runs the show with everything else dead.</span>
-    <span class="link"><span class="dot" id="dot"></span><span id="linkText">connecting</span></span>
+    <span class="link" role="status" aria-live="polite"><span class="dot" id="dot" aria-hidden="true"></span><span id="linkText">connecting</span></span>
   </header>
 
   <div class="grid">
@@ -76,56 +94,90 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
         <h2>Now</h2>
         <div class="now">
           <div>
-            <div class="side red num" id="nRed">0</div>
-            <div class="teams" id="nRedTeams">—</div>
+            <span class="sr-only">Red alliance score</span>
+            <div class="side red num" id="nRed" aria-live="polite">0</div>
+            <div class="teams" id="nRedTeams">-</div>
           </div>
           <div class="mid">
             <div class="clock num" id="nClock">0:20</div>
-            <div class="phase" id="nPhase">Pre-match</div>
+            <div class="phase" id="nPhase" aria-live="polite">Pre-match</div>
           </div>
-          <div>
-            <div class="side blue num" id="nBlue">0</div>
-            <div class="teams" id="nBlueTeams">—</div>
+          <div style="text-align:right">
+            <span class="sr-only">Blue alliance score</span>
+            <div class="side blue num" id="nBlue" aria-live="polite">0</div>
+            <div class="teams" id="nBlueTeams">-</div>
           </div>
         </div>
-        <div class="hint" id="nMatch">No match loaded</div>
+        <div class="hint" id="nMatch" aria-live="polite">No match loaded</div>
       </section>
 
       <section>
         <h2>Match</h2>
         <div class="row">
-          <button class="btn" data-emit="match.preview">Preview<kbd>1</kbd></button>
-          <button class="btn" data-emit="match.prestart">Prestart<kbd>2</kbd></button>
-          <button class="btn" data-emit="match.start">Start<kbd>3</kbd></button>
-          <button class="btn" data-emit="match.end">End<kbd>4</kbd></button>
-          <button class="btn" data-emit="match.score_posted">Post score<kbd>5</kbd></button>
-          <button class="btn" data-emit="match.aborted">Abort<kbd>0</kbd></button>
+          <button class="btn" data-emit="match.preview" aria-label="Preview (keyboard shortcut 1)">Preview<kbd aria-hidden="true">1</kbd></button>
+          <button class="btn" data-emit="match.armed" aria-label="Arm (keyboard shortcut 2)">Arm<kbd aria-hidden="true">2</kbd></button>
+          <button class="btn" data-emit="match.start" aria-label="Start (keyboard shortcut 3)">Start<kbd aria-hidden="true">3</kbd></button>
+          <button class="btn" data-emit="match.end" aria-label="End (keyboard shortcut 4)">End<kbd aria-hidden="true">4</kbd></button>
+          <button class="btn" data-emit="match.score_posted" aria-label="Post score (keyboard shortcut 5)">Post score<kbd aria-hidden="true">5</kbd></button>
+          <button class="btn" data-emit="match.aborted" aria-label="Abort (keyboard shortcut 0)">Abort<kbd aria-hidden="true">0</kbd></button>
+        </div>
+        <p class="hint"><b>Arm</b> flips program to the score bar. Hit it when the field
+          goes green, before the announcer starts the countdown. With the Cheesy bridge up,
+          it fires on its own the moment every robot links.</p>
+        <label for="screenSel">Program screen: manual take</label>
+        <div class="row">
+          <select id="screenSel" style="flex:1; min-width: 220px">
+            <option value="overview">Pre-match · alliance overview</option>
+            <option value="match">In-match · score bar</option>
+            <option value="score">Post-match · final score</option>
+            <option value="analysis">Analysis desk</option>
+            <option value="arcade">Video games · arcade bumper</option>
+            <option value="selection">Alliance selection board</option>
+            <option value="explain">How to watch · explainer loop</option>
+            <option value="blank">Blank</option>
+          </select>
+          <button class="btn" id="screenTake">Take</button>
+        </div>
+        <p class="hint"><b>B</b> takes blank instantly, from anywhere on this page.</p>
+      </section>
+
+      <section>
+        <h2>Delay &amp; status card</h2>
+        <p class="hint">Puts a "why we're waiting" card on program and the side screens.
+          An unexplained stoppage reads as dead air; a named one reads as process.</p>
+        <div class="row">
+          <button class="btn" data-status="delay:Field delay">Field delay</button>
+          <button class="btn" data-status="delay:Waiting on a robot connection">Robot connection</button>
+          <button class="btn" data-status="review:Score under review">Score review</button>
+          <button class="btn" data-status="fault:Arena fault, match paused">Arena fault</button>
+          <button class="btn" data-status="replay:This match will be replayed">Match replay</button>
         </div>
         <div class="row">
-          <button class="btn" data-screen="overview">Screen: overview</button>
-          <button class="btn" data-screen="match">Screen: match</button>
-          <button class="btn" data-screen="score">Screen: score</button>
-          <button class="btn" data-screen="blank">Screen: blank<kbd>B</kbd></button>
+          <label class="in" for="statusMin" style="font-family:var(--font-cond);font-weight:600;font-size: 14px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim)">Back in</label>
+          <input id="statusMin" type="number" min="0" max="120" placeholder="min" style="width:70px">
+          <input id="statusCustom" placeholder="Custom message…" aria-label="Custom status message" style="flex:1;min-width:180px">
+          <button class="btn" id="statusShowCustom">Show custom</button>
+          <button class="btn" id="statusClear">Clear card</button>
         </div>
       </section>
 
       <section>
         <h2>Shadow scoring <span style="color:var(--st-warn)">· estimated</span></h2>
         <p class="hint">Typed scores publish at <b>estimated</b> confidence and render
-          <b>outlined</b> on air, never solid — we don't present a guess as official.</p>
+          <b>outlined</b> on air, never solid. We don't present a guess as official.</p>
         <div class="row">
-          <button class="btn" data-score="red:fuel:1">Red +1 fuel<kbd>Q</kbd></button>
-          <button class="btn" data-score="red:fuel:5">Red +5<kbd>W</kbd></button>
-          <button class="btn" data-score="red:tower:10">Red climb L1<kbd>E</kbd></button>
-          <button class="btn" data-score="red:tower:20">L2</button>
-          <button class="btn" data-score="red:tower:30">L3</button>
+          <button class="btn" data-score="red:fuel:1" aria-label="Red plus 1 fuel (keyboard shortcut Q)">Red +1 fuel<kbd aria-hidden="true">Q</kbd></button>
+          <button class="btn" data-score="red:fuel:5" aria-label="Red plus 5 fuel (keyboard shortcut W)">Red +5<kbd aria-hidden="true">W</kbd></button>
+          <button class="btn" data-score="red:tower:10" aria-label="Red climb level 1 (keyboard shortcut E)">Red climb L1<kbd aria-hidden="true">E</kbd></button>
+          <button class="btn" data-score="red:tower:20" aria-label="Red climb level 2">L2</button>
+          <button class="btn" data-score="red:tower:30" aria-label="Red climb level 3">L3</button>
         </div>
         <div class="row">
-          <button class="btn" data-score="blue:fuel:1">Blue +1 fuel<kbd>A</kbd></button>
-          <button class="btn" data-score="blue:fuel:5">Blue +5<kbd>S</kbd></button>
-          <button class="btn" data-score="blue:tower:10">Blue climb L1<kbd>D</kbd></button>
-          <button class="btn" data-score="blue:tower:20">L2</button>
-          <button class="btn" data-score="blue:tower:30">L3</button>
+          <button class="btn" data-score="blue:fuel:1" aria-label="Blue plus 1 fuel (keyboard shortcut A)">Blue +1 fuel<kbd aria-hidden="true">A</kbd></button>
+          <button class="btn" data-score="blue:fuel:5" aria-label="Blue plus 5 fuel (keyboard shortcut S)">Blue +5<kbd aria-hidden="true">S</kbd></button>
+          <button class="btn" data-score="blue:tower:10" aria-label="Blue climb level 1 (keyboard shortcut D)">Blue climb L1<kbd aria-hidden="true">D</kbd></button>
+          <button class="btn" data-score="blue:tower:20" aria-label="Blue climb level 2">L2</button>
+          <button class="btn" data-score="blue:tower:30" aria-label="Blue climb level 3">L3</button>
         </div>
       </section>
 
@@ -136,22 +188,22 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
         <label for="t2">Line 2</label>
         <input id="t2" placeholder="Analyst · CalGames Content Desk">
         <div class="row" style="margin-top:12px">
-          <button class="btn" id="thirdShow">Show<kbd>T</kbd></button>
+          <button class="btn" id="thirdShow" aria-label="Show lower third (keyboard shortcut T)">Show<kbd aria-hidden="true">T</kbd></button>
           <button class="btn" id="thirdPin">Show pinned</button>
-          <button class="btn" id="thirdHide">Hide<kbd>Y</kbd></button>
+          <button class="btn" id="thirdHide" aria-label="Hide lower third (keyboard shortcut Y)">Hide<kbd aria-hidden="true">Y</kbd></button>
         </div>
       </section>
 
       <section>
         <h2>Telestrator</h2>
-        <label for="analyst">Analyst name — shown on the ANALYSIS chip</label>
+        <label for="analyst">Analyst name (shown on the ANALYSIS chip)</label>
         <input id="analyst" placeholder="Priya Raman">
         <label for="frame">Frozen frame URL</label>
         <input id="frame" placeholder="/media/… or any image URL">
         <p class="hint">The analyst draws on the frame the audience is seeing, not a
-          blank sheet. The replay console will push this automatically; until then,
-          paste one. <b>Hide</b> kills the render surface instantly without clearing
-          the analyst's pad.</p>
+          blank sheet. The replay console's <b>Send frame to analyst</b> pushes one
+          automatically; this field is the manual fallback. <b>Hide</b> kills the
+          render surface instantly without clearing the analyst's pad.</p>
         <div class="row" style="margin-top:12px">
           <button class="btn" id="teleSend">Send frame</button>
           <button class="btn" id="teleLive">Go live</button>
@@ -164,15 +216,16 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
         <h2>Load match</h2>
         <label for="mName">Match name</label>
         <input id="mName" placeholder="Qualification 42" value="Qualification 42">
-        <label for="mRed">Red alliance — team numbers</label>
+        <label for="mRed">Red alliance: team numbers</label>
         <input id="mRed" placeholder="846 1868 253" value="846 1868 253">
-        <label for="mBlue">Blue alliance — team numbers</label>
+        <label for="mBlue">Blue alliance: team numbers</label>
         <input id="mBlue" placeholder="100 115 670" value="100 115 670">
         <div class="row" style="margin-top:12px">
           <button class="btn" id="loadMatch">Load</button>
         </div>
-        <p class="hint">Names fill in from the team list when the Cheesy adapter lands.
-          Until then numbers alone are enough for the overview to build itself.</p>
+        <p class="hint">With the Cheesy bridge up, names fill in from the field's team
+          list on their own. Desk-only, numbers alone are enough for the overview to
+          build itself.</p>
       </section>
     </div>
 
@@ -180,7 +233,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
       <section>
         <h2>Replay markers</h2>
         <div class="row">
-          <button class="btn" id="mark" style="width:100%">Mark<kbd>SPACE</kbd></button>
+          <button class="btn" id="mark" aria-label="Mark replay moment (keyboard shortcut space bar)" style="width:100%">Mark<kbd aria-hidden="true">SPACE</kbd></button>
         </div>
         <p class="hint">Drops a marker at <b>now − 2s</b>, because human reaction time
           is real. Automation catches the scoring; a human catches the interesting.</p>
@@ -188,13 +241,46 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
       </section>
 
       <section>
+        <h2>Publish a segment</h2>
+        <p class="hint">The parts of the day that are not matches. Press <b>Start</b> when the
+          segment begins and <b>Queue</b> when it ends. The queue cuts it from the program
+          recording and holds it if the length looks wrong.</p>
+        <div class="row">
+          <select id="segKind" aria-label="Segment type" style="flex:1; min-width: 190px">
+            <option value="selection">Alliance selection</option>
+            <option value="awards">Awards ceremony</option>
+            <option value="opening">Opening ceremony</option>
+            <option value="closing">Closing ceremony</option>
+          </select>
+          <button class="btn" id="segStart">Start</button>
+          <button class="btn" id="segQueue" disabled>Queue</button>
+        </div>
+        <p class="hint" id="segState" aria-live="polite">Not marking.</p>
+      </section>
+
+      <section>
+        <h2>Day VOD chapters</h2>
+        <p class="hint">Paste-ready YouTube chapters, timed off the event log. Give it the
+          wall-clock time the stream recording started.</p>
+        <div class="row">
+          <input id="chapStart" type="time" step="1" style="flex:1" aria-label="Recording start time">
+          <button class="btn" id="chapMake">Build</button>
+        </div>
+        <textarea id="chapText" rows="6" readonly aria-label="Generated chapter list"
+          style="width:100%; margin-top:8px; display:none"></textarea>
+        <p class="hint" id="chapState" aria-live="polite"></p>
+      </section>
+
+      <section>
         <h2>Event log</h2>
-        <div id="log"></div>
+        <ul id="log" aria-label="Event log"></ul>
       </section>
     </div>
   </div>
 </div>
 
-<script type="module" src="/s/desk/desk.js"></script>
+<script type="module" src="/s/desk/desk.js">import { mountNav } from '/shared/nav.js';
+mountNav('desk');
+</script>
 </body>
 </html>

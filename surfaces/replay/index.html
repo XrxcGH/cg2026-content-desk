@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en" data-surface="light">
+<html lang="en" data-surface="console">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Replay console — CalGames 2026</title>
+<title>Replay console · CalGames 2026</title>
 <link rel="stylesheet" href="/theme/tokens.css">
 <link rel="stylesheet" href="/shared/fonts.css">
 <style>
@@ -11,15 +11,15 @@ body { font-size: var(--font-ui-body); }
 .wrap { max-width: 1240px; margin: 0 auto; padding: 18px 22px 60px; }
 header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
 h1 { font-size: 24px; font-variation-settings: "wdth" 118; margin: 0; }
-.hint { color: var(--text-dim); font-size: 12px; line-height: 1.6; }
+.hint { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
 .spacer { margin-left: auto; }
 .dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px;
-  background: var(--st-bad); display: inline-block; }
+  background: var(--st-bad); display: inline-block; vertical-align: middle; }
 .dot[data-up="true"] { background: var(--st-ok); }
 
 section { background: var(--surface-raised); padding: 16px 18px; margin-bottom: 14px;
   clip-path: var(--chamfer); --ch: 14px; }
-h2 { font-family: var(--font-cond); font-weight: 700; font-size: 12px;
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
   letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 12px; }
 
 /* ---- timeline: the MATCH CLOCK, phase-segmented. The operator thinks in
@@ -28,16 +28,19 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 12px;
 #phases { position: absolute; inset: 0 0 auto 0; height: 30px; display: flex;
   clip-path: var(--chamfer); --ch: 8px; overflow: hidden; }
 #phases div { display: grid; place-items: center; font-family: var(--font-cond);
-  font-weight: 600; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--text-dim); background: var(--surface-sunken);
+  font-weight: 600; font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-dim); background: var(--surface-sunken); padding: 0 4px;
+  /* Tracking adds a trailing space to every glyph, so centered tracked text
+     sits half a track left of center; the indent puts it back (see broadcast.css). */
+  text-indent: .12em; box-sizing: border-box;
   box-shadow: inset -1px 0 0 rgba(0,0,0,.12); }
-#phases div[data-p="auto"] { background: #E4D9E9; }
-#phases div[data-p="endgame"] { background: #F7E2C0; color: #6B4A00; }
+#phases div[data-p="auto"] { background: var(--btn-hover); color: var(--text); }
+#phases div[data-p="endgame"] { background: #4A3305; color: var(--cg-gold-hi); }
 
 #track { position: absolute; left: 0; right: 0; top: 34px; height: 34px;
   background: var(--surface-sunken); cursor: crosshair; }
 #playhead { position: absolute; top: 30px; width: 2px; height: 42px;
-  background: var(--cg-purple); pointer-events: none; }
+  background: var(--cg-gold-hi); pointer-events: none; }
 #sel { position: absolute; top: 34px; height: 34px; background: rgba(240,175,0,.42);
   box-shadow: inset 0 0 0 2px var(--cg-gold); pointer-events: none; }
 
@@ -47,27 +50,41 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 12px;
 .mk[data-pri="2"] { background: var(--cg-green); }
 .mk[data-a="red"]  { box-shadow: 0 34px 0 -30px var(--alliance-red); }
 .mk[data-a="blue"] { box-shadow: 0 34px 0 -30px var(--alliance-blue); }
-.mk:hover::after { content: attr(data-label); position: absolute; bottom: -22px; left: 0;
+.mk:hover::after, .mk:focus-visible::after { content: attr(data-label); position: absolute; bottom: -22px; left: 0;
   white-space: nowrap; background: var(--cg-purple); color: #fff; padding: 3px 7px;
-  font-size: 11px; z-index: 5; }
+  font-size: 13px; z-index: 5; }
+.mk:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 #ticks { position: absolute; top: 72px; left: 0; right: 0; height: 16px;
-  font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
 #ticks span { position: absolute; transform: translateX(-50%); }
+/* The first and last tick sit exactly at the track's edges: centering them
+   would hang half the label off the end and into the panel's padding, where
+   a wide label ("1:00") can get cut by the chamfer. Anchor them inward instead. */
+#ticks span[data-align="start"] { transform: translateX(0); }
+#ticks span[data-align="end"]   { transform: translateX(-100%); }
 
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.btn { font-size: 12px; padding: 9px 14px; }
-.btn kbd { font-family: var(--font-mono); font-size: 10px; opacity: .6; margin-left: 6px; }
-.btn--go { background: var(--cg-purple); color: #fff; }
-label.inline { font-family: var(--font-cond); font-weight: 600; font-size: 11px;
+/* .btn (packages/theme/tokens.css) is letter-spaced, uppercase, and centered
+   by the browser's default button text-align: same trailing-space offset as
+   #phases div above, corrected the same way. */
+.btn { font-size: 14px; padding: 9px 14px; text-indent: .1em; }
+.btn kbd { font-family: var(--font-mono); font-size: 12px; opacity: .6; margin-left: 6px; }
+.btn--go { background: var(--accent); color: var(--text-on-accent); }
+label.inline, .inline { font-family: var(--font-cond); font-weight: 600; font-size: 13px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }
+/* Same field treatment as the desk and arcade consoles: native OS selects
+   are the one off-brand control on the page otherwise. */
+input, select { padding: 8px 10px; font-family: var(--font-display); font-size: 14px;
+  background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
 
 .cols { display: grid; grid-template-columns: 1fr 330px; gap: 14px; align-items: start; }
 video { width: 100%; background: #000; clip-path: var(--chamfer); --ch: 10px; }
 #clips div { display: grid; grid-template-columns: 1fr auto; gap: 6px; padding: 7px 0;
-  border-bottom: 1px solid var(--surface-sunken); font-size: 12px; }
+  border-bottom: 1px solid var(--surface-sunken); font-size: 14px; }
 #clips a { color: var(--accent); text-decoration: none; font-weight: 600; }
-.mono { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
-#status { font-size: 12px; min-height: 18px; }
+.mono { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); }
+#status { font-size: 14px; min-height: 18px; }
 #status[data-err] { color: var(--st-bad); }
 </style>
 </head>
@@ -75,10 +92,10 @@ video { width: 100%; background: #000; clip-path: var(--chamfer); --ch: 10px; }
 <div class="wrap">
   <header>
     <h1>Replay console</h1>
-    <span class="hint" id="matchName">No match loaded</span>
+    <span class="hint" id="matchName" aria-live="polite">No match loaded</span>
     <span class="spacer"></span>
-    <span class="hint"><span class="dot" id="dot"></span> <span id="linkText">connecting</span>
-      · <span id="encoder">—</span></span>
+    <span class="hint" aria-live="polite"><span class="dot" id="dot" aria-hidden="true"></span> <span id="linkText">connecting</span>
+      · <span id="encoder">-</span></span>
   </header>
 
   <section>
@@ -92,7 +109,7 @@ video { width: 100%; background: #000; clip-path: var(--chamfer); --ch: 10px; }
     </div>
     <p class="hint" style="margin:10px 0 0">
       Click the track to place the in-point, or click a marker to frame it. Markers land
-      automatically — bursts, lead changes, climbs, phase boundaries — so nobody has to hunt.
+      automatically (bursts, lead changes, climbs, phase boundaries) so nobody has to hunt.
     </p>
   </section>
 
@@ -109,17 +126,20 @@ video { width: 100%; background: #000; clip-path: var(--chamfer); --ch: 10px; }
             <option value="0.5">½×</option>
             <option value="0.25">¼×</option>
           </select>
-          <span class="mono" id="bounds">in — · out — · —</span>
+          <span class="mono" id="bounds" aria-live="polite">in - · out - · -</span>
         </div>
+        <!-- No "s" unit on the nudges: .btn uppercases, and a condensed
+             uppercase S reads as a 5: "IN −1S" becomes "IN −15". -->
         <div class="row">
-          <button class="btn" data-nudge="in:-1">In −1s</button>
-          <button class="btn" data-nudge="in:1">In +1s</button>
-          <button class="btn" data-nudge="out:-1">Out −1s</button>
-          <button class="btn" data-nudge="out:1">Out +1s</button>
+          <span class="inline">Nudge ±1 second</span>
+          <button class="btn" data-nudge="in:-1">In −1</button>
+          <button class="btn" data-nudge="in:1">In +1</button>
+          <button class="btn" data-nudge="out:-1">Out −1</button>
+          <button class="btn" data-nudge="out:1">Out +1</button>
           <button class="btn btn--go" id="cut">Cut clip<kbd>ENTER</kbd></button>
           <button class="btn" id="cutMatch">Cut full match video</button>
         </div>
-        <p id="status" style="margin:10px 0 0"></p>
+        <p id="status" style="margin:10px 0 0" aria-live="polite"></p>
       </section>
 
       <section>
@@ -131,7 +151,7 @@ video { width: 100%; background: #000; clip-path: var(--chamfer); --ch: 10px; }
         </div>
         <p class="hint" style="margin:10px 0 0">
           <b>Send frame</b> grabs the frame you're paused on and pushes it to the telestrator
-          as the drawing backdrop — the analyst marks up exactly what the audience saw.
+          as the drawing backdrop. The analyst marks up exactly what the audience saw.
         </p>
       </section>
     </div>
@@ -143,12 +163,15 @@ video { width: 100%; background: #000; clip-path: var(--chamfer); --ch: 10px; }
       </section>
       <section>
         <h2>Clips</h2>
-        <div id="clips"></div>
+        <div id="clips"><p class="hint" id="clipsEmpty">Nothing cut yet. Pick a marker
+          and hit Cut clip.</p></div>
       </section>
     </div>
   </div>
 </div>
 
-<script type="module" src="/s/replay/replay.js"></script>
+<script type="module" src="/s/replay/replay.js">import { mountNav } from '/shared/nav.js';
+mountNav('replay');
+</script>
 </body>
 </html>

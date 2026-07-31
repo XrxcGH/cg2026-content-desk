@@ -1,14 +1,14 @@
 <!doctype html>
-<html lang="en" data-key="alpha" data-scale="stream">
+<html lang="en" data-key="alpha">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Telestrator pad — CalGames 2026</title>
+<title>Telestrator pad · CalGames 2026</title>
 <link rel="stylesheet" href="/theme/tokens.css">
 <link rel="stylesheet" href="/shared/fonts.css">
 <style>
 /* Tablet surface. Dark, because the analyst is sitting in a dim broadcast
-   position and a white UI at arm's length is blinding. Big targets — this is
+   position and a white UI at arm's length is blinding. Big targets. This is
    driven with a stylus and a thumb, standing up, under time pressure. */
 html, body { height: 100%; overscroll-behavior: none; }
 body {
@@ -19,13 +19,13 @@ body {
   touch-action: none; -webkit-user-select: none; user-select: none;
 }
 
-/* 16:9 pad, letterboxed — same aspect as programme so a circle drawn here
+/* 16:9 pad, letterboxed to match the programme's aspect, so a circle drawn here
    lands as a circle on air. */
 #pad {
   flex: 1; min-height: 0; position: relative;
   display: grid; place-items: center; padding: 10px;
 }
-/* Sized in JS — see layout(). An aspect-ratio box with no definite width or
+/* Sized in JS: see layout(). An aspect-ratio box with no definite width or
    height collapses to zero here, because the only child is absolutely
    positioned so there's nothing to derive an intrinsic size from. Computing
    the largest 16:9 rect that fits is deterministic and avoids the CSS edge
@@ -40,14 +40,25 @@ body {
 #ink { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
 
 #noFrame {
-  position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+  /* place-CONTENT, not place-items: with two lines inside, items-centering
+     stretches each into its own row and scatters them across the pad. */
+  position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
   color: var(--cg-white-dim); font-family: var(--font-cond); font-size: 17px;
-  letter-spacing: .1em; text-transform: uppercase; padding: 24px; line-height: 1.8;
+  /* Tracking adds a trailing space to every glyph, so centered tracked text
+     sits half a track left of center; the indent puts it back. */
+  letter-spacing: .1em; text-indent: .1em; text-transform: uppercase; padding: 24px; line-height: 1.8;
 }
 #noFrame[hidden] { display: none; }
 
-/* toolbar */
-#bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+/* Visually hidden but present for a screen reader: the page has no visible
+   heading, since the toolbar labels already say what everything does. */
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* toolbar: centered under the pad; the analyst stands mid-screen, and a
+   left-hugging toolbar reads as clutter on any camera that catches the pad. */
+#bar { position: relative; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  justify-content: center;
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   background: var(--cg-purple-deep); border-top: var(--rule); }
 .grp { display: flex; gap: 6px; }
@@ -58,24 +69,34 @@ body {
   background: var(--cg-purple); color: var(--cg-white);
   clip-path: var(--chamfer); --ch: 9px;
   font-family: var(--font-cond); font-weight: 700; font-size: 13px;
-  letter-spacing: .1em; text-transform: uppercase;
+  /* Tracking adds a trailing space to every glyph, so centered tracked text
+     sits half a track left of center; the indent puts it back. */
+  letter-spacing: .1em; text-indent: .1em; text-transform: uppercase;
   transition: background var(--dur-tap) linear, transform var(--dur-tap) var(--ease-pop);
 }
 .tool:active { transform: scale(.94); }
 .tool[aria-pressed="true"] { background: var(--cg-gold); color: var(--cg-black); }
-.tool small { display: block; font-size: 10px; opacity: .55; letter-spacing: .06em; }
+.tool small { display: block; font-size: 12px; opacity: .55; letter-spacing: .06em; text-indent: .06em; }
 
 .ink { width: 44px; height: 44px; border: 0; cursor: pointer; padding: 0;
   clip-path: var(--chamfer); --ch: 7px; box-shadow: inset 0 0 0 3px transparent; }
 .ink[aria-pressed="true"] { box-shadow: inset 0 0 0 4px var(--cg-white); }
+.tool:focus-visible, .ink:focus-visible, .tag:focus-visible {
+  outline: 3px solid var(--focus-ring); outline-offset: 2px;
+}
 
-#status { margin-left: auto; display: flex; align-items: center; gap: 10px;
-  font-family: var(--font-mono); font-size: 11px; color: var(--cg-white-dim); }
-.dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px; background: var(--st-bad); }
+/* Link state: a quiet dot in the corner, not a labeled readout. Spectators
+   glancing at the pad shouldn't be reading production plumbing. The word only
+   appears when something is WRONG. */
+#status { position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--cg-white-dim); opacity: .5; }
+#status .dot[data-up="true"] + #statusText { display: none; }
+.dot { width: 8px; height: 8px; clip-path: var(--chamfer); --ch: 3px; background: var(--st-bad); }
 .dot[data-up="true"] { background: var(--st-ok); }
 
-#tags { display: flex; gap: 6px; }
-.tag { padding: 11px 12px; border: 0; cursor: pointer;
+#tags { display: flex; align-items: center; gap: 6px; }
+.tag { padding: 13px 14px; border: 0; cursor: pointer;
   background: var(--cg-purple-hi); color: var(--cg-white);
   clip-path: var(--chamfer); --ch: 7px;
   font-family: var(--font-num); font-weight: 900; font-size: 15px; }
@@ -85,11 +106,12 @@ body {
 </style>
 </head>
 <body>
+<h1 class="vh">Telestrator pad</h1>
 
 <div id="pad">
   <div id="frameBox">
     <img id="frameImg" alt="" hidden>
-    <div id="noFrame">No frozen frame<br><span style="opacity:.6;font-size:14px">
+    <div id="noFrame"><span>No frozen frame</span><span style="opacity:.6;font-size:14px">
       Draw anyway, or send a frame from the desk</span></div>
     <canvas id="ink"></canvas>
   </div>
@@ -117,7 +139,7 @@ body {
     <button class="tool" id="hide">Hide<small>H</small></button>
   </div>
 
-  <div id="status"><span class="dot" id="dot"></span><span id="statusText">connecting</span></div>
+  <div id="status" aria-live="polite"><span class="dot" id="dot" aria-hidden="true"></span><span id="statusText">connecting</span></div>
 </div>
 
 <script type="module">
@@ -140,7 +162,7 @@ let ink = 'gold';
 let tagTeam = null;
 
 // ---- layout: largest 16:9 box that fits, then back the canvas at device res
-// 16:9 matters — a circle drawn on a differently-shaped pad lands as an
+// 16:9 matters. A circle drawn on a differently-shaped pad lands as an
 // ellipse on air.
 const pad = $('pad');
 const frameBox = $('frameBox');
@@ -170,7 +192,7 @@ const INK_SWATCHES = [
   ['red', '--alliance-red'], ['blue', '--alliance-blue'],
 ];
 $('inks').innerHTML = INK_SWATCHES.map(([id, v]) =>
-  `<button class="ink" data-ink="${id}" style="background:var(${v})" aria-pressed="${id === 'gold'}" title="${id}"></button>`).join('');
+  `<button class="ink" data-ink="${id}" style="background:var(${v})" aria-pressed="${id === 'gold'}" aria-label="${id} ink" title="${id}"></button>`).join('');
 
 // ---- stroke transport -----------------------------------------------------
 // Points are batched and flushed once per frame. A Pencil reports at 120Hz;
@@ -201,7 +223,7 @@ canvas.addEventListener('pointerdown', e => {
   if (e.button !== undefined && e.button !== 0) return;
 
   // Capture keeps events flowing if the stylus leaves the canvas mid-stroke.
-  // It is an optimisation, not a requirement — and it throws NotFoundError if
+  // It is an optimisation, not a requirement, and it throws NotFoundError if
   // the pointer is no longer active by the time we get here. Letting that
   // escape would abort the handler and silently drop the whole stroke, so the
   // analyst would draw and nothing would appear. Never worth failing over.
@@ -266,7 +288,7 @@ for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
 
 // ---- toolbar --------------------------------------------------------------
 /**
- * One place decides what is selected. The tag tool has no toolbar button —
+ * One place decides what is selected. The tag tool has no toolbar button:
  * it is selected by picking a team, so `tagTeam` is set first and setTool
  * reads it rather than clearing it.
  */
@@ -302,9 +324,13 @@ $('hide').onclick = () => desk.emit({ type: 'telestrator.hide' });
 function buildTags(state) {
   const red = state?.match?.red ?? [];
   const blue = state?.match?.blue ?? [];
-  $('tags').innerHTML = [...red.map(t => [t, 'red']), ...blue.map(t => [t, 'blue'])]
-    .map(([t, side]) => `<button class="tag" data-alliance="${side}" data-team="${t.number}">${t.number}</button>`)
-    .join('');
+  const tagBtn = (t, side) =>
+    `<button class="tag" data-alliance="${side}" data-team="${t.number}" aria-label="Team ${t.number}, ${side} alliance">${t.number}</button>`;
+  // The gap between the two groups is a real divider, not just a color
+  // change: alliance-only-by-color is the one thing this palette can't do.
+  $('tags').innerHTML = red.map(t => tagBtn(t, 'red')).join('')
+    + (red.length && blue.length ? '<span class="sep"></span>' : '')
+    + blue.map(t => tagBtn(t, 'blue')).join('');
   for (const b of document.querySelectorAll('.tag')) {
     b.onclick = () => { tagTeam = Number(b.dataset.team); setTool('tag'); };
   }

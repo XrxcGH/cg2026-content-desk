@@ -1,43 +1,48 @@
 <!doctype html>
-<html lang="en" data-key="alpha" data-scale="stream">
+<html lang="en" data-key="alpha">
 <head>
 <meta charset="utf-8">
-<title>Arcade overlay — CalGames 2026</title>
+<title>Arcade overlay · CalGames 2026</title>
 <link rel="stylesheet" href="/theme/tokens.css">
 <link rel="stylesheet" href="/shared/fonts.css">
 <link rel="stylesheet" href="/shared/broadcast.css">
 <style>
-/* Same component vocabulary as the match overlay — panel, chip, numeral block.
+/* Same component vocabulary as the match overlay: panel, chip, numeral block.
    Player sides use purple and green, NOT alliance red/blue: those mean FRC
    alliance on this broadcast and nowhere else, and borrowing them here would
    quietly poison the association we spend all weekend building. */
+/* The set card runs across the TOP of the frame, not the bottom: Mario Kart
+   and Smash both draw their own HUD (coins, lap, position, damage) along the
+   bottom of the capture, and covering it referees the game blind. */
 .ar-card {
-  position: absolute; left: 0; right: 0; bottom: 0;
+  position: absolute; left: 0; right: 0; top: 0;
   display: grid; grid-template-columns: 1fr 300px 1fr;
-  background-color: var(--cg-purple-deep);
-  background-image: var(--tex-perf), linear-gradient(180deg, var(--cg-purple-lo), var(--cg-purple-deep));
-  background-size: var(--tex-perf-size), cover;
-  border-top: var(--rule);
-  min-height: 148px;
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf);
+  background-size: var(--tex-perf-size);
+  border-bottom: var(--rule);
+  min-height: calc(var(--bar-h, 156px) * 0.72);
 }
-:root[data-scale="venue"] .ar-card { min-height: 240px; }
 
-.ar-side { display: flex; align-items: center; gap: var(--gap); padding: 18px 32px; }
+.ar-side { display: flex; align-items: center; gap: var(--gap); padding: 10px 26px; }
 .ar-side--p2 { flex-direction: row-reverse; text-align: right; }
 .ar-side--p1 { background: var(--cg-purple); border-right: var(--rule); }
 .ar-side--p2 { background: var(--cg-green-lo); border-left: var(--rule); }
 
 .ar-name {
-  font-family: var(--font-display); font-weight: 800; font-size: var(--t-title);
+  font-family: var(--font-display); font-weight: 800; font-size: calc(var(--t-title) * .74);
   font-variation-settings: "wdth" var(--wdth-display); line-height: 1.02;
+  overflow-wrap: break-word;
 }
 .ar-team {
+  margin-top: 4px;
   font-family: var(--font-cond); font-weight: 600; font-size: var(--t-label);
   letter-spacing: .1em; text-transform: uppercase; color: var(--cg-gold);
+  overflow-wrap: break-word;
 }
 .ar-score {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 900; font-size: var(--t-hero); line-height: 1;
+  font-weight: 900; font-size: calc(var(--t-hero) * .62); line-height: 1;
   color: var(--cg-white); letter-spacing: -.04em; margin-left: auto;
 }
 .ar-side--p2 .ar-score { margin-left: 0; margin-right: auto; }
@@ -47,38 +52,113 @@
 .ar-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; }
 .ar-round {
   font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
-  letter-spacing: .16em; text-transform: uppercase; color: var(--cg-gold); text-align: center;
+  letter-spacing: .16em; text-indent: .16em; text-transform: uppercase; color: var(--cg-gold); text-align: center;
 }
 .ar-game { font-size: calc(var(--t-label) * .8); }
 
 /* ---- Mario Kart standings ---- */
 .gp {
-  position: absolute; right: var(--safe-x); bottom: 190px; width: 620px;
+  /* Hangs below the top strip, clear of the round tab. Right edge, where it
+     covers the least of the racing line, never the bottom HUD text. */
+  position: absolute; right: var(--safe-x); top: calc(var(--bar-h, 156px) * 0.72 + 74px); width: 430px;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
   clip-path: var(--chamfer);
-  box-shadow: inset 0 6px 0 var(--cg-gold);
-  padding: 20px 26px;
+  padding: 12px 18px;
+}
+/* Real filled edge, not box-shadow: shadows die under the luma key. */
+.gp::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px;
+  background: var(--cg-gold);
 }
 .gp[hidden] { display: none; }
 .gp h2 {
-  margin: 0 0 12px; font-family: var(--font-cond); font-weight: 700;
-  font-size: var(--t-label); letter-spacing: .18em; text-transform: uppercase; color: var(--cg-gold);
+  margin: 0 0 8px; font-family: var(--font-cond); font-weight: 700;
+  font-size: calc(var(--t-label) * .78); letter-spacing: .18em; text-transform: uppercase; color: var(--cg-gold);
 }
 .gp-row {
-  display: grid; grid-template-columns: 44px 1fr auto; gap: 14px; align-items: baseline;
-  padding: 7px 0; border-bottom: 1px solid var(--cg-purple-hi);
+  display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: baseline;
+  padding: 4px 0; border-bottom: 1px solid var(--cg-purple-hi);
 }
 .gp-row:last-child { border-bottom: 0; }
-.gp-pos { font-family: var(--font-num); font-weight: 900; font-size: var(--t-body); color: var(--cg-gold); }
-.gp-name { font-family: var(--font-cond); font-weight: 600; font-size: var(--t-body); text-transform: uppercase; letter-spacing: .04em; }
-.gp-pts { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 900; font-size: var(--t-body); }
+.gp-pos { font-family: var(--font-num); font-weight: 900; font-size: calc(var(--t-body) * .72); color: var(--cg-gold); }
+.gp-name {
+  font-family: var(--font-cond); font-weight: 600; font-size: calc(var(--t-body) * .72); text-transform: uppercase; letter-spacing: .04em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gp-pts { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 900; font-size: calc(var(--t-body) * .72); }
 
 #upNext {
-  position: absolute; left: var(--safe-x); bottom: 190px;
+  position: absolute; left: var(--safe-x); top: calc(var(--bar-h, 156px) * 0.72 + 74px);
   display: none;
 }
 #upNext[data-show] { display: inline-flex; }
+
+/* ---- free-for-all: 3-4 players (split-screen Kart, Pac-Man party, Tetris).
+       One cell per player across the bar; the round rides in a tab above,
+       same gold-shell construction as the hub indicator. ------------------- */
+.ffa {
+  position: absolute; left: 0; right: 0; top: 0;
+  display: grid;
+  /* Brand purple, not the near-black deep gradient: the strip must read as
+     the same chrome family as the GP panel and the round tab. */
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf);
+  background-size: var(--tex-perf-size);
+  border-bottom: var(--rule);
+  min-height: var(--bar-h, 156px);
+}
+.ffa-cell {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 14px 20px;
+  border-left: var(--rule-thin);
+}
+.ffa-cell:first-child { border-left: 0; }
+/* The current leader carries a filled gold cap, never color alone at 720p. */
+.ffa-cell[data-lead="true"]::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px;
+  background: var(--cg-gold);
+}
+/* Each FFA cell sits over that player's split-screen quadrant, top edge. */
+.ffa-score {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: var(--t-score); line-height: 1;
+  color: var(--cg-white); letter-spacing: -.03em;
+}
+.ffa-score[data-est="true"] { color: transparent; -webkit-text-stroke: 3px var(--cg-white); }
+.ffa-name {
+  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-label);
+  letter-spacing: .06em; text-indent: .06em; text-transform: uppercase; color: var(--cg-white);
+  text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.ffa-name b { font-family: var(--font-num); font-weight: 900; color: var(--cg-gold); margin-right: 10px; }
+
+/* Round tab hangs DOWN from the strip. Same gold-shell construction as the
+   hub tab, flipped. +3px keeps the strip's gold border unbroken above it. */
+.ffa-tab {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(var(--bar-h, 156px) + 3px); z-index: 5;
+  padding: 10px 36px 16px;
+  background: var(--cg-gold);
+  --ch: 14px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--ch)),
+                     calc(100% - var(--ch)) 100%, var(--ch) 100%, 0 calc(100% - var(--ch)));
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  letter-spacing: .14em; text-transform: uppercase; color: var(--cg-white);
+  white-space: nowrap;
+}
+.ffa-tab::before {
+  content: ""; position: absolute; inset: 0 3px 3px;
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf); background-size: var(--tex-perf-size);
+  --ch: 12px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--ch)),
+                     calc(100% - var(--ch)) 100%, var(--ch) 100%, 0 calc(100% - var(--ch)));
+}
+.ffa-tab span { position: relative; }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -91,10 +171,14 @@
 
   <span class="chip chip--accent" id="upNext"></span>
 
+  <!-- 3-4 player free-for-all -->
+  <div class="ffa-tab" id="ffaTab" hidden><span></span></div>
+  <div class="ffa" id="ffa" hidden></div>
+
   <div class="ar-card" id="card" hidden>
     <div class="ar-side ar-side--p1">
       <div>
-        <div class="ar-name" id="p1Name">—</div>
+        <div class="ar-name" id="p1Name">-</div>
         <div class="ar-team" id="p1Team"></div>
       </div>
       <div class="ar-score num" id="p1Score">0</div>
@@ -105,7 +189,7 @@
     </div>
     <div class="ar-side ar-side--p2">
       <div>
-        <div class="ar-name" id="p2Name">—</div>
+        <div class="ar-name" id="p2Name">-</div>
         <div class="ar-team" id="p2Team"></div>
       </div>
       <div class="ar-score num" id="p2Score">0</div>
@@ -116,20 +200,18 @@
 </div></div>
 
 <script type="module">
-import { connect, applyDisplayMode, roll, startTicker } from '/shared/desk-client.js';
+import { connect, applyDisplayMode, fitStage, roll } from '/shared/desk-client.js';
 
 applyDisplayMode();
 const $ = id => document.getElementById(id);
 const desk = connect('arcade');
 
-const stage = $('stage');
-const fit = () => {
-  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
-  stage.style.transform = `translate(-50%, -50%) scale(${s})`;
-};
-addEventListener('resize', fit); fit();
+fitStage($('stage'));
 
-const GAME_LABEL = { smash: 'Super Smash Bros.', mariokart: 'Mario Kart', other: 'Arcade' };
+const GAME_LABEL = {
+  smash: 'Super Smash Bros.', mariokart: 'Mario Kart',
+  pacman: 'Pac-Man', tetris: 'Tetris', other: 'Arcade',
+};
 
 let snap = null;
 const load = async () => {
@@ -140,14 +222,18 @@ function paint(s) {
   if (!s) return;
   snap = s;
 
-  // ---- head-to-head set ----
+  // ---- live set: versus card for 2, free-for-all strip for 3-4 ----
   const set = s.set;
-  $('card').hidden = !set;
-  if (set) {
+  const ffa = !!set && set.players.length > 2;
+  $('card').hidden = !set || ffa;
+  $('ffa').hidden = !ffa;
+  $('ffaTab').hidden = !ffa;
+
+  if (set && !ffa) {
     const est = set.scoreConfidence === 'estimated';
     [0, 1].forEach(i => {
       const p = set.players[i];
-      $(`p${i + 1}Name`).textContent = p?.name ?? '—';
+      $(`p${i + 1}Name`).textContent = p?.name ?? '-';
       // The crossover: entrants registered by FRC team read as the team.
       $(`p${i + 1}Team`).textContent = p?.team
         ? `${p.team}${p.teamName ? ' · ' + p.teamName : ''}`
@@ -158,6 +244,19 @@ function paint(s) {
     });
     $('round').textContent = set.round ?? '';
     $('game').textContent = GAME_LABEL[set.game] ?? 'Arcade';
+  }
+
+  if (ffa) {
+    const est = set.scoreConfidence === 'estimated';
+    const max = Math.max(...set.scores);
+    $('ffa').style.gridTemplateColumns = `repeat(${set.players.length}, 1fr)`;
+    $('ffa').innerHTML = set.players.map((p, i) => `
+      <div class="ffa-cell" data-lead="${max > 0 && set.scores[i] === max}">
+        <div class="ffa-score num" data-est="${est}">${set.scores[i] ?? 0}</div>
+        <div class="ffa-name">${p.team ? `<b>${p.team}</b>` : ''}${escapeHtml(p.name ?? '-')}</div>
+      </div>`).join('');
+    $('ffaTab').firstElementChild.textContent =
+      `${set.round ? set.round + ' · ' : ''}${GAME_LABEL[set.game] ?? 'Arcade'}`;
   }
 
   // ---- grand prix standings ----
@@ -184,8 +283,10 @@ for (const t of ['arcade.set_start', 'arcade.score', 'arcade.set_end', 'arcade.b
 desk.on('link', up => { if (up) load(); });
 load();
 
-// Keeps the overlay honest if an event is missed while the source is hidden.
-startTicker(() => { if (!snap) return; });
+// Keeps the overlay honest if an event is missed while the source was hidden:
+// OBS pauses hidden Browser Sources, so a set started during a scene we were
+// off of would otherwise never appear. A slow re-poll is the whole story.
+setInterval(load, 30_000);
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
