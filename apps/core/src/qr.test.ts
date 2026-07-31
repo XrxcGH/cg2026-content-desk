@@ -71,12 +71,12 @@ function codewordsFrom(text: string): { data: number[]; ecLen: number } {
   return { data, ecLen: total - dataLen };
 }
 
-/** Recompute ECC the way the encoder does, then check it divides cleanly. */
+/**
+ * The full codeword from this file's own RS math, so the byte-for-byte
+ * comparison below never asks the encoder to grade itself.
+ */
 function eccOf(text: string): { full: number[]; ecLen: number } {
   const { data, ecLen } = codewordsFrom(text);
-  // Pull the encoder's own rsRemainder out by round-tripping through a matrix
-  // is not possible, so recompute with the corrected convention and assert the
-  // encoder agrees by checking its matrix is stable and non-trivial.
   let gen: number[] = [1];
   for (let i = 0; i < ecLen; i++) {
     const next = new Array<number>(gen.length + 1).fill(0);
