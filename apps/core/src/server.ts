@@ -54,10 +54,26 @@ export const SURFACES = [
   { id: 'media',   group: 'Before the event', name: 'Team media', note: 'Upload robot photos for the pre-match overview. Missing photos fall back gracefully.' },
   { id: 'cards',   group: 'Before the event', name: 'Post-match cards', note: 'Square result graphics for social. They build themselves when a score posts.' },
   { id: 'quiz',    group: 'For the audience', name: 'Trivia play', note: 'The phone page the crowd joins from. The trivia overlay shows this URL.' },
-  { id: 'watch',   group: 'For the audience', name: 'Watch on a monitor', note: 'Put any public screen on a pit TV. Composites the field feed under the overlay, so no OBS is needed. No PIN.' },
+  { id: 'watch',   group: 'On a pit monitor', name: 'Pick a screen', note: 'Every screen below, in one place, with the desk\'s address on this network. Hand this to whoever is setting up a monitor.' },
+  // One row per screen a pit TV can show, so the exact URL can be copied
+  // rather than assembled. `path` carries the query string the index would
+  // otherwise have no way to express.
+  { id: 'watch', path: '/s/watch?screen=program', group: 'On a pit monitor', name: 'Program, with the field feed',
+    note: 'The broadcast picture: field feed with the live overlay on top. What the stream shows, without OBS.' },
+  { id: 'watch', path: '/s/watch?screen=side', group: 'On a pit monitor', name: 'Side screen',
+    note: 'On deck and rankings, rotating. Built to be read from across the room.' },
+  { id: 'watch', path: '/s/watch?screen=arcade', group: 'On a pit monitor', name: 'Arcade',
+    note: 'The side tournament, over the game capture.' },
+  { id: 'watch', path: '/s/watch?screen=trivia', group: 'On a pit monitor', name: 'Trivia',
+    note: 'The crowd game. Shows the join code between questions.' },
+  { id: 'watch', path: '/s/watch?screen=next', group: 'On a pit monitor', name: 'When do we play?',
+    note: 'Per-team schedule with drift-adjusted start times. Also fine on a phone.' },
   { id: 'next',    group: 'For the audience', name: 'When do we play?', note: 'Per-team schedule on any phone, with honest drift-adjusted start estimates. Side screens show its QR.' },
   { id: 'remote',  group: 'Run the show', name: 'Phone remote', note: 'Run the show from a phone. Big targets, PIN-gated when REMOTE_PIN is set.' },
 ] as const;
+
+/** Where a surface actually lives. Most are /s/{id}; some carry a query. */
+export const surfacePath = (s: { id: string; path?: string }): string => s.path ?? `/s/${s.id}`;
 
 /** Every IPv4 the desk is reachable on, so the remote can print a real URL. */
 export function lanAddresses(): string[] {
@@ -672,7 +688,7 @@ export function startServer(opts: ServerOpts) {
     const groups = [...new Set(SURFACES.map(s => s.group))];
     const sections = groups.map(g =>
       `<h2>${g}</h2>` + SURFACES.filter(s => s.group === g).map(s =>
-        `<a class="row" href="/s/${s.id}"><b>${s.name}</b><code>/s/${s.id}</code><i>${s.note}</i></a>`,
+        `<a class="row" href="${surfacePath(s)}"><b>${s.name}</b><code>${surfacePath(s)}</code><i>${s.note}</i></a>`,
       ).join('')).join('');
     const html = `<!doctype html><html lang="en" data-surface="console"><head><meta charset="utf-8">
 <title>CalGames 2026 Content Desk</title>
@@ -774,7 +790,7 @@ ${sections}</body></html>`;
 
   http.listen(port, host, () => {
     console.log(`[core] http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
-    for (const s of SURFACES) console.log(`         /s/${s.id.padEnd(9)} ${s.name}`);
+    for (const s of SURFACES) console.log(`         ${surfacePath(s).padEnd(24)} ${s.name}`);
 
     // Said at startup rather than left to be discovered. At a venue the desk
     // is reachable by every phone in the building, and the trivia QR code
