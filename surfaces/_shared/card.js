@@ -11,6 +11,9 @@
  * so the card can never drift from the broadcast look.
  */
 
+import { allianceRoster } from './alliance.js';
+import { rpBadges } from './rp.js';
+
 export const CARD_SIZE = 1080;
 
 const css = name => getComputedStyle(document.documentElement)
@@ -31,7 +34,7 @@ function palette() {
   };
 }
 
-/** Chamfered rect — the shape language from docs/03, in canvas form. */
+/** Chamfered rect: the shape language from docs/03, in canvas form. */
 function chamfer(ctx, x, y, w, h, ch) {
   ctx.beginPath();
   ctx.moveTo(x + ch, y);
@@ -122,11 +125,16 @@ export function drawCard(ctx, card) {
     ctx.restore();
     perf(ctx, x, blockY, blockW, blockH, 20);
 
-    // Winner gets a gold cap — position and a label carry it too, never colour
-    // alone, because red/blue is ~8% of male viewers' worst case.
+    // Winner gets a gold cap. Position and a label carry it too, never colour
+    // alone, because red/blue is ~8% of male viewers' worst case. Clipped to
+    // the plate's chamfer so the band ends where the corner cut begins.
     if (isWinner) {
+      ctx.save();
+      chamfer(ctx, x, blockY, blockW, blockH, 26);
+      ctx.clip();
       ctx.fillStyle = p.gold;
       ctx.fillRect(x, blockY, blockW, 10);
+      ctx.restore();
     }
 
     ctx.textAlign = 'center';
@@ -155,12 +163,35 @@ export function drawCard(ctx, card) {
   side(60, card.red, p.red, 'Red', won === 'red');
   side(60 + blockW + gap, card.blue, p.blue, 'Blue', won === 'blue');
 
+  // ---- vertical rhythm below the score blocks ---------------------------
+  // Three equal optical gaps: blocks to team list, team list to RP badges,
+  // badges to the footer rule. Measured off cap height and descender rather
+  // than baselines, because a baseline sits well inside the ink and matching
+  // baseline gaps leaves the block looking bottom-heavy.
+  //
+  // The old layout placed the badges a full row pitch below the last name, as
+  // though a fourth team were coming, which opened a gap three times the one
+  // above the list.
+  // Alliance size is whatever the match actually fielded. Qualification
+  // alliances are three; a playoff alliance can carry a fourth, and the card
+  // has to make room for it rather than quietly dropping a team off the
+  // bottom. The pitch tightens so the block still lands on the same rhythm.
+  const rows = Math.max(1,
+    (card.red?.teams ?? []).length, (card.blue?.teams ?? []).length);
+  const ROW_PITCH = rows > 3 ? 64 : 78;
+  const NUM_CAP = 33;        // cap height of the 46px team number
+  const NAME_DROP = 34;      // name baseline offset below the number, plus descender
+  const RP_H = 78;           // badge plate plus its label
+  const teamsH = NUM_CAP + (rows - 1) * ROW_PITCH + NAME_DROP;
+  const footerRule = S - 96;
+  const vGap = (footerRule - (blockY + blockH) - teamsH - RP_H) / 3;
+
   // ---- team lists -------------------------------------------------------
-  const teamsY = blockY + blockH + 54;
+  const teamsY = blockY + blockH + vGap + NUM_CAP;
   const drawTeams = (x, teams) => {
     ctx.textAlign = 'center';
-    (teams ?? []).slice(0, 3).forEach((t, i) => {
-      const y = teamsY + i * 78;
+    (teams ?? []).forEach((t, i) => {
+      const y = teamsY + i * ROW_PITCH;
       ctx.fillStyle = p.gold;
       ctx.font = num(900)(46);
       ctx.fillText(String(t.number ?? ''), x + blockW / 2, y);
@@ -176,20 +207,44 @@ export function drawCard(ctx, card) {
   drawTeams(60, card.red?.teams);
   drawTeams(60 + blockW + gap, card.blue?.teams);
 
-  // ---- ranking point pips ----------------------------------------------
-  const rpY = teamsY + 3 * 78 + 26;
+  // ---- ranking point badges --------------------------------------------
+  // Icon says which bonus, numeral says the threshold: same vocabulary as
+  // the broadcast score bar, so the card teaches nothing new.
+  const rpY = teamsY - NUM_CAP + teamsH + vGap;
   const drawRp = (x, rp) => {
-    const keys = ['energized', 'supercharged', 'traversal'];
-    const w = 26, sp = 12;
-    const total = keys.length * w + (keys.length - 1) * sp;
+    const bw = 128, bh = 46, sp = 16;
+    const badges = rpBadges(card.thresholds);
+    const total = badges.length * bw + (badges.length - 1) * sp;
     let px = x + blockW / 2 - total / 2;
-    for (const k of keys) {
+    for (const b of badges) {
+      const earned = !!rp?.[b.key];
+      const ink = earned ? p.white : 'rgba(255,255,255,.66)';
       ctx.save();
-      chamfer(ctx, px, rpY, w, w, 8);
-      ctx.fillStyle = rp?.[k] ? p.green : p.purpleHi;
+      chamfer(ctx, px, rpY, bw, bh, 12);
+      ctx.fillStyle = earned ? p.green : 'rgba(0,0,0,.30)';
       ctx.fill();
       ctx.restore();
-      px += w + sp;
+
+      ctx.save();
+      ctx.translate(px + 16, rpY + (bh - 26) / 2);
+      ctx.scale(26 / 24, 26 / 24);
+      ctx.fillStyle = ink;
+      ctx.fill(new Path2D(b.path));
+      ctx.restore();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = ink;
+      ctx.font = num(700)(30);
+      ctx.fillText(String(b.need), px + 54, rpY + bh / 2 + 11);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = p.dim;
+      ctx.font = cond(600)(16);
+      ctx.letterSpacing = '2px';
+      ctx.fillText(b.label.toUpperCase(), px + bw / 2, rpY + bh + 26);
+      ctx.letterSpacing = '0px';
+
+      px += bw + sp;
     }
   };
   drawRp(60, card.red?.rp);
@@ -208,14 +263,22 @@ export function drawCard(ctx, card) {
 
 /** Build the card model from a DeskState snapshot. */
 export function cardFromState(state, opts = {}) {
+  // The card is about the alliance, so it names the whole alliance. In a
+  // playoff that is four teams even though three played, because CalGames
+  // picks four and never calls a backup: leaving the fourth off the result
+  // graphic tells a team that won a match they were not part of it. In
+  // qualification this is just the three on the field.
   const side = which => ({
-    teams: (state.match?.[which] ?? []).map(t => ({ number: t.number, name: t.name })),
+    teams: allianceRoster(state, which).map(t => ({ number: t.number, name: t.name })),
     score: state.score?.[which]?.total ?? 0,
     rp: state.score?.[which]?.rp ?? {},
   });
   return {
     eventName: opts.eventName ?? 'CalGames 2026',
     matchName: state.match?.displayName ?? 'Match',
+    // Carried onto the card so the printed numeral matches what the match
+    // was actually scored against.
+    thresholds: state.thresholds,
     red: side('red'),
     blue: side('blue'),
     footer: opts.footer ?? 'calgames.org',

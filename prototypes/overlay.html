@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-key="alpha" data-scale="stream">
+<html lang="en" data-key="alpha">
 <head>
 <meta charset="utf-8">
-<title>CalGames 2026 Content Desk — overlay prototype</title>
+<title>CalGames 2026 Content Desk: overlay prototype</title>
 
-<!-- Prototype only. Production self-hosts WOFF2s — see docs/03-brand.md. -->
+<!-- Prototype only. Production self-hosts WOFF2s. See docs/03-brand.md. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..900&family=Chivo:wght@700;900&family=Saira+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -14,7 +14,7 @@
 <style>
 /* ==========================================================================
    Prototype-only layout. The tokens, primitives, and motion system all come
-   from packages/theme/tokens.css — nothing below redefines a brand value.
+   from packages/theme/tokens.css. Nothing below redefines a brand value.
    ========================================================================== */
 
 body { background: #101014; overflow: hidden; }
@@ -37,7 +37,9 @@ body { background: #101014; overflow: hidden; }
   background-size: 48px 48px;
   background-position: 0 0, 24px 24px;
 }
-#stage[data-clean="1"] { background-image: none; }
+/* "Hide checker" must outgun the alpha rule above, which is why the key
+   selector repeats here: #stage[data-clean] alone loses on specificity. */
+:root[data-key="alpha"] #stage[data-clean="1"] { background-image: none; }
 
 .screen { position: absolute; inset: 0; display: none; }
 .screen[data-active] { display: block; }
@@ -69,26 +71,37 @@ body { background: #101014; overflow: hidden; }
   text-align: center;
 }
 .ov-head .ov-label {
-  font-family: var(--font-cond); font-weight: 600;
+  font-family: var(--font-cond); font-weight: 700;
   font-size: var(--t-title); letter-spacing: .22em; text-transform: uppercase;
   color: var(--cg-gold);
+  /* Tracking adds a trailing space per glyph; centered tracked text sits half
+     a track left of center without the indent. */
+  text-indent: .22em;
 }
 .ov-head .ov-tick { width: 420px; margin: 12px auto 0; height: 4px; background: var(--tick); }
 .ov-body {
   position: absolute; top: 190px; left: var(--safe-x); right: var(--safe-x); bottom: var(--safe-y);
-  display: grid; grid-template-columns: 1fr 240px 1fr; gap: var(--gap);
+  /* Center column is the reserved 320x120 logo lockup slot (see docs/03). */
+  display: grid; grid-template-columns: 1fr var(--cg-logo-slot-w) 1fr; gap: var(--gap);
 }
 .ov-side { display: flex; flex-direction: column; }
 .ov-robots { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); align-items: end; }
 .ov-band {
+  position: relative;
   margin-top: var(--gap); padding: 12px 0; text-align: center;
   font-family: var(--font-cond); font-weight: 700;
   font-size: var(--t-label); letter-spacing: .2em; text-transform: uppercase;
+  text-indent: .2em;
   color: var(--cg-white);
   clip-path: var(--chamfer);
 }
-.ov-side--red  .ov-band { background: var(--alliance-red);  box-shadow: inset 0 6px 0 var(--cg-gold); }
-.ov-side--blue .ov-band { background: var(--alliance-blue); box-shadow: inset 0 6px 0 var(--cg-gold); }
+/* Gold edges are filled elements, never box-shadow, because luma strips shadows. */
+.ov-band::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px;
+  background: var(--cg-gold);
+}
+.ov-side--red  .ov-band { background: var(--alliance-red); }
+.ov-side--blue .ov-band { background: var(--alliance-blue); }
 
 .robot { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
 
@@ -96,26 +109,35 @@ body { background: #101014; overflow: hidden; }
    No photo -> tier-3 fallback: gold number on a purple plinth (docs/07). */
 .robot-art {
   position: relative; flex: 1;
-  display: grid; place-items: center;
+  display: grid; place-items: end center;
   min-height: 0;
 }
 .robot-art img { max-height: 100%; max-width: 100%; object-fit: contain; object-position: bottom; }
 /* Tier-3 fallback plinth: chamfered plate, perf texture, gold base rule.
    Must read as a designed state, not a broken image. */
 .robot-art--fallback {
+  position: relative;
+  display: grid; place-items: center;
   background-color: var(--cg-purple-lo);
   background-image: var(--tex-perf),
                     linear-gradient(180deg, var(--cg-purple-hi), var(--cg-purple-lo));
   background-size: var(--tex-perf-size), cover;
-  box-shadow: inset 0 -6px 0 var(--cg-gold);
   clip-path: var(--chamfer);
-  width: 100%;
+  width: 100%; height: 100%;
+}
+.robot-art--fallback::after {
+  content: ""; position: absolute; bottom: 0; left: 0; right: 0; height: 6px;
+  background: var(--cg-gold);
 }
 .robot-art--fallback span {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 900; font-size: var(--t-hero); line-height: .9;
+  font-weight: 900; font-size: var(--t-hero); line-height: 1;
   color: var(--cg-gold);
 }
+/* Sized by digit count so long numbers keep real margins from the plinth
+   edges: a 4-digit number at .82 grazed the sides. */
+.robot-art--fallback span[data-len="4"] { font-size: calc(var(--t-hero) * .68); }
+.robot-art--fallback span[data-len="5"] { font-size: calc(var(--t-hero) * .55); }
 .robot-shadow {
   height: 14px; margin-top: 6px;
   background: radial-gradient(ellipse at center, rgba(0,0,0,.55), transparent 72%);
@@ -137,16 +159,16 @@ body { background: #101014; overflow: hidden; }
 
 .ov-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
 .ov-logo {
-  width: 100%; aspect-ratio: 8/3;
+  width: var(--cg-logo-slot-w); height: var(--cg-logo-slot-h);
   display: grid; place-items: center;
   clip-path: var(--chamfer);
   background: var(--cg-gold);
-  /* Reserved logo lockup slot — the contest-winning mark drops in here as SVG.
+  /* Reserved logo lockup slot: the contest-winning mark drops in here as SVG.
      Placeholder wordmark is sized to fit the slot, not the other way round. */
-  font-family: var(--font-display); font-weight: 800; font-size: 30px;
+  font-family: var(--font-display); font-weight: 800; font-size: 38px;
   font-variation-settings: "wdth" 100;
   color: var(--cg-black); text-align: center; line-height: .98;
-  letter-spacing: -.01em; padding: 0 10px; overflow: hidden;
+  letter-spacing: -.01em; padding: 0 10px; overflow: hidden; box-sizing: border-box;
 }
 .ov-vs {
   font-family: var(--font-num); font-weight: 900; font-size: var(--t-title);
@@ -154,9 +176,11 @@ body { background: #101014; overflow: hidden; }
 }
 
 /* ------------------------------------------------------------- match / bar */
+:root { --bar-h: 156px; }   /* hub tab + lower third key off this */
+
 .bar {
   position: absolute; left: 0; right: 0; bottom: 0;
-  height: 148px;
+  height: var(--bar-h);
   display: grid; grid-template-columns: 1fr 420px 1fr;
   background-color: var(--cg-purple-deep);
   background-image: var(--tex-perf),
@@ -164,22 +188,24 @@ body { background: #101014; overflow: hidden; }
   background-size: var(--tex-perf-size), cover;
   border-top: var(--rule);
 }
-:root[data-scale="venue"] .bar { height: 260px; grid-template-columns: 1fr 520px 1fr; }
 :root[data-key="luma"] .bar { background-color: var(--cg-purple); background-image: var(--tex-perf); }
 
-.bar-side { display: flex; align-items: center; gap: var(--gap); padding: 0 32px; }
+.bar-side { display: flex; align-items: center; gap: 28px; padding: 0 36px; }
 .bar-side--red  { background: var(--alliance-red);  border-right: var(--rule); }
 .bar-side--blue { background: var(--alliance-blue); border-left:  var(--rule); flex-direction: row-reverse; }
 
 .bar-teams {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-weight: 700; font-size: var(--t-label);
-  line-height: 1.08; color: var(--cg-white); letter-spacing: .02em;
+  line-height: 1.16; color: var(--cg-white); letter-spacing: .02em;
 }
 .bar-side--blue .bar-teams { text-align: right; }
 
-.bar-stats { display: flex; align-items: baseline; gap: 18px; margin-left: auto; }
-.bar-side--blue .bar-stats { margin-left: 0; margin-right: auto; flex-direction: row-reverse; }
+/* Fuel/tower readout centered over its RP strip; total centered between the
+   strip and the clock, symmetric on both sides. */
+.bar-stats { flex: 1; display: flex; align-items: center; justify-content: space-evenly; gap: 12px; }
+.bar-side--blue .bar-stats { flex-direction: row-reverse; }
+.bar-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; }
 .bar-total {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-weight: 900; font-size: var(--t-score); line-height: 1;
@@ -187,36 +213,58 @@ body { background: #101014; overflow: hidden; }
 }
 .bar-sub {
   font-family: var(--font-cond); font-weight: 600; font-size: var(--t-label);
-  color: var(--cg-white); opacity: .94; line-height: 1.1;
+  color: var(--cg-white); opacity: .94; line-height: 1;
   letter-spacing: .06em; text-transform: uppercase;
 }
-.bar-pips { display: flex; gap: 8px; margin-top: 6px; }
+/* Sub-line counters size to their value: a 3ch reservation reads as a hole. */
+.bar-sub { text-align: center; }
+.bar-sub .roll { min-width: 0; text-align: left; }
+.bar-rp { display: flex; gap: 8px; }
+/* Recess unearned badges against the alliance fills; no box-shadow ring,
+   since the luma key strips shadows. */
+.bar-rp .rp { background: rgba(0, 0, 0, .30); box-shadow: none; color: rgba(255, 255, 255, .72); }
+.bar-rp .rp[data-earned="true"] { background: var(--cg-green-hi); color: var(--cg-white); }
 
 .bar-center {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; padding: 0 12px;
+  gap: 10px; padding: 0 12px;
 }
 .clock {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-weight: 900; font-size: var(--t-clock); line-height: 1;
   color: var(--cg-gold); letter-spacing: -.03em;
 }
-.phase { font-size: calc(var(--t-label) * .86); }
+.phase { font-size: var(--t-label); }   /* 28px floor applies on air */
 
-/* The 2026-specific graphic: which hub is live right now. */
+/* The 2026-specific graphic: which hub is live right now. A tab growing out
+   of the bar's center column: flush, part of the scorebug, never floating. */
 .hub {
   position: absolute; left: 50%; transform: translateX(-50%);
-  bottom: 170px;
-  display: flex; align-items: center; gap: 16px;
-  padding: 12px 30px;
+  /* +3px: the bar's gold border-top paints above its height, so the band must
+     run unbroken beneath the tab. */
+  bottom: calc(var(--bar-h) + 3px);
+  /* Gold shell, purple face inset top+sides: the bar's gold band flows up
+     and over the tab in one continuous line. */
+  z-index: 5;
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 36px 10px;
+  background: var(--cg-gold);
+  --ch: 14px;
+  clip-path: polygon(var(--ch) 0, calc(100% - var(--ch)) 0, 100% var(--ch),
+                     100% 100%, 0 100%, 0 var(--ch));
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  letter-spacing: .14em; text-transform: uppercase; color: var(--cg-white);
+  white-space: nowrap;
+}
+.hub::before {
+  content: ""; position: absolute; inset: 3px 3px 0;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
-  clip-path: var(--chamfer); --ch: 12px;
-  box-shadow: inset 0 4px 0 var(--cg-gold);
-  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
-  letter-spacing: .16em; text-transform: uppercase; color: var(--cg-white);
+  --ch: 12px;
+  clip-path: polygon(var(--ch) 0, calc(100% - var(--ch)) 0, 100% var(--ch),
+                     100% 100%, 0 100%, 0 var(--ch));
 }
-:root[data-scale="venue"] .hub { bottom: 300px; --ch: 20px; }
+.hub > * { position: relative; }
 .hub-dot { width: 22px; height: 22px; clip-path: var(--chamfer); --ch: 7px; background: var(--cg-white-dim); }
 .hub-dot[data-on="red"]  { background: var(--alliance-red); }
 .hub-dot[data-on="blue"] { background: var(--alliance-blue); }
@@ -224,21 +272,24 @@ body { background: #101014; overflow: hidden; }
 
 /* ------------------------------------------------------------ lower third */
 #third {
-  position: absolute; left: var(--safe-x); bottom: 210px; z-index: 40;
-  display: none; min-width: 620px;
+  position: absolute; left: var(--safe-x); bottom: calc(var(--bar-h) + 28px); z-index: 40;
+  display: none; box-sizing: border-box; min-width: 560px; max-width: 690px;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
-  box-shadow: inset 10px 0 0 var(--cg-gold);
   clip-path: var(--chamfer);
   padding: 20px 40px 20px 54px;
 }
-:root[data-scale="venue"] #third { bottom: 340px; }
+#third::before {
+  content: ""; position: absolute; top: 0; left: 0; bottom: 0; width: 10px;
+  background: var(--cg-gold);
+}
 #third[data-show] { display: block; }
 #third .t1 {
   font-family: var(--font-display); font-weight: 800; font-size: var(--t-title);
-  font-variation-settings: "wdth" var(--wdth-display); line-height: 1.02;
+  font-variation-settings: "wdth" var(--wdth-display); line-height: 1.06;
+  overflow-wrap: break-word;
 }
-#third .t2 { font-family: var(--font-cond); font-weight: 600; font-size: var(--t-body); color: var(--cg-gold); letter-spacing: .12em; text-transform: uppercase; }
+#third .t2 { font-family: var(--font-cond); font-weight: 600; font-size: var(--t-body); color: var(--cg-gold); letter-spacing: .12em; text-transform: uppercase; margin-top: 4px; }
 
 /* ------------------------------------------------------------ telestrator */
 #tele { position: absolute; inset: 0; z-index: 50; touch-action: none; cursor: crosshair; display: none; }
@@ -301,9 +352,9 @@ body { background: #101014; overflow: hidden; }
         <div class="bar-side bar-side--red">
           <div class="bar-teams" id="redTeams"></div>
           <div class="bar-stats">
-            <div>
-              <div class="bar-sub"><span class="num roll" id="redFuel">0</span> fuel &nbsp;·&nbsp; <span class="num roll" id="redTower">0</span> tower</div>
-              <div class="bar-pips" id="redPips"></div>
+            <div class="bar-mid">
+              <div class="bar-sub"><span class="num roll" id="redFuel">0</span> fuel · <span class="num roll" id="redTower">0</span> tower</div>
+              <div class="bar-rp" id="redPips"></div>
             </div>
             <div class="bar-total num roll" id="redTotal" data-motion="essential">0</div>
           </div>
@@ -317,9 +368,9 @@ body { background: #101014; overflow: hidden; }
         <div class="bar-side bar-side--blue">
           <div class="bar-teams" id="blueTeams"></div>
           <div class="bar-stats">
-            <div>
-              <div class="bar-sub"><span class="num roll" id="blueFuel">0</span> fuel &nbsp;·&nbsp; <span class="num roll" id="blueTower">0</span> tower</div>
-              <div class="bar-pips" id="bluePips"></div>
+            <div class="bar-mid">
+              <div class="bar-sub"><span class="num roll" id="blueFuel">0</span> fuel · <span class="num roll" id="blueTower">0</span> tower</div>
+              <div class="bar-rp" id="bluePips"></div>
             </div>
             <div class="bar-total num roll" id="blueTotal" data-motion="essential">0</div>
           </div>
@@ -343,11 +394,6 @@ body { background: #101014; overflow: hidden; }
     <button class="btn" data-screen="overview">Overview</button>
     <button class="btn" data-screen="match">Match</button>
   </div>
-  <span class="lbl">Scale</span>
-  <div class="grp">
-    <button class="btn" data-scale="stream">Stream</button>
-    <button class="btn" data-scale="venue">Venue</button>
-  </div>
   <span class="lbl">Key</span>
   <div class="grp">
     <button class="btn" data-key="alpha">Alpha</button>
@@ -365,7 +411,7 @@ body { background: #101014; overflow: hidden; }
 <script>
 /* ==========================================================================
    Prototype driver. Stands in for the `core` event bus described in
-   docs/02-architecture.md — same event shapes, fake data.
+   docs/02-architecture.md: same event shapes, fake data.
    ========================================================================== */
 const $ = s => document.querySelector(s);
 const root = document.documentElement;
@@ -374,7 +420,9 @@ const params = new URLSearchParams(location.search);
 /* ---- fit the 1920x1080 stage into the window ---------------------------- */
 const stage = $('#stage');
 function fit() {
-  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  /* Rounded up a hair so fractional scaling never leaves a sub-pixel seam of
+     page background at the stage edges. Mirrors fitStage in desk-client.js. */
+  const s = Math.ceil(Math.min(innerWidth / 1920, innerHeight / 1080) * 2000) / 2000;
   stage.style.transform = `translate(-50%, -50%) scale(${s})`;
 }
 addEventListener('resize', fit); fit();
@@ -385,15 +433,21 @@ const MATCH = {
   red:  [{n:846,name:'The Funky Monkeys'},{n:1868,name:'Space Cookies'},{n:253,name:'Boba Bots'}],
   blue: [{n:100,name:'The Wildhats'},{n:115,name:'MVRT'},{n:670,name:'Homestead Robotics'}]
 };
-const RP = ['Energized','Supercharged','Traversal'];
-const THRESH = { fuel: [100, 360], tower: 50 };   // 2026 REBUILT regional thresholds
+/* 2026 REBUILT bonus RP: icon says which, numeral says the threshold.
+   Mirrors surfaces/_shared/rp.js, duplicated here because the prototype
+   stays double-clickable from disk, where module imports don't resolve. */
+const RP = [
+  { key:'energized',    label:'Energized',    need:100, path:'M13 2 5 13.5h4.8L8 22 19 9.5h-5.4L16 2z' },
+  { key:'supercharged', label:'Supercharged', need:360, path:'M9 1 2.5 9.5H6L4.8 15 13 5.5H9.2L11 1zM19 9l-6.5 8.5H16L14.8 23 23 13.5h-3.8L21 9z' },
+  { key:'traversal',    label:'Traversal',    need:50,  path:'M3.5 21h4.4v-5H3.5zM9.8 21h4.4V10.5H9.8zM16.1 21h4.4V4h-4.4z' },
+];
 
 /* ---- build the alliance overview --------------------------------------- */
 function robotCard(t, i) {
   /* Tier-3 fallback per docs/07-team-media.md: no uploaded cutout yet, so a
      gold number on a purple plinth. Must look deliberate, not broken. */
   return `<div class="robot reveal reveal--up" style="--i:${i}">
-    <div class="robot-art robot-art--fallback"><span class="num">${t.n}</span></div>
+    <div class="robot-art"><div class="robot-art--fallback"><span class="num" data-len="${String(t.n).length}">${t.n}</span></div></div>
     <div class="robot-shadow"></div>
     <div class="robot-num num">${t.n}</div>
     <div class="robot-name">${t.name}</div>
@@ -408,7 +462,10 @@ $('#redTeams').innerHTML  = MATCH.red.map(t => t.n).join('<br>');
 $('#blueTeams').innerHTML = MATCH.blue.map(t => t.n).join('<br>');
 
 for (const side of ['red','blue']) {
-  $(`#${side}Pips`).innerHTML = RP.map(r => `<span class="pip" title="${r}"></span>`).join('');
+  $(`#${side}Pips`).innerHTML = RP.map(r =>
+    `<span class="rp" data-rp="${r.key}" title="${r.label} · ${r.need}">` +
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${r.path}"/></svg>` +
+    `<span class="rp-need num">${r.need}</span></span>`).join('');
 }
 
 /* ---- Gold Sweep screen transition -------------------------------------- */
@@ -424,6 +481,8 @@ function show(name) {
     $('#' + name).setAttribute('data-active','');
     if (name === 'overview') buildOverview();
     current = name;
+    /* Keep the toggle bar honest when the demo drives the switch. */
+    press('[data-screen]', $(`#ui [data-screen="${name}"]`));
   }, half);
 }
 
@@ -451,7 +510,7 @@ function phaseOf(c) {
   if (c < 0)   return ['Auto', 'both'];
   if (c < 10)  return ['Transition', 'both'];
   if (c < 110) {
-    // Odd shifts belong to the AUTO LOSER, even shifts to the winner —
+    // Odd shifts belong to the AUTO LOSER, even shifts to the winner,
     // verified against Cheesy Arena's Hub.isShiftActive. Winning auto buys the
     // LATER shifts. The real system takes this from the field rather than
     // inferring it, because Cheesy decides auto on fuel count alone and
@@ -483,10 +542,10 @@ function render() {
     roll($(`#${a}Fuel`),  S[a].fuel);
     roll($(`#${a}Tower`), S[a].tower);
     roll($(`#${a}Total`), total(a));
-    const pips = $(`#${a}Pips`).children;
-    pips[0].dataset.earned = S[a].fuel  >= THRESH.fuel[0];
-    pips[1].dataset.earned = S[a].fuel  >= THRESH.fuel[1];
-    pips[2].dataset.earned = S[a].tower >= THRESH.tower;
+    const badges = $(`#${a}Pips`).children;
+    badges[0].dataset.earned = S[a].fuel  >= RP[0].need;
+    badges[1].dataset.earned = S[a].fuel  >= RP[1].need;
+    badges[2].dataset.earned = S[a].tower >= RP[2].need;
   }
 
   /* Lockdown at endgame: decorative motion off, score/clock/pips stay live. */
@@ -498,7 +557,9 @@ setInterval(() => {
   if (!running) return;
   S.clock += 0.25;
   if (S.clock > 152) { S.clock = -22; S.red={fuel:0,tower:0}; S.blue={fuel:0,tower:0}; show('overview'); return; }
-  if (S.clock > -20 && current !== 'match') show('match');
+  /* Flip to the score bar BEFORE the countdown reaches zero-of-auto: the
+     armed moment, mirroring `match.armed` in the real system. */
+  if (S.clock > -21 && current !== 'match') show('match');
 
   const [, hub] = phaseOf(S.clock);
   if (S.clock > -20 && S.clock < 140) {
@@ -539,7 +600,7 @@ function draw() {
   ctx.clearRect(0, 0, 1920, 1080);
   const now = performance.now(), fade = FADE();
 
-  /* Spotlight dims everything outside the lassoed region — reads far better
+  /* Spotlight dims everything outside the lassoed region. It reads far better
      at 720p than an ellipse does. */
   const spots = strokes.filter(s => s.tool === 'spotlight' && (s === live || now - s.born < fade));
   if (spots.length) {
@@ -598,12 +659,12 @@ draw();
 function press(sel, on) {
   document.querySelectorAll(sel).forEach(b => b.setAttribute('aria-pressed', b === on));
 }
-document.querySelectorAll('[data-screen]').forEach(b =>
+/* Scoped to #ui: <html> itself carries data-key, and an unscoped selector
+   would hand the whole page a click handler. */
+document.querySelectorAll('#ui [data-screen]').forEach(b =>
   b.onclick = () => { show(b.dataset.screen); press('[data-screen]', b); });
-document.querySelectorAll('[data-scale]').forEach(b =>
-  b.onclick = () => { root.dataset.scale = b.dataset.scale; press('[data-scale]', b); });
-document.querySelectorAll('[data-key]').forEach(b =>
-  b.onclick = () => { root.dataset.key = b.dataset.key; press('[data-key]', b); });
+document.querySelectorAll('#ui [data-key]').forEach(b =>
+  b.onclick = () => { root.dataset.key = b.dataset.key; press('#ui [data-key]', b); });
 
 $('#btnTele').onclick  = e => { cv.toggleAttribute('data-on'); e.target.setAttribute('aria-pressed', cv.hasAttribute('data-on')); };
 $('#btnThird').onclick = e => {
@@ -611,7 +672,7 @@ $('#btnThird').onclick = e => {
   e.target.setAttribute('aria-pressed', on);
   if (on) { t.setAttribute('data-show',''); t.className = 'third'; }
   else {
-    /* let the Slide Third exit finish before hiding — a lower third that
+    /* let the Slide Third exit finish before hiding: a lower third that
        vanishes instead of leaving is invisible in the room */
     t.className = 'third--exit';
     const d = parseFloat(getComputedStyle(root).getPropertyValue('--dur-out')) || 260;
@@ -634,11 +695,13 @@ addEventListener('keydown', e => {
 });
 
 /* ---- boot -------------------------------------------------------------- */
-root.dataset.key   = params.get('key')   || 'alpha';
-root.dataset.scale = params.get('scale') || 'stream';
+root.dataset.key = params.get('key') || 'alpha';
 if (params.get('ui') === '0') $('#ui').setAttribute('hidden','');
 buildOverview();
 $('#overview').setAttribute('data-active','');
+/* Reflect the boot state in the toggle bar, so nothing looks unset. */
+press('[data-screen]', $('#ui [data-screen="overview"]'));
+press('#ui [data-key]', $(`#ui [data-key="${root.dataset.key}"]`));
 render();
 </script>
 </body>

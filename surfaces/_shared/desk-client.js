@@ -8,7 +8,7 @@
  *    don't spend bandwidth on a number the client can compute.
  *
  * 2. Reconnect is aggressive and silent. A surface is a Browser Source in OBS
- *    that nobody is looking at until it is on air — it must heal itself
+ *    that nobody is looking at until it is on air, so it must heal itself
  *    without anyone noticing, and never show an error state on the broadcast.
  */
 
@@ -37,8 +37,8 @@ export function phaseAt(c) {
 }
 
 /**
- * Odd shifts belong to the AUTO LOSER, even shifts to the winner — verified
- * against Cheesy Arena's Hub.isShiftActive. Winning auto buys the LATER
+ * Odd shifts belong to the AUTO LOSER, even shifts to the winner (verified
+ * against Cheesy Arena's Hub.isShiftActive). Winning auto buys the LATER
  * shifts. Mirrors apps/core/src/clock.ts; keep the two in step.
  */
 export function hubActiveAt(c, autoWinner, authoritative) {
@@ -58,6 +58,21 @@ export function clockDisplay(c) {
   const remaining = c < REBUILT.TELEOP_START ? -c : REBUILT.MATCH_END - c;
   const s = Math.max(0, Math.ceil(remaining));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * A null clock is ambiguous: pre-match before the first start, but OVER after
+ * the buzzer (match.end stops the clock by clearing matchStartedAt). These
+ * disambiguate with state.matchEndedAt so a finished match reads "Final 0:00",
+ * never "Pre-match 0:20". match.loaded clears matchEndedAt for the next one.
+ */
+export function phaseFor(state, c) {
+  if (c !== null) return phaseAt(c);
+  return state?.matchEndedAt ? 'post' : 'pre';
+}
+export function clockDisplayFor(state, c) {
+  if (c !== null) return clockDisplay(c);
+  return state?.matchEndedAt ? '0:00' : '0:20';
 }
 
 class DeskClient extends EventTarget {
@@ -132,8 +147,8 @@ class DeskClient extends EventTarget {
 
   /**
    * Ephemeral broadcast that bypasses the event bus and the log. For data
-   * that arrives at pointer rate and is worthless a second later — telestrator
-   * strokes, scrub positions. Never use it for anything the archive needs.
+   * that arrives at pointer rate and is worthless a second later, like
+   * telestrator strokes or scrub positions. Never use it for anything the archive needs.
    */
   relay(channel, data) {
     if (this.#ws?.readyState === WebSocket.OPEN) {
@@ -148,27 +163,27 @@ class DeskClient extends EventTarget {
 }
 
 /**
- * Reads ?key= and ?scale= onto <html>, so one URL configures a surface for
- * OBS alpha vs. a Blackmagic luma key, and for stream vs. venue legibility.
+ * Reads ?key= onto <html>, so one URL configures a surface for OBS alpha vs.
+ * a Blackmagic luma key. A surface's own markup default (e.g. the side screen
+ * shipping luma) holds unless the URL says otherwise.
  */
 export function applyDisplayMode() {
   const p = new URLSearchParams(location.search);
   const root = document.documentElement;
-  root.dataset.key = p.get('key') || 'alpha';
-  root.dataset.scale = p.get('scale') || 'stream';
+  root.dataset.key = p.get('key') || root.dataset.key || 'alpha';
   if (p.get('surface')) root.dataset.surface = p.get('surface');
   return p;
 }
 
 /**
  * Number Roll. Counts to the new value with tabular figures so nothing
- * reflows — at 140px the changing digit shapes are visible across a gym even
+ * reflows: at 140px the changing digit shapes are visible across a gym even
  * when the exact value isn't.
  *
  * Jumps straight to the value while hidden: requestAnimationFrame does not
  * fire in a backgrounded page, so an animated roll started while hidden would
  * strand the element on a stale number. Nobody is watching a hidden source, so
- * the animation is worthless there — but the correct value is not.
+ * the animation is worthless there, but the correct value is not.
  */
 export function roll(el, to, ms = 600) {
   const from = Number(el.dataset.v ?? 0);
@@ -189,8 +204,8 @@ export function roll(el, to, ms = 600) {
 /**
  * Per-frame paint loop with a backstop.
  *
- * OBS throttles — and with "shutdown source when not visible" effectively
- * pauses — Browser Sources that aren't on a live scene, and rAF stops firing
+ * OBS throttles (and with "shutdown source when not visible" effectively
+ * pauses) Browser Sources that aren't on a live scene, and rAF stops firing
  * entirely in a hidden page. A clock driven by rAF alone freezes at whatever
  * it read when the source went off-scene, then snaps forward when it returns.
  * On a scoreboard that is very visible.
@@ -216,6 +231,21 @@ export function startTicker(fn) {
   if (!document.hidden) raf = requestAnimationFrame(frame);
 
   return () => { cancelAnimationFrame(raf); clearInterval(backstop); };
+}
+
+/**
+ * Fit a 1920x1080 stage into the window. The scale rounds UP a hair (≤0.05%,
+ * cropped by the wrap's overflow) so fractional scaling can never leave a
+ * sub-pixel seam of page background at the stage edges. On a broadcast
+ * overlay that seam reads as a white line around the score bar.
+ */
+export function fitStage(stage) {
+  const fit = () => {
+    const s = Math.ceil(Math.min(innerWidth / 1920, innerHeight / 1080) * 2000) / 2000;
+    stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+  };
+  addEventListener('resize', fit);
+  fit();
 }
 
 /** Re-trigger a CSS animation that may already have run. */

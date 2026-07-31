@@ -1,9 +1,9 @@
 /* ==========================================================================
-   CalGames 2026 Content Desk — design tokens
+   CalGames 2026 Content Desk: design tokens
 
    Palette is mandated: official WRRF Purple #560F6B, Gold #F0AF00,
    Green #006549, black/white for text; official FIRST Red #ED1C24 and
-   Blue #0066B3 for alliances. We don't get to choose colors — so the
+   Blue #0066B3 for alliances. We don't get to choose colors, so the
    character comes from TYPOGRAPHY, GEOMETRY, and TEXTURE instead.
 
    The visual language is "field-built": chamfered corners cut like the
@@ -13,10 +13,14 @@
    Modes, set on <html>:
      data-key="alpha"      transparent background   (OBS Browser Source)
      data-key="luma"       black background         (Blackmagic downstream luma key)
-     data-scale="stream"   phone/laptop viewing     (default)
-     data-scale="venue"    30-90 ft across a gym    (see docs/08-motion.md)
      data-surface="light"  light operator UI
      data-lockdown         endgame: suppress decorative motion only
+
+   One scale. The broadcast overlay serves the stream and the venue projector
+   from the same layout, sized so the score, clock, and alliance blocks clear
+   the gym-legibility floor while the rest serves the stream viewer. The venue
+   side screens (surfaces/side) carry their own larger type locally.
+   See docs/08-motion.md.
    ========================================================================== */
 
 :root {
@@ -43,7 +47,7 @@
   --cg-white-dim:     #C9BCD0;  /* white tinted toward purple, not grey */
 
   /* ---- Alliance: official FIRST red/blue. --------------------------------
-     RESERVED — semantic only, never decorative. Fixed by FIRST; the only
+     RESERVED: semantic only, never decorative. Fixed by FIRST; the only
      colors in this system we do not get to choose. The -lo shades are ours,
      for recessed fills behind the canonical color. */
   --alliance-red:     #ED1C24;
@@ -77,13 +81,13 @@
   /* ---- Type ------------------------------------------------------------
      Deliberately NOT Inter/Roboto/Poppins. Three siblings from the same
      grotesque lineage, so they cohere without matching:
-       Archivo         — variable width axis, pushed expanded. Wide and
-                         confident; expanded grotesques are the native
-                         language of scoreboards.
-       Chivo           — headline face with genuinely good tabular figures.
-                         Sturdier and less anonymous than Archivo's numerals.
-       Saira Condensed — fits "Homestead Robotics" in a lower third without
-                         ellipsis, and has more spine than Barlow.
+       Archivo:         variable width axis, pushed expanded. Wide and
+                        confident; expanded grotesques are the native
+                        language of scoreboards.
+       Chivo:           headline face with genuinely good tabular figures.
+                        Sturdier and less anonymous than Archivo's numerals.
+       Saira Condensed: fits "Homestead Robotics" in a lower third without
+                        ellipsis, and has more spine than Barlow.
      calgames.org uses Poppins; that stays the WEB face. Broadcast needs
      more weight and width than Poppins can give at 90 feet.               */
   --font-display:  "Archivo", "Archivo Expanded", system-ui, sans-serif;
@@ -91,10 +95,10 @@
   --font-cond:     "Saira Condensed", "Archivo Narrow", system-ui, sans-serif;
   --font-mono:     "JetBrains Mono", ui-monospace, monospace;
 
-  --wdth-display:  118;   /* Archivo width axis — expanded, not default */
+  --wdth-display:  118;   /* Archivo width axis: expanded, not default */
   --wdth-wide:     125;
 
-  /* ---- Type scale: STREAM (default) --------------------------------------
+  /* ---- Type scale ---------------------------------------------------------
      Viewed at 12-24in on a phone at 720p. 28px is the hard floor.          */
   --t-hero:   112px;
   --t-score:   72px;
@@ -108,17 +112,10 @@
   --font-ui-label: 12px;
 
   /* ---- Geometry ----------------------------------------------------------
-     The chamfer is the signature shape. 20px cut on two opposite corners —
-     a lightening cut on a gusset plate, not a rounded rectangle.           */
+     The chamfer is the signature shape. 20px cut on two opposite corners:
+     a lightening cut on a gusset plate, not a rounded rectangle.
+     --ch is the cut size; --chamfer itself is declared on * below.         */
   --ch: 20px;
-  --chamfer: polygon(
-    var(--ch) 0, 100% 0,
-    100% calc(100% - var(--ch)), calc(100% - var(--ch)) 100%,
-    0 100%, 0 var(--ch)
-  );
-  --chamfer-flat: polygon(
-    var(--ch) 0, 100% 0, 100% 100%, 0 100%, 0 var(--ch)
-  );
 
   --safe-x: 96px;   /* 5% title-safe, 1920 wide */
   --safe-y: 54px;
@@ -132,7 +129,7 @@
               rgba(255,255,255,.055) 1.4px, transparent 1.5px);
   --tex-perf-size: 13px 13px;
 
-  /* Blueprint tick rule — measurement marks along a panel's top edge */
+  /* Blueprint tick rule: measurement marks along a panel's top edge */
   --tick: repeating-linear-gradient(90deg,
           var(--cg-gold) 0 2px, transparent 2px 14px);
 
@@ -150,7 +147,7 @@
   --dur-count:  600ms;
   --dur-pop:    340ms;
   --dur-third:  420ms;
-  --dur-pulse: 1200ms;  /* 0.83Hz — WCAG 2.3.1 safe, never above 3Hz */
+  --dur-pulse: 1200ms;  /* 0.83Hz, WCAG 2.3.1 safe, never above 3Hz */
   --stagger:     90ms;
   --dwell:      8000ms;
 
@@ -167,6 +164,12 @@
   --travel-md: 120px;
   --travel-lg: 320px;
 
+  /* ---- Operator interaction states --------------------------------------
+     Semantic, because the light surfaces must remap them: raw brand purple
+     under black hover text and a gold ring on white both fail contrast.    */
+  --btn-hover:  var(--cg-purple-hi);
+  --focus-ring: var(--cg-gold-hi);
+
   /* ---- Telestrator ink -------------------------------------------------- */
   --ink-default: var(--cg-gold);
   --ink-good:    var(--cg-green-hi);
@@ -182,40 +185,9 @@
 }
 
 /* --------------------------------------------------------------------------
-   VENUE SCALE
-   Back row of a HS gym is ~90ft from a 12-16ft screen — roughly 10x image
-   height, past the AVIXA threshold for detailed content. Only the largest
-   2-3 elements are readable. 72px hard type floor; see docs/08-motion.md.
-   -------------------------------------------------------------------------- */
-:root[data-scale="venue"] {
-  --t-hero:  220px;
-  --t-score: 140px;
-  --t-clock: 120px;
-  --t-title:  84px;
-  --t-body:   76px;
-  --t-label:  72px;   /* HARD FLOOR */
-
-  --travel-sm: 120px;
-  --travel-md: 220px;
-  --travel-lg: 420px;
-
-  --pad: 40px;
-  --gap: 28px;
-  --ch:  34px;             /* chamfer scales too, or it vanishes */
-  --edge-w: 6px;
-  --rule: 6px solid var(--cg-gold);
-  --rule-thin: 4px solid var(--cg-gold);
-  --tex-perf-size: 22px 22px;
-  --wdth-display: 125;     /* push wider — width reads before weight at distance */
-}
-
-/* A venue surface holds 5-7 elements, not 15. Reduce, don't shrink. */
-:root[data-scale="venue"] [data-density="rich"] { display: none !important; }
-
-/* --------------------------------------------------------------------------
    LUMA KEY MODE
    Cheesy Arena's audience overlay feeds a Blackmagic downstream key, and the
-   DSK only does LUMA — black is transparent, chroma unavailable. No shadows,
+   DSK only does LUMA: black is transparent, chroma unavailable. No shadows,
    no translucency, and purple-deep is too dark to survive as a panel fill.
    Chamfers work beautifully here: the cut corner keys straight out.
    -------------------------------------------------------------------------- */
@@ -232,8 +204,44 @@
 }
 
 /* --------------------------------------------------------------------------
-   LIGHT OPERATOR SURFACES
-   Gold on white is 1.9:1 — unusable. On light surfaces gold becomes purple.
+   DARK OPERATOR CONSOLES: the default for every operator page.
+   A production booth is dark; a white page next to the program monitor kills
+   the operator's night vision and glows on camera. Deep purple, not black,
+   so it still reads as the same brand as the broadcast.
+   -------------------------------------------------------------------------- */
+:root[data-surface="console"] {
+  --page-bg:        #120318;
+  --surface:        #1D0726;
+  --surface-raised: #270A33;
+  --surface-sunken: #0D0212;
+  --accent:         var(--cg-gold);
+  --text:           #F4EFF7;
+  --text-dim:       #A18FAE;
+  --text-on-accent: var(--cg-black);
+  --rule:           3px solid var(--cg-gold);
+  --atmo:           none;
+  --tex-perf:       radial-gradient(circle at center, rgba(255,255,255,.03) 1.4px, transparent 1.5px);
+  --btn-hover:      #3A1349;
+  --focus-ring:     var(--cg-gold-hi);
+}
+:root[data-surface="console"] body { background: var(--page-bg); }
+/* One shared field treatment so every console input matches. */
+:root[data-surface="console"] input,
+:root[data-surface="console"] select,
+:root[data-surface="console"] textarea {
+  background: var(--surface-sunken);
+  color: var(--text);
+  border: 2px solid #3A1349;
+}
+:root[data-surface="console"] input:focus,
+:root[data-surface="console"] select:focus,
+:root[data-surface="console"] textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+
+/* --------------------------------------------------------------------------
+   LIGHT OPERATOR SURFACES (legacy: consoles now default to dark above)
+   Gold on white is 1.9:1, unusable. On light surfaces gold becomes purple.
    -------------------------------------------------------------------------- */
 :root[data-surface="light"] {
   --page-bg:        #FBF8FC;
@@ -247,6 +255,40 @@
   --rule:           3px solid var(--cg-purple);
   --atmo:           none;
   --tex-perf:       radial-gradient(circle at center, rgba(86,15,107,.07) 1.4px, transparent 1.5px);
+  --btn-hover:      var(--surface-sunken);
+  --focus-ring:     var(--cg-purple);
+}
+
+/* --------------------------------------------------------------------------
+   OPERATOR FOCUS RING: any keyboard-focusable control on an operator surface
+   gets a visible ring, even ones that predate this rule (plain buttons,
+   links, custom rows). Inputs/selects/textareas above and .btn below keep
+   their own more specific :focus treatment; this is the catch-all, not a
+   replacement for it.
+   -------------------------------------------------------------------------- */
+:root[data-surface="console"] :focus-visible,
+:root[data-surface="light"] :focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   The chamfer polygon, deliberately declared on * rather than :root.
+   A custom property substitutes its inner var() where it is DECLARED, so a
+   :root-declared --chamfer would bake in :root's --ch: 20px once and every
+   per-component `--ch: 8px` override would be silently ignored (chips, pips,
+   badges, and the hub dot all shipped with 20px cuts before this). Declaring
+   it on every element re-resolves var(--ch) against that element's own value.
+   -------------------------------------------------------------------------- */
+* {
+  --chamfer: polygon(
+    var(--ch) 0, 100% 0,
+    100% calc(100% - var(--ch)), calc(100% - var(--ch)) 100%,
+    0 100%, 0 var(--ch)
+  );
+  --chamfer-flat: polygon(
+    var(--ch) 0, 100% 0, 100% 100%, 0 100%, 0 var(--ch)
+  );
 }
 
 /* --------------------------------------------------------------------------
@@ -271,14 +313,14 @@ html, body {
   letter-spacing: -.015em;
 }
 
-/* Atmosphere layer — full-bleed backdrops are never a flat fill. */
+/* Atmosphere layer: full-bleed backdrops are never a flat fill. */
 .atmosphere {
   background-image: var(--tex-perf), var(--atmo);
   background-size: var(--tex-perf-size), cover;
 }
 
 /* --------------------------------------------------------------------------
-   Primitives — panel, chip, numeral block.
+   Primitives: panel, chip, numeral block.
    Every broadcast component composes from these three.
 
    The panel is a gold chamfered plate with a purple face inset by --edge-w.
@@ -300,7 +342,7 @@ html, body {
 }
 .panel > * { position: relative; }
 
-/* Blueprint tick rule — CAD reference, and it reads as texture at distance */
+/* Blueprint tick rule: CAD reference, and it reads as texture at distance */
 .tickrule { height: 4px; background: var(--tick); }
 
 .chip {
@@ -323,26 +365,37 @@ html, body {
 .alliance--red  { background: var(--alliance-red);  border-right: var(--rule); }
 .alliance--blue { background: var(--alliance-blue); border-left:  var(--rule); }
 
-/* Ranking-point pips — chamfered, not circles. Consistency of shape language
-   matters more than the 3px of extra polish a circle would give. */
-.pip {
-  width: 20px; height: 20px;
-  clip-path: var(--chamfer); --ch: 6px;
+/* Ranking-point badge. Chamfered, not a circle: consistency of shape
+   language matters more than the 3px of extra polish a circle would give.
+   Icon says WHICH bonus, the numeral says the threshold. Composition
+   (icon + threshold) is built by surfaces/_shared/rp.js. The numeral honors
+   the 28px broadcast type floor. It is the point of the badge. */
+.rp {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 13px 4px 10px;
+  clip-path: var(--chamfer); --ch: 8px;
   background: var(--cg-purple-hi);
+  color: var(--cg-white-dim);
   box-shadow: inset 0 0 0 2px var(--cg-purple-deep);
 }
-:root[data-scale="venue"] .pip { width: 44px; height: 44px; --ch: 12px; }
-.pip[data-earned="true"] {
+.rp svg { width: 22px; height: 22px; fill: currentColor; display: block; }
+.rp .rp-need {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 700; font-size: 28px; line-height: 1;
+}
+.rp[data-earned="true"] {
   background: var(--cg-green-hi);
+  color: var(--cg-white);
+  box-shadow: none;
   animation: cg-pip-pop var(--dur-pop) var(--ease-pop) both;
 }
 
 /* --------------------------------------------------------------------------
-   THE MOTION SYSTEM — seven named transitions. See docs/08-motion.md.
+   THE MOTION SYSTEM: seven named transitions. See docs/08-motion.md.
    Animate transform/opacity only; anything else drops browser-source frames.
    -------------------------------------------------------------------------- */
 
-/* 1. Gold Sweep — the signature. A gold bar with a CHAMFERED leading edge
+/* 1. Gold Sweep: the signature. A gold bar with a CHAMFERED leading edge
       wipes across; content changes behind it. Highest-amplitude motion
       available, and the skewed edge ties the motion to the geometry. */
 .sweep { position: relative; overflow: hidden; }
@@ -357,7 +410,7 @@ html, body {
 }
 .sweep[data-run]::after { animation: cg-sweep var(--dur-sweep) var(--ease-sweep) both; }
 
-/* 2. Block Reveal — panels and cards. */
+/* 2. Block Reveal: panels and cards. */
 .reveal { animation: cg-reveal var(--dur-in) var(--ease-enter) both; }
 .reveal--left  { --tx: calc(-1 * var(--travel-lg)); --ty: 0; }
 .reveal--right { --tx: var(--travel-lg);            --ty: 0; }
@@ -367,13 +420,13 @@ html, body {
 /* 3. Number Roll is JS-driven; this class just guards the reflow. */
 .roll { display: inline-block; min-width: 3ch; text-align: right; }
 
-/* 5. Stagger Build — set --i on each child. */
+/* 5. Stagger Build: set --i on each child. */
 .stagger > * { animation-delay: calc(var(--i, 0) * var(--stagger)); }
 
-/* 6. Alert Pulse — endgame / E-stop. Never faster than 3Hz. */
+/* 6. Alert Pulse: endgame / E-stop. Never faster than 3Hz. */
 .pulse { animation: cg-pulse var(--dur-pulse) ease-in-out 3; }
 
-/* 7. Slide Third — full off-screen travel, never a fade. */
+/* 7. Slide Third: full off-screen travel, never a fade. */
 .third       { animation: cg-third-in  var(--dur-third) var(--ease-enter) both; }
 .third--exit { animation: cg-third-out var(--dur-out)   var(--ease-exit)  both; }
 
@@ -403,7 +456,9 @@ html, body {
 @keyframes cg-third-out { from { transform: none; } to { transform: translateX(-110%); } }
 
 /* Operator buttons: fast and tactile. Over 150ms feels laggy to someone
-   hitting it 40 times a match. */
+   hitting it 40 times a match. Hover and focus use semantic tokens so the
+   light operator surfaces can remap them: raw purple-hi under black text is
+   2.6:1, and a gold focus ring on white is invisible. */
 .btn {
   font-family: var(--font-cond);
   font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
@@ -417,13 +472,13 @@ html, body {
               background var(--dur-tap) linear,
               color var(--dur-tap) linear;
 }
-.btn:hover  { background: var(--cg-purple-hi); }
+.btn:hover  { background: var(--btn-hover); }
 .btn:active { transform: scale(.96); background: var(--cg-gold-lo); }
-.btn:focus-visible { outline: 3px solid var(--cg-gold-hi); outline-offset: 3px; }
+.btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 .btn[aria-pressed="true"] { background: var(--accent); color: var(--text-on-accent); }
 
 /* --------------------------------------------------------------------------
-   LOCKDOWN — endgame (matchClock >= 110).
+   LOCKDOWN: endgame (matchClock >= 110).
    Suppress DECORATIVE motion only. The score climbing during endgame is the
    most important motion on screen all weekend; freezing it would be backwards.
    -------------------------------------------------------------------------- */
@@ -433,9 +488,11 @@ html, body {
 
 :root[data-lockdown] [data-motion="essential"] { animation-play-state: running; }
 
-/* Reduced motion collapses to instant state changes, never half-speed. */
+/* Reduced motion collapses to instant state changes, never half-speed.
+   .pulse is deliberately excluded: it is the endgame / E-stop alert, live
+   state rather than decoration, so it keeps blinking even here. */
 @media (prefers-reduced-motion: reduce) {
-  .reveal, .exit, .third, .third--exit, .pulse,
-  .pip[data-earned="true"], .sweep[data-run]::after { animation: none !important; }
+  .reveal, .exit, .third, .third--exit,
+  .rp[data-earned="true"], .sweep[data-run]::after { animation: none !important; }
   .btn { transition: none; }
 }

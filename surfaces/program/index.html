@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="en" data-key="alpha" data-scale="stream">
+<html lang="en" data-key="alpha">
 <head>
 <meta charset="utf-8">
-<title>Program overlay — CalGames 2026</title>
+<title>Program overlay · CalGames 2026</title>
 <link rel="stylesheet" href="/theme/tokens.css">
 <link rel="stylesheet" href="/shared/fonts.css">
 <link rel="stylesheet" href="/shared/broadcast.css">
@@ -43,9 +43,9 @@
       <div class="bar-side bar-side--red">
         <div class="bar-teams" id="redTeams"></div>
         <div class="bar-stats">
-          <div>
+          <div class="bar-mid">
             <div class="bar-sub"><span class="num roll" id="redFuel">0</span> fuel · <span class="num roll" id="redTower">0</span> tower</div>
-            <div class="bar-pips" id="redPips"></div>
+            <div class="bar-rp" id="redPips"></div>
           </div>
           <div class="bar-total num roll" id="redTotal" data-motion="essential">0</div>
         </div>
@@ -59,9 +59,9 @@
       <div class="bar-side bar-side--blue">
         <div class="bar-teams" id="blueTeams"></div>
         <div class="bar-stats">
-          <div>
+          <div class="bar-mid">
             <div class="bar-sub"><span class="num roll" id="blueFuel">0</span> fuel · <span class="num roll" id="blueTower">0</span> tower</div>
-            <div class="bar-pips" id="bluePips"></div>
+            <div class="bar-rp" id="bluePips"></div>
           </div>
           <div class="bar-total num roll" id="blueTotal" data-motion="essential">0</div>
         </div>
@@ -72,13 +72,72 @@
   <!-- Final score -->
   <section class="screen" id="scr-score">
     <div class="final">
-      <div class="final-side final-side--red">
-        <div class="final-label" id="finalRedLabel">Red Alliance</div>
-        <div class="final-score num" id="finalRed">0</div>
+      <div class="final-head">
+        <div class="final-name" id="finalMatchName">&nbsp;</div>
+        <div class="final-sub">Final score</div>
+        <div class="final-tick"></div>
       </div>
-      <div class="final-side final-side--blue">
-        <div class="final-label" id="finalBlueLabel">Blue Alliance</div>
-        <div class="final-score num" id="finalBlue">0</div>
+      <div class="final-grid">
+        <div class="final-side final-side--red" id="finalRedSide">
+          <div class="final-label">Red Alliance</div>
+          <div class="final-teams num" id="finalRedTeams"></div>
+          <div class="final-score num" id="finalRed">0</div>
+          <div class="final-break" id="finalRedBreak"></div>
+          <div class="final-rp" id="finalRedRp"></div>
+          <div class="final-verdict" id="finalRedVerdict"></div>
+        </div>
+        <div class="final-side final-side--blue" id="finalBlueSide">
+          <div class="final-label">Blue Alliance</div>
+          <div class="final-teams num" id="finalBlueTeams"></div>
+          <div class="final-score num" id="finalBlue">0</div>
+          <div class="final-break" id="finalBlueBreak"></div>
+          <div class="final-rp" id="finalBlueRp"></div>
+          <div class="final-verdict" id="finalBlueVerdict"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Analysis desk: transparent for the desk camera, strap brands the segment -->
+  <section class="screen" id="scr-analysis">
+    <div class="an-strap">
+      <div class="an-title">Analysis desk</div>
+      <div class="an-sub">CalGames 2026 · Content Desk</div>
+    </div>
+  </section>
+
+  <!-- Arcade bumper: full-frame card while the switcher moves to the consoles -->
+  <section class="screen" id="scr-arcade">
+    <div class="gap-card">
+      <span class="chip chip--accent gap-chip">Side tournament</span>
+      <div class="gap-title">Arcade</div>
+      <div class="gap-sub">Smash Bros · Mario Kart · between matches</div>
+      <div class="gap-tick"></div>
+    </div>
+  </section>
+
+  <!-- Explainer: for the parent who arrived twenty minutes ago -->
+  <section class="screen" id="scr-explain">
+    <div class="exp-card">
+      <span class="chip chip--accent exp-chip" id="expChip">How to watch</span>
+      <div class="exp-title" id="expTitle"></div>
+      <div class="exp-body" id="expBody"></div>
+      <div class="exp-tick"></div>
+      <div class="exp-dots" id="expDots"></div>
+    </div>
+  </section>
+
+  <!-- Alliance selection: the board the audience never gets to see -->
+  <section class="screen" id="scr-selection">
+    <div class="sel-head">
+      <div class="sel-title">Alliance selection</div>
+      <div class="sel-clock" id="selClock" hidden><span class="num" id="selClockNum">0:00</span></div>
+    </div>
+    <div class="sel-body">
+      <div class="sel-board" id="selBoard"></div>
+      <div class="sel-pool">
+        <div class="sel-pool-head">Still available</div>
+        <div class="sel-pool-list" id="selPool"></div>
       </div>
     </div>
   </section>
@@ -88,6 +147,11 @@
   <div class="lower-third" id="third">
     <div class="t1" id="thirdT1"></div>
     <div class="t2" id="thirdT2"></div>
+  </div>
+
+  <div class="status-card" id="statusCard" hidden>
+    <div class="sc-kind" id="statusKind"></div>
+    <div class="sc-msg" id="statusMsg"></div>
   </div>
 
   <div id="sweep"></div>

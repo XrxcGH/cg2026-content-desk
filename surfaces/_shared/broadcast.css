@@ -6,6 +6,11 @@
 
 /* ---- 1920x1080 stage, scaled to fit whatever window it lands in. OBS
         renders it 1:1; a laptop preview scales it down. ------------------- */
+:root {
+  /* Score bar height. The hub tab and lower third key off it, so the three
+     stay in step if it ever changes. */
+  --bar-h: 156px;
+}
 #stageWrap { position: fixed; inset: 0; overflow: hidden; }
 #stage {
   position: absolute; top: 50%; left: 50%;
@@ -32,7 +37,7 @@
 #sweep[data-run] { animation: cg-sweep var(--dur-sweep) var(--ease-sweep) both; }
 
 /* ==========================================================================
-   Alliance overview — RSN-style, three robots a side. docs/07-team-media.md
+   Alliance overview: RSN-style, three robots a side. docs/07-team-media.md
    ========================================================================== */
 .ov {
   background-color: var(--cg-purple-void);
@@ -47,151 +52,229 @@
 .ov-head { position: absolute; top: var(--safe-y); left: 0; right: 0; text-align: center; }
 .ov-label {
   font-family: var(--font-cond); font-weight: 700;
-  font-size: var(--t-title); letter-spacing: .22em; text-transform: uppercase;
+  font-size: var(--t-title); line-height: 1; letter-spacing: .22em;
+  text-transform: uppercase;
   color: var(--cg-gold);
+  /* Tracking adds a trailing space to every glyph, so centered tracked text
+     sits half a track left of center. The indent puts it back. */
+  text-indent: .22em;
 }
 .ov-tick { width: 420px; margin: 12px auto 0; height: 4px; background: var(--tick); }
 
 .ov-body {
   position: absolute; top: 190px; left: var(--safe-x); right: var(--safe-x); bottom: var(--safe-y);
-  display: grid; grid-template-columns: 1fr 240px 1fr; gap: var(--gap);
+  /* Center column is the reserved 320x120 logo lockup slot (see docs/03). */
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--cg-logo-slot-w) minmax(0, 1fr); gap: var(--gap);
 }
 .ov-side { display: flex; flex-direction: column; }
-.ov-robots { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); align-items: end; }
+/* Columns come from the alliance, not a constant: qualification alliances are
+   three, playoff alliances can carry a fourth. */
+/* Teams stack. A row gives the name the full width of the alliance panel
+   instead of a third of it, so nothing has to shrink, and a fourth team costs
+   height (there is spare) rather than width (there is not). */
+.ov-robots { flex: 1; min-height: 0; display: grid;
+  grid-template-rows: repeat(var(--n, 3), minmax(0, 1fr));
+  gap: var(--gap); }
 .ov-band {
+  position: relative;
   margin-top: var(--gap); padding: 12px 0; text-align: center;
   font-family: var(--font-cond); font-weight: 700;
   font-size: var(--t-label); letter-spacing: .2em; text-transform: uppercase;
+  text-indent: .2em;
   color: var(--cg-white); clip-path: var(--chamfer);
 }
-.ov-side--red  .ov-band { background: var(--alliance-red);  box-shadow: inset 0 6px 0 var(--cg-gold); }
-.ov-side--blue .ov-band { background: var(--alliance-blue); box-shadow: inset 0 6px 0 var(--cg-gold); }
+/* Gold edges are real filled elements, never box-shadow: the luma key strips
+   every shadow, and these edges are structure, not decoration. */
+.ov-band::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px;
+  background: var(--cg-gold);
+}
+.ov-side--red  .ov-band { background: var(--alliance-red); }
+.ov-side--blue .ov-band { background: var(--alliance-blue); }
 
 .ov-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
 .ov-logo {
-  width: 100%; aspect-ratio: 8/3;
+  width: var(--cg-logo-slot-w); height: var(--cg-logo-slot-h);
   display: grid; place-items: center;
   clip-path: var(--chamfer); background: var(--cg-gold);
-  /* Reserved lockup slot — the contest-winning mark drops in here as SVG. */
-  font-family: var(--font-display); font-weight: 800; font-size: 30px;
+  /* Reserved lockup slot: the contest-winning mark drops in here as SVG. */
+  font-family: var(--font-display); font-weight: 800; font-size: 38px;
   font-variation-settings: "wdth" 100;
   color: var(--cg-black); text-align: center; line-height: .98;
-  letter-spacing: -.01em; padding: 0 10px; overflow: hidden;
+  letter-spacing: -.01em; padding: 0 10px; overflow: hidden; box-sizing: border-box;
 }
 .ov-vs {
   font-family: var(--font-num); font-weight: 900; font-size: var(--t-title);
-  color: var(--cg-gold); letter-spacing: .08em;
+  line-height: 1; color: var(--cg-gold); letter-spacing: .08em;
 }
 
-.robot { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
-.robot-art { position: relative; flex: 1; display: grid; place-items: end center; min-height: 0; }
-/* Normalise by HEIGHT, never width — FRC footprints vary enormously but
+/* The card is the sizing container for everything inside it, so a four-up
+   playoff alliance narrows the columns and the type follows instead of
+   spilling into the next robot. */
+.robot { container-type: inline-size;
+  min-height: 0; display: grid; grid-template-columns: var(--plate, 168px) minmax(0, 1fr);
+  align-items: center; gap: 24px; }
+.robot-art { position: relative; height: 100%; min-height: 0;
+  display: grid; place-items: center; }
+.robot-id { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+/* Normalise by HEIGHT, never width: FRC footprints vary enormously but
    heights don't, and width-normalising puts a bus next to a shoebox. */
-.robot-art img { max-height: 100%; max-width: 100%; object-fit: contain; object-position: bottom; }
+.robot-art img { max-height: 100%; max-width: 100%; object-fit: contain; object-position: center; }
 
 /* Tier-3 fallback: gold number on a chamfered plinth. Must read as a designed
-   state, not a broken image — at an offseason event most teams won't have a
+   state, not a broken image. At an offseason event most teams won't have a
    photo, and this is what the graphic mostly looks like. */
 .robot-art--fallback {
+  container-type: inline-size;
+  position: relative;
   width: 100%; height: 100%;
   display: grid; place-items: center;
   background-color: var(--cg-purple-lo);
   background-image: var(--tex-perf), linear-gradient(180deg, var(--cg-purple-hi), var(--cg-purple-lo));
   background-size: var(--tex-perf-size), cover;
-  box-shadow: inset 0 -6px 0 var(--cg-gold);
   clip-path: var(--chamfer);
+}
+.robot-art--fallback::after {
+  content: ""; position: absolute; bottom: 0; left: 0; right: 0; height: 6px;
+  background: var(--cg-gold);
 }
 .robot-art--fallback span {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 900; font-size: var(--t-hero); line-height: .9; color: var(--cg-gold);
+  font-weight: 900; font-size: min(var(--t-hero), 46cqw); line-height: 1; color: var(--cg-gold);
 }
-/* Common floor line + drawn shadow. The whole difference between "cut out"
-   and "floating sticker". */
-.robot-shadow {
-  height: 14px; margin-top: 6px;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,.55), transparent 72%);
-}
-:root[data-key="luma"] .robot-shadow { display: none; }
-
+/* Sized by digit count against the plate width, so every number lands at
+   about 80% of the plate whatever its length. The plate is a fixed column in
+   the row layout, so a 3-digit number at the old ratio ran past its edge. */
+.robot-art--fallback span[data-len="4"] { font-size: min(calc(var(--t-hero) * .68), 35cqw); }
+.robot-art--fallback span[data-len="5"] { font-size: min(calc(var(--t-hero) * .55), 28cqw); }
+/* Capped by digit count against the card width. At three-up a 3-digit number
+   still lands on the full --t-score; longer numbers, and every number in a
+   four-up alliance, step down far enough to stay inside their own column.
+   Before this, "1678" and "25801" collided into one unreadable run. */
 .robot-num {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 900; font-size: var(--t-score); line-height: 1;
-  color: var(--cg-white); text-align: center; margin-top: 12px; letter-spacing: -.02em;
+  font-weight: 900; font-size: var(--num-size, var(--t-score)); line-height: 1;
+  color: var(--cg-white); text-align: left; letter-spacing: -.02em;
 }
+/* Without a photo the plate already carries the number in gold, so printing
+   it again beside it would just be the same number twice. The name inherits
+   the whole text column instead. */
+.robot[data-photo="false"] .robot-num { display: none; }
 .robot-name {
-  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-body);
-  color: var(--cg-white-dim); text-align: center; line-height: 1.05;
+  font-family: var(--font-cond); font-weight: 600; font-size: var(--name-size, var(--t-body));
+  color: var(--cg-white-dim); text-align: left; line-height: 1.08;
   letter-spacing: .04em; text-transform: uppercase;
-  height: calc(var(--t-body) * 2.15); overflow: hidden;   /* fixed: 2 lines */
+  /* Two lines is the ceiling, and the ceiling has to follow the actual type
+     size: pinned to the old 32px token it clipped the second line clean off
+     once the names grew. */
+  max-height: calc(var(--name-size, var(--t-body)) * 2.3); overflow: hidden;
 }
+.robot[data-photo="false"] .robot-name { color: var(--cg-white); }
 
 /* ==========================================================================
    Score bar
    ========================================================================== */
 .bar {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 148px;
+  position: absolute; left: 0; right: 0; bottom: 0; height: var(--bar-h);
   display: grid; grid-template-columns: 1fr 420px 1fr;
   background-color: var(--cg-purple-deep);
   background-image: var(--tex-perf), linear-gradient(180deg, var(--cg-purple-lo), var(--cg-purple-deep));
   background-size: var(--tex-perf-size), cover;
   border-top: var(--rule);
 }
-:root[data-scale="venue"] .bar { height: 260px; grid-template-columns: 1fr 520px 1fr; }
 :root[data-key="luma"] .bar { background-color: var(--cg-purple); background-image: var(--tex-perf); }
 
-.bar-side { display: flex; align-items: center; gap: var(--gap); padding: 0 32px; }
+.bar-side { display: flex; align-items: center; gap: 28px; padding: 0 36px; }
 .bar-side--red  { background: var(--alliance-red);  border-right: var(--rule); }
 .bar-side--blue { background: var(--alliance-blue); border-left: var(--rule); flex-direction: row-reverse; }
 
 .bar-teams {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 700; font-size: var(--t-label); line-height: 1.08;
+  font-weight: 700; font-size: var(--t-label); line-height: 1.16;
   color: var(--cg-white); letter-spacing: .02em;
 }
+/* Four-team playoff alliance: the bar height is fixed, so the fourth line is
+   bought with tighter leading and a step down rather than by overflowing. */
+.bar-teams[data-rows="4"] { font-size: calc(var(--t-label) * .78); line-height: 1.06; }
 .bar-side--blue .bar-teams { text-align: right; }
 
-.bar-stats { display: flex; align-items: baseline; gap: 18px; margin-left: auto; }
-.bar-side--blue .bar-stats { margin-left: 0; margin-right: auto; flex-direction: row-reverse; }
+/* Fuel/tower readout centered over its RP strip, and the total centered in
+   the space between the RP strip and the clock: symmetric on both sides,
+   never edge-hugging. row-reverse on blue mirrors the whole arrangement. */
+.bar-stats { flex: 1; display: flex; align-items: center; justify-content: space-evenly; gap: 12px; }
+.bar-side--blue .bar-stats { flex-direction: row-reverse; }
+.bar-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; }
 .bar-total {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-weight: 900; font-size: var(--t-score); line-height: 1;
   color: var(--cg-white); letter-spacing: -.03em;
 }
 /* Estimated data renders outlined, never solid. We never present a guess as
-   official — see the `confidence` field in docs/02-architecture.md. */
+   official: see the `confidence` field in docs/02-architecture.md. */
 .bar-total[data-est="true"] {
   color: transparent;
   -webkit-text-stroke: 3px var(--cg-white);
 }
 .bar-sub {
   font-family: var(--font-cond); font-weight: 600; font-size: var(--t-label);
-  color: var(--cg-white); opacity: .94; line-height: 1.1;
+  color: var(--cg-white); opacity: .94; line-height: 1;
   letter-spacing: .06em; text-transform: uppercase;
 }
-.bar-pips { display: flex; gap: 8px; margin-top: 6px; }
-.bar-side--blue .bar-pips { justify-content: flex-end; }
+/* Sub-line counters size to their value: the 3ch reservation that keeps the
+   big total steady reads as a hole in a sentence. */
+.bar-sub {
+  text-align: center;
+  /* Tracking's trailing space sits centered text half a track left; the
+     indent puts it back. Zeroed on .roll below so it isn't applied twice. */
+  text-indent: .06em;
+}
+.bar-sub .roll { min-width: 0; text-align: left; text-indent: 0; }
+.bar-rp { display: flex; gap: 8px; }
+/* Badges sit on the alliance fills here: recess the unearned state instead of
+   operator purple (purple on FIRST blue is the palette's one hazard), and skip
+   the box-shadow ring, which the luma key strips anyway. Mirrors .final-rp. */
+.bar-rp .rp { background: rgba(0, 0, 0, .30); box-shadow: none; color: rgba(255, 255, 255, .72); }
+.bar-rp .rp[data-earned="true"] { background: var(--cg-green-hi); color: var(--cg-white); }
 
-.bar-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; }
+.bar-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 12px; }
 .clock {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-weight: 900; font-size: var(--t-clock); line-height: 1;
   color: var(--cg-gold); letter-spacing: -.03em;
 }
-.phase { font-size: calc(var(--t-label) * .86); }
+.phase { font-size: var(--t-label); }   /* 28px floor applies on air */
 
 /* The 2026-specific graphic: which hub is live right now. The alternating hub
-   is the most confusing thing on the field for a viewer; this is the fix. */
+   is the most confusing thing on the field for a viewer; this is the fix.
+   A tab growing out of the bar's center column, flush, so it reads as part
+   of the scorebug rather than a stray chip floating over the field. */
 .hub {
-  position: absolute; left: 50%; transform: translateX(-50%); bottom: 170px;
-  display: flex; align-items: center; gap: 16px; padding: 12px 30px;
+  /* +3px: the bar's gold border-top paints ABOVE its height, so the tab must
+     start above the band or its purple face covers the gold line. */
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--bar-h) + 3px);
+  /* Above the bar, so it reads as part of the scorebug. The tab is a GOLD
+     shell with a purple face inset on its top and sides: the bar's gold
+     band runs unbroken beneath it and the shell's shoulders meet the band. */
+  z-index: 5;
+  display: flex; align-items: center; gap: 14px; padding: 16px 36px 10px;
+  background: var(--cg-gold);
+  --ch: 14px;
+  clip-path: polygon(var(--ch) 0, calc(100% - var(--ch)) 0, 100% var(--ch),
+                     100% 100%, 0 100%, 0 var(--ch));
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  letter-spacing: .14em; text-transform: uppercase; color: var(--cg-white);
+  white-space: nowrap;
+}
+.hub::before {
+  content: ""; position: absolute; inset: 3px 3px 0;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
-  clip-path: var(--chamfer); --ch: 12px;
-  box-shadow: inset 0 4px 0 var(--cg-gold);
-  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
-  letter-spacing: .16em; text-transform: uppercase; color: var(--cg-white);
+  --ch: 12px;
+  clip-path: polygon(var(--ch) 0, calc(100% - var(--ch)) 0, 100% var(--ch),
+                     100% 100%, 0 100%, 0 var(--ch));
 }
-:root[data-scale="venue"] .hub { bottom: 300px; --ch: 20px; }
+.hub > * { position: relative; }
 .hub[data-on="none"] { display: none; }
 .hub-dot { width: 22px; height: 22px; clip-path: var(--chamfer); --ch: 7px; background: var(--cg-white-dim); }
 .hub[data-on="red"]  .hub-dot { background: var(--alliance-red); }
@@ -199,50 +282,374 @@
 .hub[data-on="both"] .hub-dot { background: var(--cg-gold); }
 
 /* ==========================================================================
-   Lower third — slides fully off-screen, never fades. A fade is invisible in
+   Status card, "why is nothing happening": field delays, score review,
+   arena faults, match replays. An unexplained stoppage reads as dead air;
+   a card that names the reason reads as process. Gold shell like the hub
+   tab, floating top-center where every camera framing leaves room.
+   ========================================================================== */
+.status-card {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%);
+  z-index: 45;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 22px 60px 20px;
+  background: var(--cg-gold);
+  clip-path: var(--chamfer); --ch: 18px;
+}
+.status-card::before {
+  content: ""; position: absolute; inset: 4px;
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf); background-size: var(--tex-perf-size);
+  clip-path: var(--chamfer); --ch: 15px;
+}
+.status-card > * { position: relative; }
+.status-card[hidden] { display: none; }
+.sc-kind {
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  letter-spacing: .2em; text-indent: .2em; text-transform: uppercase;
+  color: var(--cg-gold);
+}
+.sc-msg {
+  font-family: var(--font-display); font-weight: 800; font-size: var(--t-title);
+  font-variation-settings: "wdth" var(--wdth-display); line-height: 1.05;
+  color: var(--cg-white); text-align: center; max-width: 1100px;
+}
+
+/* ==========================================================================
+   Lower third: slides fully off-screen, never fades. A fade is invisible in
    the room; a slide from off-screen is unmissable.
    ========================================================================== */
 .lower-third {
-  position: absolute; left: var(--safe-x); bottom: 210px; z-index: 40;
-  display: none; min-width: 620px;
+  position: absolute; left: var(--safe-x); bottom: calc(var(--bar-h) + 28px); z-index: 40;
+  display: none; box-sizing: border-box; min-width: 560px; max-width: 690px;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
-  box-shadow: inset 10px 0 0 var(--cg-gold);
   clip-path: var(--chamfer);
   padding: 20px 40px 20px 54px;
 }
-:root[data-scale="venue"] .lower-third { bottom: 340px; }
+.lower-third::before {
+  content: ""; position: absolute; top: 0; left: 0; bottom: 0; width: 10px;
+  background: var(--cg-gold);
+}
 .lower-third[data-show] { display: block; }
 .lower-third .t1 {
   font-family: var(--font-display); font-weight: 800; font-size: var(--t-title);
-  font-variation-settings: "wdth" var(--wdth-display); line-height: 1.02;
+  font-variation-settings: "wdth" var(--wdth-display); line-height: 1.06;
+  overflow-wrap: break-word;
 }
 .lower-third .t2 {
   font-family: var(--font-cond); font-weight: 600; font-size: var(--t-body);
   color: var(--cg-gold); letter-spacing: .12em; text-transform: uppercase;
+  margin-top: 4px;
 }
 
 /* ==========================================================================
-   Final score reveal
+   Final score reveal: the same alliance-plate composition as the post-match
+   social card, so the broadcast and the graphic people share afterwards are
+   visibly the same thing.
    ========================================================================== */
 .final {
   position: absolute; inset: 0;
-  display: grid; grid-template-columns: 1fr 1fr; align-content: center;
   background-color: var(--cg-purple-void);
   background-image: var(--tex-perf), var(--atmo);
   background-size: var(--tex-perf-size), cover;
-  padding: 0 var(--safe-x);
 }
-.final-side { text-align: center; padding: var(--pad); }
-.final-side--red  { border-right: var(--rule); }
-.final-score {
-  font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 900; font-size: var(--t-hero); line-height: 1; letter-spacing: -.04em;
+/* Same luma rule as .ov and .gap-card: near-black fills key out on the DSK. */
+:root[data-key="luma"] .final {
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf);
 }
-.final-side--red  .final-score { color: var(--alliance-red); }
-.final-side--blue .final-score { color: var(--alliance-blue); }
+.final-head { position: absolute; top: var(--safe-y); left: 0; right: 0; text-align: center; }
+.final-name {
+  font-family: var(--font-cond); font-weight: 700;
+  font-size: var(--t-title); line-height: 1; letter-spacing: .22em;
+  text-indent: .22em;
+  text-transform: uppercase; color: var(--cg-gold);
+}
+.final-sub {
+  margin-top: 8px;
+  font-family: var(--font-cond); font-weight: 600;
+  font-size: var(--t-label); letter-spacing: .2em; text-indent: .2em;
+  text-transform: uppercase; color: var(--cg-white-dim);
+}
+.final-tick { width: 420px; margin: 14px auto 0; height: 4px; background: var(--tick); }
+
+.final-grid {
+  position: absolute; top: 240px; bottom: var(--safe-y);
+  left: var(--safe-x); right: var(--safe-x);
+  /* Plates size to a set height and center in the band, stretching left ~200px
+     of dead saturated fill above and below the content. */
+  display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center;
+}
+.final-side {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 24px; text-align: center; padding: 56px var(--pad); min-height: 470px;
+  clip-path: var(--chamfer);
+  background-image: var(--tex-perf); background-size: var(--tex-perf-size);
+}
+.final-side--red  { background-color: var(--alliance-red); }
+.final-side--blue { background-color: var(--alliance-blue); }
+/* Winner cap: position and a label carry the result too, never color alone. */
+.final-side[data-won]::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 10px;
+  background: var(--cg-gold);
+}
 .final-label {
   font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
-  letter-spacing: .2em; text-transform: uppercase; color: var(--cg-white-dim);
+  letter-spacing: .2em; text-indent: .2em; text-transform: uppercase;
+  color: var(--cg-white);
 }
-.final-win { color: var(--cg-gold) !important; }
+.final-teams {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 700; font-size: var(--t-body); line-height: 1;
+  color: var(--cg-white); opacity: .92; letter-spacing: .02em;
+}
+.final-score {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: calc(var(--t-hero) * 1.5); line-height: 1;
+  letter-spacing: -.04em; color: var(--cg-white);
+}
+/* Where the points came from: fuel/tower by period, plus opponent fouls.
+   A recessed plate so the itemization reads as detail under the hero total. */
+.final-break {
+  display: grid; grid-template-columns: auto 150px 150px;
+  gap: 6px 18px; align-items: baseline;
+  padding: 18px 30px;
+  background: rgba(0, 0, 0, .30);
+  clip-path: var(--chamfer); --ch: 12px;
+}
+.final-break .fb-h {
+  font-family: var(--font-cond); font-weight: 700; font-size: calc(var(--t-label) * .8);
+  letter-spacing: .14em; text-transform: uppercase; color: rgba(255, 255, 255, .72);
+  text-align: right;
+}
+.final-break .fb-l {
+  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-label);
+  letter-spacing: .1em; text-transform: uppercase; color: rgba(255, 255, 255, .8);
+  text-align: left;
+}
+.final-break .fb-n {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 700; font-size: var(--t-label); color: var(--cg-white);
+  text-align: right;
+}
+.final-break .fb-span { grid-column: 2 / 4; }
+
+.final-rp { display: flex; gap: 12px; }
+/* Badges sit on an alliance fill here, not on chrome. Recess the unearned
+   state instead of borrowing operator purple. */
+.final-rp .rp { background: rgba(0, 0, 0, .30); box-shadow: none; color: rgba(255, 255, 255, .72); }
+.final-rp .rp[data-earned="true"] { background: var(--cg-green-hi); color: var(--cg-white); }
+.final-verdict {
+  min-height: calc(var(--t-label) + 16px);
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  letter-spacing: .2em; text-indent: .2em; text-transform: uppercase;
+  /* White, not gold: gold on alliance red is 2.3:1, and docs/03 calls that pair
+     "never do this". The gold cap above already says winner in this color. */
+  color: var(--cg-white);
+}
+
+/* ==========================================================================
+   Analysis desk strap: transparent screen for the desk camera, with a
+   centered strap that says whose show this is. Lower thirds still name the
+   people; the strap brands the segment.
+   ========================================================================== */
+.an-strap {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: var(--safe-y);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 22px 64px 20px;
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf); background-size: var(--tex-perf-size);
+  clip-path: var(--chamfer);
+}
+.an-strap::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px;
+  background: var(--cg-gold);
+}
+.an-title {
+  font-family: var(--font-display); font-weight: 800; font-size: var(--t-title);
+  font-variation-settings: "wdth" var(--wdth-display); line-height: 1;
+  color: var(--cg-white); text-transform: uppercase; letter-spacing: .02em;
+}
+.an-sub {
+  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-label);
+  letter-spacing: .18em; text-indent: .18em; text-transform: uppercase;
+  color: var(--cg-gold);
+}
+
+/* ==========================================================================
+   Arcade bumper. A full-frame card for the side tournament, shown while the
+   switcher moves to the console capture. The arcade surface itself carries
+   the live set; this just tells the audience where the show went.
+   ========================================================================== */
+.gap-card {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 20px; text-align: center;
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+}
+/* Near-black fills key out under the luma DSK, same rule as .ov and .bar. */
+:root[data-key="luma"] .gap-card {
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf);
+}
+.gap-chip { font-size: var(--t-label); }
+.gap-title {
+  font-family: var(--font-display); font-weight: 800; font-size: var(--t-hero);
+  font-variation-settings: "wdth" var(--wdth-wide); line-height: 1;
+  color: var(--cg-white); text-transform: uppercase; letter-spacing: .01em;
+}
+.gap-sub {
+  font-family: var(--font-cond); font-weight: 600; font-size: var(--t-body);
+  letter-spacing: .14em; text-indent: .14em; text-transform: uppercase;
+  color: var(--cg-white-dim);
+}
+.gap-tick { width: 420px; height: 4px; background: var(--tick); }
+
+/* ==========================================================================
+   Alliance selection. Sunday's longest segment, and at most events it has no
+   graphic at all: the audience watches students walk across a floor with no
+   idea who is still available or how long the pick has taken.
+
+   Every number here comes from the field. The captains sit in seed order on
+   the left, the pool on the right greys out as teams are taken, and the clock
+   is Cheesy Arena's own pick timer rather than one we run.
+   ========================================================================== */
+.sel-head { position: absolute; top: var(--safe-y); left: var(--safe-x); right: var(--safe-x);
+  display: flex; align-items: baseline; gap: 28px; }
+.sel-title {
+  font-family: var(--font-display); font-weight: 800; font-size: 64px;
+  font-variation-settings: "wdth" var(--wdth-wide); line-height: 1;
+  color: var(--cg-white); text-transform: uppercase; letter-spacing: .01em;
+}
+/* Gold shell with an inset face, because a luma key strips every box-shadow. */
+.sel-clock { position: relative; margin-left: auto; padding: 10px 26px;
+  background: var(--cg-gold); clip-path: var(--chamfer); --ch: 12px; }
+.sel-clock::before { content: ""; position: absolute; inset: 3px;
+  background: var(--cg-purple); clip-path: var(--chamfer); --ch: 10px; }
+.sel-clock .num { position: relative;
+  font-family: var(--font-num); font-weight: 900; font-size: 56px; line-height: 1;
+  color: var(--cg-gold); font-variant-numeric: tabular-nums; }
+/* Under ten seconds the clock is the story, so it takes the accent. */
+.sel-clock[data-low]::before { background: var(--cg-gold); }
+.sel-clock[data-low] .num { color: var(--cg-black); }
+
+.sel-body { position: absolute; top: 160px; left: var(--safe-x); right: var(--safe-x);
+  bottom: var(--safe-y); display: grid; grid-template-columns: 1fr 470px; gap: 34px; }
+
+.sel-board { display: grid; grid-template-rows: repeat(4, 1fr); grid-auto-flow: column;
+  grid-template-columns: 1fr 1fr; gap: 14px 22px; }
+.sel-al { position: relative; display: grid; grid-template-columns: 92px 1fr;
+  align-items: center; gap: 16px;
+  background: var(--cg-purple); clip-path: var(--chamfer); --ch: 14px; padding: 10px 18px 10px 0; }
+.sel-al-seed {
+  align-self: stretch; display: grid; place-items: center;
+  background: var(--cg-gold); clip-path: var(--chamfer-flat); --ch: 14px;
+  font-family: var(--font-num); font-weight: 900; font-size: 46px; line-height: 1;
+  color: var(--cg-black);
+}
+/* One column per alliance slot, so station 1 lines up with station 1 all the
+   way down the board and an empty slot holds its place instead of collapsing.
+   Four is the CalGames alliance size: captain plus three, no backup call. */
+.sel-al-teams { display: grid; grid-template-columns: repeat(var(--n, 4), 1fr);
+  gap: 10px; align-items: center; }
+.sel-al-team {
+  text-align: center;
+  font-family: var(--font-num); font-weight: 900; font-size: 36px; line-height: 1;
+  color: var(--cg-white); font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+/* The captain reads differently from its picks, which is the only hierarchy
+   the board needs; everything else is just seed order. */
+.sel-al-team[data-captain] { color: var(--cg-gold); }
+.sel-al-slot {
+  width: 100%; height: 8px; justify-self: center; background: var(--cg-purple-hi); clip-path: var(--chamfer); --ch: 3px;
+}
+
+.sel-pool { display: flex; flex-direction: column; min-height: 0;
+  background: var(--cg-purple-lo); clip-path: var(--chamfer); --ch: 16px; padding: 16px 20px; }
+.sel-pool-head {
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  letter-spacing: .18em; text-indent: .18em; text-transform: uppercase;
+  color: var(--cg-white-dim); margin-bottom: 12px;
+}
+/* Down the left column first, then the right. Ranked lists read as a single
+   ordered run; alternating across two columns makes people hunt. Same rule as
+   the side-screen rankings. */
+.sel-pool-list { flex: 1; min-height: 0; display: grid;
+  grid-template-columns: 1fr 1fr; grid-template-rows: repeat(12, min-content);
+  grid-auto-flow: column; gap: 8px 18px; align-content: start; overflow: hidden; }
+.sel-pool-team { display: flex; align-items: baseline; gap: 10px;
+  font-variant-numeric: tabular-nums; }
+.sel-pool-rank {
+  font-family: var(--font-cond); font-weight: 600; font-size: 22px;
+  color: var(--cg-white-dim); min-width: 34px; text-align: right;
+}
+.sel-pool-num {
+  font-family: var(--font-num); font-weight: 900; font-size: 32px; color: var(--cg-white);
+}
+/* Taken teams stay on the board rather than vanishing, so the audience can
+   see the pool being emptied from the top. */
+.sel-pool-team[data-picked] .sel-pool-num,
+.sel-pool-team[data-picked] .sel-pool-rank { color: var(--cg-purple-hi); }
+.sel-pool-team[data-picked] { text-decoration: line-through;
+  text-decoration-color: var(--cg-purple-hi); text-decoration-thickness: 3px; }
+
+#scr-selection {
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+}
+:root[data-key="luma"] #scr-selection {
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf);
+}
+
+/* ==========================================================================
+   Explainer cards. The recurring note from newcomers is that nobody ever
+   says what the numbers mean: a parent watches for an hour without learning
+   what fuel is or why a losing alliance celebrates. These run in the gaps,
+   one idea per card, in the same language the announcer uses.
+   ========================================================================== */
+.exp-card {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 22px; text-align: center; padding: 0 var(--safe-x);
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+}
+:root[data-key="luma"] .exp-card {
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf);
+}
+.exp-chip { font-size: var(--t-label); }
+.exp-title {
+  font-family: var(--font-display); font-weight: 800; font-size: 84px;
+  font-variation-settings: "wdth" var(--wdth-wide); line-height: 1.02;
+  color: var(--cg-gold); text-transform: uppercase; letter-spacing: .01em;
+}
+.exp-body {
+  max-width: 1360px;
+  font-family: var(--font-cond); font-weight: 600; font-size: 46px; line-height: 1.28;
+  color: var(--cg-white);
+}
+.exp-body b { color: var(--cg-gold); }
+.exp-tick { width: 420px; height: 4px; background: var(--tick); }
+.exp-dots { display: flex; gap: 12px; }
+.exp-dots span {
+  width: 14px; height: 14px; background: var(--cg-purple-hi);
+  clip-path: var(--chamfer); --ch: 4px;
+}
+.exp-dots span[data-on] { background: var(--cg-gold); }
+
+/* Blue mirrors red. The two alliances face each other across the logo, the
+   way they face each other across the field, so blue's plates sit on the
+   outside edge and its text runs back toward the centre line. Grid placement
+   does the swap, so the DOM order stays plate-then-text on both sides. */
+.ov-side--blue .robot { grid-template-columns: minmax(0, 1fr) var(--plate, 168px); }
+.ov-side--blue .robot-art { grid-column: 2; grid-row: 1; }
+.ov-side--blue .robot-id { grid-column: 1; grid-row: 1; align-items: flex-end; }
+.ov-side--blue .robot-num,
+.ov-side--blue .robot-name { text-align: right; }

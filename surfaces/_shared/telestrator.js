@@ -67,8 +67,8 @@ export class StrokeBook {
   }
 
   /**
-   * A stroke's fade clock starts when it FINISHES, not when it starts —
-   * otherwise a slow, careful circle begins fading before the analyst has
+   * A stroke's fade clock starts when it FINISHES, not when it starts.
+   * Otherwise a slow, careful circle begins fading before the analyst has
    * closed it.
    */
   end(id) {
@@ -106,8 +106,8 @@ export class StrokeBook {
 /**
  * Render every stroke to a canvas.
  *
- * Spotlight is composited first as a single dim layer with holes punched out —
- * two spotlights should darken the frame once, not twice.
+ * Spotlight is composited first as a single dim layer with holes punched out,
+ * so two spotlights should darken the frame once, not twice.
  */
 export function render(ctx, book, opts = {}) {
   const { width: W, height: H } = ctx.canvas;
@@ -150,7 +150,7 @@ export function render(ctx, book, opts = {}) {
     if (s.tool === 'tag') { drawTag(ctx, s, W, H, palette); continue; }
 
     // Two passes: a black halo, then the ink. The field is red, blue and grey
-    // carpet under mixed gym lighting — gold with a black outline is the only
+    // carpet under mixed gym lighting, so gold with a black outline is the only
     // ink that survives on all of it.
     const colour = palette[s.ink] ?? palette.gold;
     for (const pass of [{ c: '#000', w: s.width + 4 }, { c: colour, w: s.width }]) {
