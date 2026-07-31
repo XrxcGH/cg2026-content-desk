@@ -1,26 +1,35 @@
 /**
  * Snapshot reducer. Pure: (state, event) -> state.
  *
- * Pure matters here — it's what lets us replay an NDJSON log from Friday's
+ * Pure matters here: it's what lets us replay an NDJSON log from Friday's
  * practice matches and get byte-identical state, which is how graphics get
  * built and tested in March with no field.
  */
 
 import { clockDisplay, clockFrom, hubActiveAt, isLockdown, phaseAt } from './clock.ts';
 import {
-  REBUILT, emptyAllianceScore,
-  type Alliance, type AllianceScore, type DeskEvent, type DeskState,
+  emptyAllianceScore,
+  type Alliance, type AllianceScore, type DeskEvent, type DeskState, type RpThresholds,
 } from './types.ts';
 
-/** Totals and bonus RPs are always derived, never trusted from the wire. */
-function settle(s: AllianceScore, opponentFouls: number): AllianceScore {
+/** Sums, totals, and bonus RPs are always derived, never trusted from the
+ *  wire. The auto/teleop parts are the source of truth; fuel and tower are
+ *  their sums. */
+function settle(s: AllianceScore, opponentFouls: number, t: RpThresholds): AllianceScore {
+  const fuel = s.autoFuel + s.teleopFuel;
+  const tower = s.autoTower + s.teleopTower;
   return {
     ...s,
-    total: s.fuel + s.tower + opponentFouls,
+    fuel,
+    tower,
+    total: fuel + tower + opponentFouls,
+    // Scored against the live thresholds, never the defaults in REBUILT: an
+    // off-season event can move these, and a badge that lights at a number
+    // nobody is playing to is worse than no badge.
     rp: {
-      energized: s.fuel >= REBUILT.RP_ENERGIZED_FUEL,
-      supercharged: s.fuel >= REBUILT.RP_SUPERCHARGED_FUEL,
-      traversal: s.tower >= REBUILT.RP_TRAVERSAL_TOWER,
+      energized: fuel >= t.energizedFuel,
+      supercharged: fuel >= t.superchargedFuel,
+      traversal: tower >= t.traversalTower,
     },
   };
 }
@@ -31,22 +40,39 @@ function withScore(state: DeskState, side: Alliance, patch: Partial<AllianceScor
   return {
     ...state,
     score: {
-      [side]: settle(merged, state.score[other].fouls),
-      [other]: settle(state.score[other], merged.fouls),
+      [side]: settle(merged, state.score[other].fouls, state.thresholds),
+      [other]: settle(state.score[other], merged.fouls, state.thresholds),
     } as Record<Alliance, AllianceScore>,
+  };
+}
+
+/** Re-score both alliances, for when the thresholds themselves change. */
+function rescore(state: DeskState): DeskState {
+  return {
+    ...state,
+    score: {
+      red: settle(state.score.red, state.score.blue.fouls, state.thresholds),
+      blue: settle(state.score.blue, state.score.red.fouls, state.thresholds),
+    },
   };
 }
 
 /** Recompute everything that follows from the clock. */
 function retime(state: DeskState, now: number): DeskState {
   const c = clockFrom(state.matchStartedAt, now);
+  // A null clock is ambiguous: before the first match it means pre-match, but
+  // after the buzzer (match.end clears matchStartedAt to stop the clock) it
+  // means the match is OVER. Showing "Pre-match 0:20" over a finished match
+  // confused everyone; matchEndedAt is the tiebreaker, and match.loaded
+  // clears it for the next cycle.
+  const ended = c === null && state.matchEndedAt !== null;
   return {
     ...state,
     matchClock: c,
-    phase: phaseAt(c),
-    clockDisplay: clockDisplay(c),
+    phase: ended ? 'post' : phaseAt(c),
+    clockDisplay: ended ? '0:00' : clockDisplay(c),
     // The field's own answer wins; inference is the desk-only fallback.
-    hubActive: state.hubAuthoritative ?? hubActiveAt(c, state.autoWinner),
+    hubActive: state.hubAuthoritative ?? (ended ? 'none' : hubActiveAt(c, state.autoWinner)),
     lockdown: isLockdown(c),
   };
 }
@@ -75,7 +101,14 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       case 'match.preview':
         return { ...state, screen: 'overview' };
 
+      // Field reset between matches. Deliberately no screen change: the next
+      // match's `match.loaded` owns the transition back to the overview.
       case 'match.prestart':
+        return state;
+
+      // The field is armed and ready: every robot linked, scorekeeper about to
+      // hand it to the announcer. Flip to the score bar NOW, so the graphic is
+      // already in place when the countdown starts, never mid-"3, 2, 1".
       case 'match.armed':
         return { ...state, screen: 'match' };
 
@@ -85,7 +118,7 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       case 'match.auto_end': {
         // HEURISTIC, and only used when running desk-only. Cheesy Arena decides
         // the auto winner on AUTO FUEL ALONE (`redWonAuto = redAutoFuel >
-        // blueAutoFuel`) — tower climbs do not count, so an alliance can score
+        // blueAutoFuel`), tower climbs do not count, so an alliance can score
         // 15 auto points from a climb and still lose auto. We don't track auto
         // fuel separately here, so this compares totals and can disagree.
         //
@@ -109,7 +142,7 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       case 'match.score_posted':
         return { ...state, scorePostedAt: ev.ts, screen: 'score', confidence: ev.confidence };
 
-      // A full snapshot can restore authority — it replaces every number.
+      // A full snapshot can restore authority: it replaces every number.
       case 'score.realtime': {
         const p = ev.payload as Partial<Record<Alliance, Partial<AllianceScore>>>;
         let s = { ...state, confidence: ev.confidence };
@@ -125,7 +158,17 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       case 'score.delta': {
         const p = ev.payload as { alliance: Alliance; field: 'fuel' | 'tower' | 'fouls'; amount: number };
         const cur = state.score[p.alliance];
-        const scored = withScore(state, p.alliance, { [p.field]: cur[p.field] + p.amount });
+        // Attribute the delta to a period by the clock AT THE EVENT'S OWN
+        // TIME: state.matchClock is only retimed after each event lands, so
+        // reading it here would use the previous event's clock. A shadow-scored
+        // "+5 fuel" during auto is auto fuel; the breakdown stays honest even
+        // when the whole match is typed by hand.
+        const at = clockFrom(state.matchStartedAt, ev.ts);
+        const inAuto = at !== null && at < 0;
+        const part = p.field === 'fouls' ? 'fouls' as const
+          : p.field === 'fuel' ? (inAuto ? 'autoFuel' as const : 'teleopFuel' as const)
+          : (inAuto ? 'autoTower' as const : 'teleopTower' as const);
+        const scored = withScore(state, p.alliance, { [part]: cur[part] + p.amount });
         return ev.confidence === 'estimated'
           ? { ...scored, confidence: 'estimated' }
           : scored;
@@ -151,7 +194,7 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       case 'lower_third.hide':
         return { ...state, lowerThird: null };
 
-      // Strokes themselves never come through here — they're relayed off-bus
+      // Strokes themselves never come through here. They're relayed off-bus
       // at pointer rate (see server.ts). What lands on the bus is the durable
       // part: who's drawing, what frame they're drawing on, and whether the
       // render surface is live.
@@ -182,6 +225,37 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
 
       case 'arena.status':
         return { ...state, connected: { ...state.connected, ...(ev.payload as object) } };
+
+      case 'pace.updated':
+        return { ...state, pace: ev.payload as DeskState['pace'] };
+
+      case 'status.show':
+        return { ...state, status: ev.payload as DeskState['status'] };
+
+      case 'status.hide':
+        return { ...state, status: null };
+
+      // Thresholds arrive from config at boot. Re-scoring immediately means a
+      // mid-event correction repaints every badge instead of waiting for the
+      // next score packet to happen along.
+      case 'game.thresholds': {
+        const p = ev.payload as Partial<RpThresholds> | null;
+        if (!p) return state;
+        return rescore({
+          ...state,
+          thresholds: { ...state.thresholds, ...p },
+        });
+      }
+
+      /**
+       * Selection republishes the whole board on every pick and once a second
+       * while the clock runs, so this replaces rather than merges. The field
+       * is the only writer; nothing here ever edits an alliance.
+       */
+      case 'alliance_selection.update': {
+        const p = ev.payload as DeskState['selection'];
+        return p ? { ...state, selection: { ...p, updatedAt: ev.ts } } : state;
+      }
 
       default:
         return state;

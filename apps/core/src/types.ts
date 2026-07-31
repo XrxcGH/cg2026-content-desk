@@ -12,14 +12,14 @@ export type Source =
   | 'tba'
   | 'statbotics'
   | 'startgg'
-  | 'manual'    // desk console — always authoritative override
+  | 'manual'    // desk console, always authoritative override
   | 'cue'       // show automation
   | 'replay';
 
 /**
  * Matters more than it looks. Cheesy Arena gives `authoritative` numbers; a
  * state inferred from a scene change is `derived`; an operator's guess is
- * `estimated`. Graphics use this to decide whether to show a number at all —
+ * `estimated`. Graphics use this to decide whether to show a number at all:
  * an estimated score renders outlined, never solid, so we never present a
  * guess as official.
  */
@@ -60,7 +60,15 @@ export type DeskEventType =
   | 'telestrator.stroke' | 'telestrator.undo' | 'telestrator.clear'
   | 'telestrator.frame' | 'telestrator.hide'
   // arcade
-  | 'arcade.set_start' | 'arcade.score' | 'arcade.set_end' | 'arcade.bracket_updated';
+  | 'arcade.set_start' | 'arcade.score' | 'arcade.set_end' | 'arcade.bracket_updated'
+  // crowd trivia: one event type, the payload is the whole snapshot
+  | 'trivia.updated'
+  // schedule pace (cycle time + behind-schedule estimate)
+  | 'pace.updated'
+  // audience-facing status card: delays, score review, arena faults
+  | 'status.show' | 'status.hide'
+  // game configuration pushed from config.json at boot
+  | 'game.thresholds';
 
 // ---------------------------------------------------------------------------
 // 2026 REBUILT
@@ -81,7 +89,15 @@ export const REBUILT = {
   TOWER_AUTO_L1: 15,
   TOWER_TELEOP: { 1: 10, 2: 20, 3: 30 } as Record<1 | 2 | 3, number>,
 
-  /** Regional bonus RP thresholds. */
+  /**
+   * Default bonus RP thresholds.
+   *
+   * Defaults, not constants. An off-season event can and does move these, and
+   * REBUILT's own numbers were still being argued over as this was written, so
+   * they live in config and travel on the state snapshot. Nothing derives a
+   * ranking point from these literals: `DeskState.thresholds` is the value
+   * every surface and the reducer actually read.
+   */
   RP_ENERGIZED_FUEL: 100,
   RP_SUPERCHARGED_FUEL: 360,
   RP_TRAVERSAL_TOWER: 50,
@@ -104,8 +120,15 @@ export interface Team {
 }
 
 export interface AllianceScore {
+  /** The period breakdown: what the final-score screen itemizes. */
+  autoFuel: number;
+  teleopFuel: number;
+  autoTower: number;
+  teleopTower: number;
+  /** Derived sums, kept because every surface reads them. */
   fuel: number;
   tower: number;
+  /** Foul points this alliance CONCEDED (credited to the opponent's total). */
   fouls: number;
   /** fuel + tower + opponent foul points */
   total: number;
@@ -113,17 +136,47 @@ export interface AllianceScore {
 }
 
 export const emptyAllianceScore = (): AllianceScore => ({
+  autoFuel: 0, teleopFuel: 0, autoTower: 0, teleopTower: 0,
   fuel: 0, tower: 0, fouls: 0, total: 0,
   rp: { energized: false, supercharged: false, traversal: false },
 });
 
 export interface MatchInfo {
   id: string;
-  /** "Qualification 42", "Playoff 3" — what goes on the intro card. */
+  /** "Qualification 42", "Playoff 3": what goes on the intro card. */
   displayName: string;
+  /**
+   * The robots on the field. Three in qualification, and three in a playoff
+   * match too: a four-team playoff alliance is carrying a backup, and which
+   * three play can change between matches. Every surface sizes itself off the
+   * length of this array rather than assuming three, so a fuller roster
+   * renders correctly wherever one is supplied.
+   */
   red: Team[];
   blue: Team[];
+  /** Playoff seed, 1-8. Absent in qualification. */
+  redAlliance?: number;
+  blueAlliance?: number;
 }
+
+/**
+ * What each bonus ranking point costs, live on the state snapshot.
+ *
+ * These are the numbers the reducer scores against and every surface labels
+ * its badges with, so changing them in config changes the whole system at
+ * once. Nothing recomputes an RP from a hard-coded literal.
+ */
+export interface RpThresholds {
+  energizedFuel: number;
+  superchargedFuel: number;
+  traversalTower: number;
+}
+
+export const defaultThresholds = (): RpThresholds => ({
+  energizedFuel: REBUILT.RP_ENERGIZED_FUEL,
+  superchargedFuel: REBUILT.RP_SUPERCHARGED_FUEL,
+  traversalTower: REBUILT.RP_TRAVERSAL_TOWER,
+});
 
 export interface LowerThird {
   line1: string;
@@ -151,6 +204,46 @@ export interface UpcomingMatch {
   blue: number[];
 }
 
+/** How the event is actually running vs. the published schedule. */
+export interface PaceInfo {
+  cycleSec: number | null;
+  nextStartAt: number | null;
+  behindMin: number | null;
+  lastStartAt: number | null;
+}
+
+/**
+ * Audience-facing status card. Unexplained stoppages read as dead air; a
+ * card that says WHY ("score under review") reads as process.
+ */
+export interface StatusCard {
+  kind: 'delay' | 'review' | 'fault' | 'replay' | 'custom';
+  message: string;
+  /** Optional "back at" estimate, wall clock ms. */
+  backAt: number | null;
+}
+
+/**
+ * Sunday's alliance selection, mirrored from the field.
+ *
+ * Selection is a long segment where the audience watches students walk across
+ * a floor, and at most events there is no graphic at all: no board, no clock,
+ * no way to know who is still available. Cheesy Arena already tracks every bit
+ * of this and publishes it to audience displays, so the desk draws it rather
+ * than tracking a second copy that could disagree with the field.
+ */
+export interface AllianceSelection {
+  /** In seed order. `teams[0]` is the captain; the rest are picks so far. */
+  alliances: { id: number; teams: number[] }[];
+  /** The pool, in rank order, with the ones already taken marked. */
+  ranked: { rank: number; team: number; picked: boolean }[];
+  /** The field's own pick clock. We render it, we never run it. */
+  showTimer: boolean;
+  timeRemainingSec: number;
+  /** When this snapshot arrived, so the clock can tick between messages. */
+  updatedAt: number;
+}
+
 export interface TelestratorState {
   /** Named on the ANALYSIS chip, so the audience knows it's opinion. */
   analyst: string;
@@ -170,21 +263,21 @@ export interface DeskState {
   phase: Phase;
   /**
    * Wall clock of match start. Surfaces derive their own matchClock from this
-   * every frame rather than being pushed the clock at 10Hz — the overlay
+   * every frame rather than being pushed the clock at 10Hz. The overlay
    * countdown stays smooth through a network hiccup, and we don't spend
    * bandwidth on a number the client can compute.
    */
   matchStartedAt: number | null;
   /**
    * Survives the buzzer. `matchStartedAt` is cleared at match end so the clock
-   * stops, but cutting a match video happens after that — often minutes after,
-   * once the score is finally posted — and the replay timeline still needs to
+   * stops, but cutting a match video happens after that (often minutes after,
+   * once the score is finally posted), and the replay timeline still needs to
    * map match clock onto wall clock.
    */
   lastMatchStartedAt: number | null;
   /** Wall clock of the buzzer, and of the score actually being posted. The gap
-   *  between them is unbounded — referees deliberating fouls and cards can run
-   *  minutes — which is why match videos cut rather than run straight through. */
+   *  between them is unbounded (referees deliberating fouls and cards can run
+   *  minutes), which is why match videos cut rather than run straight through. */
   matchEndedAt: number | null;
   scorePostedAt: number | null;
   matchClock: number | null;
@@ -193,7 +286,7 @@ export interface DeskState {
   hubActive: Alliance | 'both' | 'none';
   /**
    * Hub state straight from the field, when the Cheesy bridge is up. Preferred
-   * over inference — the field knows which hub is live and we would only be
+   * over inference: the field knows which hub is live and we would only be
    * guessing from the auto result. Null when running desk-only.
    */
   hubAuthoritative: Alliance | 'both' | 'none' | null;
@@ -201,7 +294,7 @@ export interface DeskState {
   /**
    * True once the field has told us who won auto. Needed because `null` is a
    * legitimate answer (a tied auto) and is otherwise indistinguishable from
-   * "nobody has said yet" — without this the time-driven heuristic overwrites
+   * "nobody has said yet": without this the time-driven heuristic overwrites
    * the field's correct answer a moment after it arrives.
    */
   autoWinnerKnown: boolean;
@@ -215,6 +308,14 @@ export interface DeskState {
   rankings: RankingRow[];
   highestPlayedMatch: string;
   upcoming: UpcomingMatch[];
+  /** Actual cycle time + behind-schedule estimate. See pace.ts. */
+  pace: PaceInfo;
+  /** Live status card, or null. Operator-fired from the desk console. */
+  status: StatusCard | null;
+  /** Alliance selection, mirrored from the field. Null until it starts. */
+  selection: AllianceSelection | null;
+  /** What each bonus RP costs. From config, not a constant. */
+  thresholds: RpThresholds;
   /** Endgame: suppress decorative motion, keep score/clock animating. */
   lockdown: boolean;
   connected: { cheesy: boolean };
@@ -242,6 +343,10 @@ export const initialState = (): DeskState => ({
   rankings: [],
   highestPlayedMatch: '',
   upcoming: [],
+  pace: { cycleSec: null, nextStartAt: null, behindMin: null, lastStartAt: null },
+  status: null,
+  selection: null,
+  thresholds: defaultThresholds(),
   lockdown: false,
   connected: { cheesy: false },
   updatedAt: Date.now(),
