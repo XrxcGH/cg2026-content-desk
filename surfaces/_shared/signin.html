@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-surface="console">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · CalGames 2026 Content Desk</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+body { font-size: var(--font-ui-body, 16px); display: grid; place-items: center;
+  min-height: 100vh; margin: 0; }
+.box { width: min(420px, calc(100vw - 40px));
+  background: var(--surface-raised); clip-path: var(--chamfer); --ch: 16px;
+  padding: 28px 30px 26px; }
+h1 { margin: 0 0 6px; font-size: 24px; font-variation-settings: "wdth" 118; }
+p { color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 18px; }
+label { display: block; font-family: var(--font-cond); font-weight: 600; font-size: 13px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 6px; }
+input { width: 100%; box-sizing: border-box; padding: 13px 14px;
+  font-family: var(--font-num); font-size: 22px; letter-spacing: .18em;
+  background: var(--page-bg); color: var(--text); border: 2px solid var(--surface-sunken); }
+input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
+  border-color: var(--accent); }
+button { margin-top: 14px; width: 100%; padding: 13px; border: 0; cursor: pointer;
+  clip-path: var(--chamfer); --ch: 10px;
+  background: var(--accent); color: var(--text-on-accent);
+  font-family: var(--font-cond); font-weight: 700; font-size: 15px;
+  letter-spacing: .1em; text-transform: uppercase; }
+button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.err { color: #FF6B6B; font-size: 14px; min-height: 20px; margin-top: 10px; }
+.open { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--surface-sunken);
+  font-size: 13px; }
+.open a { color: var(--accent); }
+</style>
+</head>
+<body>
+  <main class="box">
+    <h1>Content desk</h1>
+    <p>Match and content controls are for the production crew. Enter the event PIN to
+      carry on.</p>
+
+    <form id="form" autocomplete="off">
+      <label for="pin">Event PIN</label>
+      <input id="pin" name="pin" type="password" inputmode="numeric"
+        autocomplete="current-password" autofocus aria-describedby="err">
+      <button type="submit">Sign in</button>
+      <p class="err" id="err" role="alert" aria-live="polite"></p>
+    </form>
+
+    <p class="open">Looking for the schedule or the trivia game? Those need no PIN:
+      <a href="/s/next">when do we play?</a> · <a href="/s/quiz">trivia</a></p>
+  </main>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const next = new URLSearchParams(location.search).get('next') || '/';
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('err').textContent = '';
+  try {
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pin: $('pin').value }),
+    });
+    if (res.ok) { location.replace(next); return; }
+    const body = await res.json().catch(() => ({}));
+    // Same message whichever way it failed, so a wrong PIN and a missing one
+    // are not distinguishable from out here.
+    $('err').textContent = body.error ?? 'That PIN was not accepted.';
+    $('pin').select();
+  } catch {
+    $('err').textContent = 'Could not reach the desk. Check the network.';
+  }
+});
+</script>
+</body>
+</html>

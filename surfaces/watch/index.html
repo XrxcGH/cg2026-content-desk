@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Watch · CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+/* Kiosk wrapper for the pit monitors.
+ *
+ * The overlays are built for OBS, which means they are transparent and expect
+ * something behind them. A monitor in the pits has no OBS: somebody plugs in a
+ * spare screen, opens a browser, and needs the finished picture. So this page
+ * composites what the switcher would: the field feed underneath, the program
+ * overlay on top, nothing else on screen.
+ *
+ * Everything here is a plain iframe or a plain video element. A pit TV might be
+ * a smart TV browser or an ancient laptop, and anything clever is a thing that
+ * can fail in a room nobody is watching.
+ */
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: #000; color: var(--cg-white);
+}
+
+/* A fixed 16:9 stage centred in whatever the screen is, so the overlay lands
+   pixel-for-pixel on the video behind it. Letterboxing is black, which is what
+   a broadcast monitor does. */
+#stage {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 100vw; height: 56.25vw;          /* 16:9 by width */
+  max-height: 100vh; max-width: 177.78vh; /* 16:9 by height */
+  background: #000;
+}
+
+#bg, #fg {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
+}
+#bg { object-fit: cover; background: #000; }
+/* The overlay sits above the feed and must never eat clicks: a pit TV with a
+   touch screen should not be able to drive anything. */
+#fg { pointer-events: none; background: transparent; }
+
+/* Shown when no field feed is configured. The overlay still works: an
+   alliance overview or a score bar over the brand backdrop is a perfectly
+   good pit screen, and better than a black rectangle. */
+#backdrop {
+  position: absolute; inset: 0;
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+}
+
+/* Nothing is clickable, so the cursor is noise on a permanent display. */
+#stage { cursor: none; }
+
+/* The chooser, shown at /s/watch with no screen picked. This is the page a
+   volunteer lands on when told "put the desk on that monitor". */
+.menu { position: fixed; inset: 0; overflow: auto; cursor: auto;
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+  padding: 40px 32px 60px; box-sizing: border-box; }
+.menu-in { max-width: 900px; margin: 0 auto; }
+h1 { margin: 0 0 6px; font-family: var(--font-cond); font-weight: 700; font-size: 34px;
+  letter-spacing: .18em; text-indent: .18em; text-transform: uppercase; color: var(--cg-gold); }
+.lead { color: var(--cg-white-dim); font-size: 16px; line-height: 1.6; margin: 0 0 26px;
+  max-width: 60ch; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+a.card { display: block; text-decoration: none; color: inherit;
+  background-color: var(--cg-purple); background-image: var(--tex-perf);
+  background-size: var(--tex-perf-size);
+  clip-path: var(--chamfer); --ch: 14px; padding: 16px 18px; }
+a.card:hover { background-color: var(--cg-purple-hi); }
+a.card:focus-visible { outline: 3px solid var(--cg-gold); outline-offset: 3px; }
+.card b { display: block; font-size: 19px; margin-bottom: 4px; }
+.card span { color: var(--cg-white-dim); font-size: 14px; line-height: 1.5; }
+.card code { display: block; margin-top: 9px; font-family: var(--font-mono); font-size: 13px;
+  color: var(--cg-gold); }
+.note { margin-top: 26px; color: var(--cg-white-dim); font-size: 14px; line-height: 1.65; }
+.note b { color: var(--cg-white); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- Kiosk: feed underneath, overlay on top -->
+<div id="stage" hidden>
+  <div id="backdrop"></div>
+  <img id="bgImg" hidden alt="">
+  <iframe id="bgFrame" hidden allow="autoplay; encrypted-media" title="Field feed"></iframe>
+  <video id="bgVideo" hidden muted autoplay playsinline></video>
+  <iframe id="fg" title="Overlay"></iframe>
+</div>
+
+<!-- Chooser -->
+<div class="menu" id="menu" hidden>
+  <div class="menu-in">
+    <h1>Watch</h1>
+    <p class="lead">Screens anyone can put on a monitor. Open one of these on a pit TV and
+      leave it: no OBS, no sign-in, no keyboard. Each one fills the screen and looks after
+      itself.</p>
+    <div class="grid" id="grid"></div>
+    <p class="note" id="note"></p>
+  </div>
+</div>
+
+<script type="module">
+/**
+ * Screens a pit monitor can show. Only surfaces that need no PIN appear here,
+ * which is the same list `access.ts` keeps open, for the same reason.
+ *
+ * `feed` marks the ones that are transparent overlays and therefore want the
+ * field picture behind them. The rest already draw their own background.
+ */
+const SCREENS = [
+  { id: 'program', name: 'Program', feed: true,
+    blurb: 'The broadcast picture: field feed with the live overlay on top. What the stream shows.' },
+  { id: 'side', name: 'Side screen', feed: false,
+    blurb: 'On deck and rankings, rotating. Built to be read from across the room.' },
+  { id: 'arcade', name: 'Arcade', feed: true,
+    blurb: 'The side tournament, over the game capture.' },
+  { id: 'trivia', name: 'Trivia', feed: false,
+    blurb: 'The crowd game. Shows the join code between questions.' },
+  { id: 'next', name: 'When do we play?', feed: false,
+    blurb: 'Per-team schedule with drift-adjusted start times. Also fine on a phone.' },
+];
+
+const params = new URLSearchParams(location.search);
+const want = params.get('screen');
+const $ = id => document.getElementById(id);
+
+if (!want) {
+  showMenu();
+} else {
+  const screen = SCREENS.find(s => s.id === want) ?? SCREENS[0];
+  showKiosk(screen);
+}
+
+function showMenu() {
+  $('menu').hidden = false;
+  document.title = 'Watch · CalGames 2026';
+  $('grid').innerHTML = SCREENS.map(s => `
+    <a class="card" href="?screen=${s.id}">
+      <b>${s.name}</b>
+      <span>${s.blurb}</span>
+      <code>/s/watch?screen=${s.id}</code>
+    </a>`).join('');
+
+  fetch('/api/urls').then(r => r.json()).then(u => {
+    const base = u.base ?? location.origin;
+    $('note').innerHTML =
+      `On this network the desk is <b>${base}</b>. A pit monitor only needs that address `
+      + `followed by <b>/s/watch</b>. Nothing here asks for a PIN, and nothing here can `
+      + `change the show.`
+      + (u.fieldStream
+        ? ` The field feed is configured, so the program screen composites it automatically.`
+        : ` No field feed is set, so the program screen draws on the CalGames backdrop `
+          + `instead. Add one with <b>?feed=</b> or set <b>kiosk.fieldStreamUrl</b> in config.`);
+  }).catch(() => { $('note').textContent = ''; });
+}
+
+async function showKiosk(screen) {
+  document.title = `${screen.name} · CalGames 2026`;
+  $('stage').hidden = false;
+
+  // The overlay itself. `key=alpha` keeps it transparent so the feed shows
+  // through; the side screen and trivia draw their own background and are
+  // unaffected by it.
+  $('fg').src = `/s/${screen.id}?key=alpha`;
+
+  if (!screen.feed) return;                    // draws its own background
+
+  // Where the field picture comes from, most specific first: the URL the
+  // monitor was opened with, then the configured default.
+  let feed = params.get('feed');
+  if (!feed) {
+    feed = await fetch('/api/urls')
+      .then(r => r.json()).then(u => u.fieldStream ?? '').catch(() => '');
+  }
+  if (!feed) return;                           // backdrop stays, overlay still works
+
+  mountFeed(feed);
+}
+
+/**
+ * Attach whatever kind of source this is.
+ *
+ * Three shapes cover everything a venue realistically has: a YouTube or Twitch
+ * page to embed, an MJPEG stream straight off a capture box or IP camera, and
+ * a plain video file or stream a browser can play natively. No streaming
+ * library: one more dependency is one more thing to fail on a pit TV.
+ */
+function mountFeed(url) {
+  const yt = url.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/live\/)([\w-]{6,})/);
+  if (yt) {
+    const el = $('bgFrame');
+    // Muted and autoplaying, because a pit monitor has no speakers and no
+    // one to press play. The house PA is the audio.
+    el.src = `https://www.youtube.com/embed/${yt[1]}`
+      + '?autoplay=1&mute=1&controls=0&modestbranding=1&playsinline=1&rel=0';
+    el.hidden = false;
+    return;
+  }
+
+  if (/\.(mjpe?g|cgi)(\?|$)/i.test(url) || /mjpg/i.test(url)) {
+    const el = $('bgImg');
+    el.src = url;
+    el.style.objectFit = 'cover';
+    el.hidden = false;
+    // An MJPEG stream that drops leaves a frozen frame, which looks live and
+    // is not. Reconnect rather than sit on a stale picture.
+    el.onerror = () => setTimeout(() => { el.src = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`; }, 3000);
+    return;
+  }
+
+  const el = $('bgVideo');
+  el.src = url;
+  el.hidden = false;
+  el.play().catch(() => { /* autoplay refused; the poster frame still shows */ });
+  // Same reasoning as above: a dead feed should keep trying, quietly.
+  el.onerror = el.onended = () => setTimeout(() => { el.load(); el.play().catch(() => {}); }, 3000);
+}
+
+// A permanent display should heal itself. If the desk restarts, the overlay
+// iframe reloads on its own rather than sitting on a dead socket until
+// somebody notices the scores stopped moving.
+setInterval(async () => {
+  try {
+    const res = await fetch('/api/state', { cache: 'no-store' });
+    if (!res.ok) throw new Error(String(res.status));
+    document.documentElement.dataset.online = 'true';
+  } catch {
+    if (document.documentElement.dataset.online === 'true') {
+      document.documentElement.dataset.online = 'false';
+      const fg = $('fg');
+      if (fg?.src) fg.src = fg.src;           // reload once the desk is back
+    }
+  }
+}, 15_000);
+</script>
+</body>
+</html>

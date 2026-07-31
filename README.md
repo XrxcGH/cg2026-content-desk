@@ -181,15 +181,47 @@ npm run fake-arena -- --port 8091 --speed 2
 npm start -- --cheesy --cheesy-host 127.0.0.1:8091 --display-id simdesk
 ```
 
+## Who can drive it
+
+Control is gated. Viewing is not.
+
+The desk runs on the venue network, and at an event that network has a few hundred phones on
+it. The trivia QR code puts the desk's address on a projector in front of the whole gym, so
+"nobody will find it" was never a real answer.
+
+| | Surfaces | Needs the PIN |
+| --- | --- | --- |
+| **Open** | `/s/program` `/s/side` `/s/tele` `/s/arcade` `/s/trivia` `/s/quiz` `/s/next` | no |
+| **Gated** | `/s/desk` `/s/replay` `/s/draw` `/s/media` `/s/arcadedesk` `/s/triviadesk` `/s/talent` `/s/var` `/s/cards` `/s/remote` | yes |
+
+An OBS Browser Source cannot type a PIN and a spectator should not have to, so the overlays,
+the venue TVs and the two audience phone pages stay open, along with exactly the reads they
+need. Joining and answering trivia stay open too: that is the game. Everything else that
+*changes* something requires the PIN, over HTTP and over the websocket alike.
+
+The rule is an allowlist in both directions, so an endpoint added later is private until
+somebody opens it deliberately. That is the safe direction for a mistake to fall.
+
+```bash
+$env:REMOTE_PIN = "4726"; npm start -- --demo
+```
+
+Sign in once at `/signin` and the session lasts the day. The PIN is only ever read from a POST
+body, never a query string, because a query string ends up in the server log and the browser
+history of a machine several volunteers share. Startup says which mode it is in, and warns
+loudly when no PIN is set.
+
+Unset it for a laptop on a kitchen table in March. Set it before the desk touches the venue
+network.
+
 ## Phone remote
 
 `/s/remote` runs the show from a phone: screen changes, match lifecycle, replay marks,
 telestrator kill, and per-cue arming. Big thumb targets, haptic confirmation, and it
 re-authenticates itself after a reconnect so it can't quietly stop working mid-show.
 
-**Set a PIN before exposing it to any network.** Anyone who can load the page can drive the
-broadcast; the read path stays open so overlays and pit TVs never need a credential, but anything
-that *changes* the show requires the PIN.
+**Set a PIN before exposing it to any network.** See below: the same PIN now gates every
+control surface, not just this one.
 
 ```bash
 $env:REMOTE_PIN = "4726"; npm start

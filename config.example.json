@@ -13,6 +13,13 @@
     "resultsUrl": "https://www.thebluealliance.com/event/2026cacg"
   },
 
+  "game": {
+    "//": "Bonus RP thresholds. Off-season events move these, and the 2026 REBUILT numbers were still being argued over while this was built. They travel on the state snapshot, so changing one here changes the reducer, every badge, and the talent view together. Defaults below match the REBUILT constants in apps/core/src/types.ts.",
+    "rpEnergizedFuel": 100,
+    "rpSuperchargedFuel": 360,
+    "rpTraversalTower": 50
+  },
+
   "publish": {
     "//enabled": "Master switch. Nothing uploads while this is false.",
     "enabled": false,

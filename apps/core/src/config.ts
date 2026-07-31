@@ -36,6 +36,17 @@ export interface Config {
     rpSuperchargedFuel: number;
     rpTraversalTower: number;
   };
+  /**
+   * Screens shown on their own monitors, with no OBS in front of them.
+   *
+   * A pit TV opens /s/watch and gets the finished picture. The field feed can
+   * be a YouTube live URL, an MJPEG stream off a capture box or IP camera, or
+   * any video URL a browser plays natively. Blank is fine: the overlay then
+   * draws on the CalGames backdrop instead of a black rectangle.
+   */
+  kiosk: {
+    fieldStreamUrl: string;
+  };
   publish: {
     /** Master switch. Nothing uploads while this is false. */
     enabled: boolean;
@@ -88,6 +99,7 @@ export interface Config {
 export const DEFAULTS: Config = {
   event: { key: '', name: 'CalGames', year: 2026, resultsUrl: '' },
   game: { rpEnergizedFuel: 100, rpSuperchargedFuel: 360, rpTraversalTower: 50 },
+  kiosk: { fieldStreamUrl: '' },
   publish: {
     enabled: false,
     mode: 'deferred',
