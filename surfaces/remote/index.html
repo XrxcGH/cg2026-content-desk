@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B0322">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>CalGames Remote</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+/* Phone-first. Dark, because the producer is standing in a dim broadcast
+   position; big targets, because they are doing this one-handed while
+   watching the field rather than the screen. */
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 20px);
+  -webkit-user-select: none; user-select: none;
+  overscroll-behavior-y: contain;
+}
+.wrap { max-width: 560px; margin: 0 auto; }
+
+header { display: flex; align-items: center; gap: 10px; padding: 14px 4px 10px; }
+h1 { margin: 0; font-size: 19px; font-variation-settings: "wdth" 118; }
+.dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px; background: var(--st-bad); }
+.dot[data-up="true"] { background: var(--st-ok); }
+.link { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--cg-white-dim); }
+
+/* ---- now playing ---- */
+.now {
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center;
+  background: var(--cg-purple); background-image: var(--tex-perf);
+  background-size: var(--tex-perf-size);
+  clip-path: var(--chamfer); --ch: 14px; padding: 14px 16px; margin-bottom: 12px;
+}
+.now .s { font-family: var(--font-num); font-weight: 900; font-size: 40px; line-height: 1; }
+.now .s.red { color: var(--alliance-red); }
+.now .s.blue { color: var(--alliance-blue); text-align: right; }
+.now .mid { text-align: center; }
+.now .clk { font-family: var(--font-num); font-weight: 900; font-size: 26px; line-height: 1; color: var(--cg-gold); }
+.now .ph { font-family: var(--font-cond); font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--cg-white-dim); margin-top: 3px; }
+.mname { font-family: var(--font-cond); font-size: 12px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--cg-white-dim); text-align: center; margin: -4px 0 12px; }
+
+section { margin-bottom: 14px; }
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--cg-white-dim); margin: 0 0 8px 4px; }
+
+.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.grid.three { grid-template-columns: repeat(3, 1fr); }
+
+/* 60px minimum height: this gets pressed with a thumb, in a hurry. */
+.b {
+  min-height: 60px; padding: 10px 12px; border: 0; cursor: pointer;
+  background: var(--cg-purple); color: var(--cg-white);
+  clip-path: var(--chamfer); --ch: 11px;
+  font-family: var(--font-cond); font-weight: 700; font-size: 15px;
+  letter-spacing: .08em; text-transform: uppercase;
+  transition: transform 90ms var(--ease-pop), background 90ms linear;
+  touch-action: manipulation;
+}
+.b:active { transform: scale(.95); background: var(--cg-gold); color: var(--cg-black); }
+.b[data-on="true"] { background: var(--cg-gold); color: var(--cg-black); }
+.b small { display: block; font-size: 10px; opacity: .6; letter-spacing: .04em; margin-top: 2px; }
+.b--go { background: var(--cg-green); }
+.b--warn { background: var(--cg-purple-hi); }
+.b--wide { grid-column: 1 / -1; }
+
+#toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  background: var(--cg-gold); color: var(--cg-black);
+  clip-path: var(--chamfer); --ch: 10px; padding: 10px 20px;
+  font-family: var(--font-cond); font-weight: 700; font-size: 13px;
+  letter-spacing: .08em; text-transform: uppercase;
+  opacity: 0; pointer-events: none; transition: opacity 160ms linear;
+}
+#toast[data-show] { opacity: 1; }
+#toast[data-err] { background: var(--st-bad); color: #fff; }
+
+/* ---- PIN gate ---- */
+#gate {
+  position: fixed; inset: 0; z-index: 50; display: none;
+  place-items: center; padding: 24px;
+  background: var(--cg-purple-void);
+}
+#gate[data-show] { display: grid; }
+#gate .box { width: 100%; max-width: 340px; text-align: center; }
+#gate h2 { font-size: 13px; margin-bottom: 14px; }
+#pin {
+  width: 100%; box-sizing: border-box; text-align: center;
+  font-family: var(--font-num); font-weight: 900; font-size: 34px; letter-spacing: .3em;
+  padding: 16px; background: var(--cg-purple); color: var(--cg-white);
+  border: 3px solid var(--cg-gold-lo); margin-bottom: 12px;
+}
+#pin:focus { outline: none; border-color: var(--cg-gold); }
+.hint { color: var(--cg-white-dim); font-size: 12px; line-height: 1.6; margin-top: 14px; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="box">
+    <h2>Enter show PIN</h2>
+    <input id="pin" inputmode="numeric" autocomplete="off" placeholder="••••">
+    <button class="b b--go b--wide" id="unlock" style="width:100%">Unlock</button>
+    <p class="hint">Anyone who can reach this page can drive the broadcast.
+      The PIN is set with <code>REMOTE_PIN</code> on the desk.</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <header>
+    <span class="dot" id="dot"></span>
+    <h1>CalGames Remote</h1>
+    <span class="link" id="link">connecting</span>
+  </header>
+
+  <div class="now">
+    <div class="s red num" id="red">0</div>
+    <div class="mid">
+      <div class="clk num" id="clk">0:20</div>
+      <div class="ph" id="phase">Pre-match</div>
+    </div>
+    <div class="s blue num" id="blue">0</div>
+  </div>
+  <div class="mname" id="mname">No match loaded</div>
+
+  <section>
+    <h2>Screen</h2>
+    <div class="grid">
+      <button class="b" data-screen="overview">Overview</button>
+      <button class="b" data-screen="match">Match</button>
+      <button class="b" data-screen="score">Score</button>
+      <button class="b b--warn" data-screen="blank">Blank</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Match</h2>
+    <div class="grid three">
+      <button class="b" data-emit="match.preview">Preview</button>
+      <button class="b" data-emit="match.prestart">Prestart</button>
+      <button class="b b--go" data-emit="match.start">Start</button>
+      <button class="b" data-emit="match.end">End</button>
+      <button class="b" data-emit="match.score_posted">Post</button>
+      <button class="b b--warn" data-emit="match.aborted">Abort</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Replay</h2>
+    <div class="grid">
+      <button class="b b--go b--wide" id="mark" style="min-height:76px">
+        Mark<small>drops at now − 2s</small></button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Telestrator</h2>
+    <div class="grid">
+      <button class="b" id="teleClear">Clear ink</button>
+      <button class="b b--warn" id="teleHide">Hide</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cues</h2>
+    <div class="grid" id="cues"></div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { connect, clockDisplay, phaseAt, PHASE_LABEL, startTicker } from '/shared/desk-client.js';
+
+const $ = id => document.getElementById(id);
+const desk = connect('remote');
+
+let toastTimer = null;
+function toast(msg, err = false) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.toggleAttribute('data-err', err);
+  t.setAttribute('data-show', '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.removeAttribute('data-show'), 1600);
+}
+
+// ---- PIN gate --------------------------------------------------------------
+desk.on('ready', () => {
+  $('gate').toggleAttribute('data-show', desk.needsPin && !desk.authed);
+});
+desk.on('auth', ok => {
+  $('gate').toggleAttribute('data-show', !ok);
+  toast(ok ? 'Unlocked' : 'Wrong PIN', !ok);
+  if (ok) navigator.vibrate?.(30);
+});
+desk.on('denied', () => {
+  $('gate').setAttribute('data-show', '');
+  toast('PIN required', true);
+});
+const unlock = () => desk.authenticate($('pin').value.trim());
+$('unlock').onclick = unlock;
+$('pin').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
+
+// ---- connection ------------------------------------------------------------
+desk.on('link', up => {
+  $('dot').dataset.up = String(up);
+  $('link').textContent = up ? 'linked' : 'reconnecting…';
+});
+
+// ---- live readout ----------------------------------------------------------
+desk.on('state', s => {
+  $('red').textContent = s.score.red.total;
+  $('blue').textContent = s.score.blue.total;
+  $('mname').textContent = s.match?.displayName ?? 'No match loaded';
+});
+
+startTicker(() => {
+  const c = desk.matchClock;
+  $('clk').textContent = clockDisplay(c);
+  $('phase').textContent = PHASE_LABEL[phaseAt(c)] ?? '';
+});
+
+// ---- actions ---------------------------------------------------------------
+const tap = fn => e => {
+  e.preventDefault();
+  navigator.vibrate?.(12);   // confirms the press without looking at the screen
+  fn();
+};
+
+for (const b of document.querySelectorAll('[data-emit]')) {
+  b.onclick = tap(() => {
+    desk.emit({ type: b.dataset.emit });
+    toast(b.textContent.trim());
+  });
+}
+for (const b of document.querySelectorAll('[data-screen]')) {
+  b.onclick = tap(() => {
+    desk.emit({ type: 'screen.change', payload: { screen: b.dataset.screen } });
+    toast(b.dataset.screen);
+  });
+}
+
+$('mark').onclick = tap(() => {
+  const at = (desk.matchClock ?? 0) - 2;
+  desk.emit({ type: 'replay.marker', payload: { kind: 'manual', matchClock: at } });
+  toast(`Marked ${clockDisplay(at)}`);
+});
+
+$('teleClear').onclick = tap(() => { desk.emit({ type: 'telestrator.clear' }); toast('Ink cleared'); });
+$('teleHide').onclick = tap(() => { desk.emit({ type: 'telestrator.hide' }); toast('Telestrator hidden'); });
+
+// ---- cue arming ------------------------------------------------------------
+async function loadCues() {
+  try {
+    const { cues = [] } = await fetch('/api/cues').then(r => r.json());
+    $('cues').innerHTML = cues.map(c =>
+      `<button class="b" data-cue="${c.id}" data-on="${c.autopilot}">${c.name}` +
+      `<small>${c.autopilot ? 'armed' : `off · would have fired ${c.wouldHaveFired}×`}</small></button>`
+    ).join('');
+    for (const b of document.querySelectorAll('[data-cue]')) {
+      b.onclick = tap(async () => {
+        const on = b.dataset.on !== 'true';
+        await fetch(`/api/cues/${b.dataset.cue}/${on ? 'arm' : 'disarm'}`, { method: 'POST' });
+        toast(`${b.firstChild.textContent} ${on ? 'armed' : 'disarmed'}`);
+        loadCues();
+      });
+    }
+  } catch { /* transient */ }
+}
+desk.on('link', up => { if (up) loadCues(); });
+loadCues();
+</script>
+</body>
+</html>

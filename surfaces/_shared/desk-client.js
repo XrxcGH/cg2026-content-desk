@@ -79,6 +79,10 @@ class DeskClient extends EventTarget {
   state = null;
   media = {};
   connected = false;
+  /** Set from the server snapshot; surfaces only prompt when it's true. */
+  needsPin = false;
+  authed = false;
+  #pin = null;
   /** Server clock minus ours. Small, but it makes the countdown honest. */
   #skew = 0;
   #ws = null;
@@ -106,8 +110,20 @@ class DeskClient extends EventTarget {
       const msg = JSON.parse(e.data);
       if (msg.t === 'snapshot') {
         this.media = msg.media ?? {};
+        this.needsPin = !!msg.needsPin;
+        // Re-authenticate automatically after a reconnect. A remote that
+        // silently stops working mid-show because the socket blipped is worse
+        // than one that never worked.
+        if (this.needsPin && this.#pin) this.authenticate(this.#pin);
         this.#apply(msg.state);
         this.dispatchEvent(new CustomEvent('ready'));
+      } else if (msg.t === 'auth') {
+        this.authed = !!msg.ok;
+        if (!msg.ok) this.#pin = null;
+        this.dispatchEvent(new CustomEvent('auth', { detail: !!msg.ok }));
+      } else if (msg.t === 'denied') {
+        this.authed = false;
+        this.dispatchEvent(new CustomEvent('denied', { detail: msg.reason }));
       } else if (msg.t === 'event') {
         this.#apply(msg.state);
         this.dispatchEvent(new CustomEvent('desk', { detail: msg.ev }));
@@ -137,6 +153,14 @@ class DeskClient extends EventTarget {
     const started = this.state?.matchStartedAt;
     if (!started) return this.state?.matchClock ?? null;
     return (Date.now() + this.#skew - started) / 1000 + REBUILT.AUTO_START;
+  }
+
+  /** Send the shared PIN. Kept in memory only, never written to storage. */
+  authenticate(pin) {
+    this.#pin = pin;
+    if (this.#ws?.readyState === WebSocket.OPEN) {
+      this.#ws.send(JSON.stringify({ t: 'auth', pin }));
+    }
   }
 
   emit(init) {
