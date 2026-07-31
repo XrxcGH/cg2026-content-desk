@@ -50,13 +50,15 @@ export function readPngHeader(buf: Buffer): PngHeader | null {
 
 // ---------------------------------------------------------------------------
 
-type Sharp = typeof import('sharp');
+// sharp 0.35 ships ESM: the callable lives on the default export, so the
+// module type itself stopped being callable. Alias the default instead.
+type Sharp = (typeof import('sharp'))['default'];
 let sharpMod: Sharp | null | undefined;
 
 async function getSharp(): Promise<Sharp | null> {
   if (sharpMod !== undefined) return sharpMod;
   try {
-    sharpMod = (await import('sharp')).default as unknown as Sharp;
+    sharpMod = (await import('sharp')).default;
   } catch {
     sharpMod = null;
     console.warn('[media] sharp unavailable: uploads are stored as-is, without ' +

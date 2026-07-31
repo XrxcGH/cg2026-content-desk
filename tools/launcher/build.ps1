@@ -41,10 +41,12 @@ $NodeUrl     = "https://nodejs.org/dist/$NodeVersion/$NodeZipName"
 
 # Runtime dependencies only. typescript and @types are for developing the desk,
 # not running it, and they are most of the weight in node_modules.
+# sharp 0.35 carries @img/colour instead of the old color-* chain; @img also
+# holds the platform binaries, so vendoring the whole scope stays correct
+# across sharp's own dependency changes.
 $RuntimeModules = @(
     'ws',
-    'sharp', '@img', 'color', 'color-convert', 'color-name', 'color-string',
-    'detect-libc', 'is-arrayish', 'semver', 'simple-swizzle'
+    'sharp', '@img', 'detect-libc', 'semver'
 )
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
