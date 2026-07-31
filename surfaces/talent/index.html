@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en" data-surface="console">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Talent view · CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+/* The announcer's data support: the community's most-repeated unmet need
+   (gatool.org and the yearly GA cheat sheet exist because the alternative is
+   "60 sheets of paper"). Read-only, big type for a podium tablet, and the
+   numbers here are the SAME numbers driving the overlay, so what the PA says
+   never contradicts what the audience sees.
+
+   Pronunciation and fact notes live in THIS device's localStorage. The GA
+   types them once during Friday practice and they persist all weekend. */
+body { font-size: 16px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 18px 22px 60px; }
+header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+h1 { font-size: 26px; font-variation-settings: "wdth" 118; margin: 0; }
+.hint { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+.spacer { margin-left: auto; }
+.dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px;
+  background: var(--st-bad); display: inline-block; }
+.dot[data-up="true"] { background: var(--st-ok); }
+
+section { background: var(--surface-raised); padding: 16px 20px; margin-bottom: 14px;
+  clip-path: var(--chamfer); --ch: 14px; }
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 12px; }
+
+.statusline { font-family: var(--font-cond); font-weight: 600; font-size: 20px;
+  letter-spacing: .06em; }
+.statusline b { color: var(--accent); }
+
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+/* Same large-text reasoning as the alliance chips: white on the official
+   red is 4.38:1 at small sizes, and clears 3:1 once the type is large. */
+.side-h { font-family: var(--font-cond); font-weight: 700; font-size: 19px;
+  letter-spacing: .16em; text-transform: uppercase; padding: 8px 14px;
+  clip-path: var(--chamfer); --ch: 8px; color: #fff; margin-bottom: 10px; }
+.side-h.red { background: var(--alliance-red); }
+.side-h.blue { background: var(--alliance-blue); }
+
+.tcard { background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 10px;
+  padding: 12px 16px; margin-bottom: 10px; }
+.tcard .top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.tnum { font-family: var(--font-num); font-weight: 900; font-size: 30px; color: var(--accent); }
+.tname { font-size: 22px; font-weight: 700; }
+.tmeta { margin-left: auto; font-family: var(--font-cond); font-size: 15px;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); }
+.tnote { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 8px 10px;
+  font-family: var(--font-display); font-size: 15px; min-height: 38px; resize: vertical;
+  background: var(--page-bg); color: var(--text); border: 2px solid #3A1349; }
+.tnote:focus { outline: none; border-color: var(--accent); }
+.tnote::placeholder { color: var(--text-dim); }
+
+.rpline { display: flex; gap: 18px; margin-top: 6px;
+  font-family: var(--font-cond); font-weight: 600; font-size: 17px; letter-spacing: .04em; }
+.rpline b { font-family: var(--font-num); font-size: 20px; }
+.rpline .got { color: var(--st-ok); }
+
+.nextline { font-family: var(--font-cond); font-size: 17px; letter-spacing: .04em; line-height: 1.7; }
+.nextline b { font-family: var(--font-num); color: var(--accent); }
+/* Alliance labels. Lightened off the on-field colours because the official
+   red and blue do not clear 4.5:1 against this panel; the word itself is
+   still there, so colour is a second cue rather than the only one. */
+.al { font-weight: 700; }
+.al--red { color: #FF6B6B; }
+.al--blue { color: #6FB6FF; }
+.vs { color: var(--text-dim); }
+a { color: var(--accent); }
+a:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Talent view</h1>
+    <span class="hint">Read-only. Same numbers as the overlay, so what you say matches what they see.
+      Notes save on this device.</span>
+    <span class="spacer"></span>
+    <span class="hint" aria-live="polite"><span class="dot" id="dot" aria-hidden="true"></span> <span id="linkText">connecting</span></span>
+  </header>
+
+  <section>
+    <h2>Right now</h2>
+    <p class="statusline" id="line">Waiting for a match…</p>
+    <div class="rpline" id="rp"></div>
+  </section>
+
+  <section>
+    <h2>On the field · <span id="matchName">-</span></h2>
+    <div class="sides">
+      <div><div class="side-h red">Red Alliance</div><div id="redCards"></div></div>
+      <div><div class="side-h blue">Blue Alliance</div><div id="blueCards"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Coming up</h2>
+    <p class="nextline" id="next">-</p>
+  </section>
+
+  <section>
+    <h2>Prep</h2>
+    <p class="hint">Official pronunciation + team-history tool:
+      <a href="https://gatool.org" target="_blank" rel="noopener">gatool.org</a>
+      (works with Cheesy Arena on this network, not in Safari).
+      The community's REBUILT Game Announcer cheat sheet covers penalty names and
+      scoring calls. Keep a printout at the podium.</p>
+  </section>
+</div>
+
+<script type="module">
+import { mountNav } from '/shared/nav.js';
+mountNav('talent');
+import { connect, startTicker, clockDisplayFor, phaseFor, PHASE_LABEL } from '/shared/desk-client.js';
+import { DEFAULT_THRESHOLDS } from '/shared/rp.js';
+
+const $ = id => document.getElementById(id);
+const desk = connect('talent');
+
+desk.on('link', up => {
+  $('dot').dataset.up = String(up);
+  $('linkText').textContent = up ? 'live' : 'reconnecting…';
+});
+
+const note = team => localStorage.getItem(`talent.note.${team}`) ?? '';
+
+function card(t, rankings) {
+  const row = (rankings ?? []).find(r => r.team === t.number);
+  return `
+    <div class="tcard">
+      <div class="top">
+        <span class="tnum num">${t.number}</span>
+        <span class="tname">${esc(t.name || '-')}</span>
+        <span class="tmeta">${row ? `Rank ${row.rank} · ${row.record} · ${row.rankingPoints} RP` : ''}</span>
+      </div>
+      <textarea class="tnote" data-team="${t.number}" rows="1"
+        aria-label="Notes for team ${t.number}"
+        placeholder="Pronunciation / one fact (saves on this tablet)">${esc(note(t.number))}</textarea>
+    </div>`;
+}
+
+let lastMatchId = null;
+desk.on('state', s => {
+  if (s.match?.id !== lastMatchId) {
+    lastMatchId = s.match?.id ?? null;
+    $('matchName').textContent = s.match?.displayName ?? '-';
+    $('redCards').innerHTML = (s.match?.red ?? []).map(t => card(t, s.rankings)).join('') || '<p class="hint">-</p>';
+    $('blueCards').innerHTML = (s.match?.blue ?? []).map(t => card(t, s.rankings)).join('') || '<p class="hint">-</p>';
+    for (const ta of document.querySelectorAll('.tnote')) {
+      ta.oninput = () => localStorage.setItem(`talent.note.${ta.dataset.team}`, ta.value);
+    }
+  }
+
+  // RP progress in words the GA can actually SAY.
+  // What this event is playing to, not what the rulebook shipped with.
+  const th = s.thresholds ?? DEFAULT_THRESHOLDS;
+  const rp = side => {
+    const sc = s.score[side];
+    const seg = (label, val, need, got) =>
+      `<span class="${got ? 'got' : ''}">${label} <b>${val}/${need}</b>${got ? ' ✓' : ''}</span>`;
+    return `<span style="text-transform:uppercase">${side}</span> ` +
+      seg('Energized', sc.fuel, th.energizedFuel, sc.rp.energized) + ' ' +
+      seg('Supercharged', sc.fuel, th.superchargedFuel, sc.rp.supercharged) + ' ' +
+      seg('Traversal', sc.tower, th.traversalTower, sc.rp.traversal);
+  };
+  $('rp').innerHTML = `${rp('red')}&nbsp;&nbsp;·&nbsp;&nbsp;${rp('blue')}`;
+
+  // Alliance words carry their own colour. The announcer scans this line
+  // between matches, and "Red" in red is found faster than "red" in the same
+  // white as everything around it. The word stays, so colour is never the
+  // only thing carrying the meaning.
+  const up = (s.upcoming ?? []).slice(0, 3).map(m =>
+    `<b>${esc(m.shortName)}</b> <span class="al al--red">Red</span> ${m.red.join(', ')}` +
+    ` <span class="vs">vs</span> <span class="al al--blue">Blue</span> ${m.blue.join(', ')}`).join('<br>');
+  $('next').innerHTML = up || 'Nothing queued yet.';
+});
+
+startTicker(() => {
+  const s = desk.state;
+  if (!s) return;
+  const c = desk.matchClock;
+  const behind = s.pace?.behindMin;
+  const behindText = behind != null && Math.abs(behind) >= 2
+    ? ` · running <b>${Math.abs(behind)} min ${behind > 0 ? 'behind' : 'ahead'}</b>` : '';
+  $('line').innerHTML = s.status
+    ? `<b>${esc(s.status.message)}</b>`
+    : `${esc(s.match?.displayName ?? 'No match loaded')} · ` +
+      `${PHASE_LABEL[phaseFor(s, c)] ?? ''} <b>${clockDisplayFor(s, c)}</b> · ` +
+      `red <b>${s.score.red.total}</b> · blue <b>${s.score.blue.total}</b>${behindText}`;
+});
+
+function esc(x) {
+  return String(x ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+</script>
+</body>
+</html>

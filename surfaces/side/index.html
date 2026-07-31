@@ -1,16 +1,31 @@
 <!doctype html>
-<html lang="en" data-key="luma" data-scale="venue">
+<html lang="en" data-key="luma">
 <head>
 <meta charset="utf-8">
-<title>Side screen — CalGames 2026</title>
+<title>Side screen · CalGames 2026</title>
 <link rel="stylesheet" href="/theme/tokens.css">
 <link rel="stylesheet" href="/shared/fonts.css">
 <link rel="stylesheet" href="/shared/broadcast.css">
 <style>
 /* Venue side screens: pit TVs and the queueing area, read from 20-60ft.
-   Defaults to data-scale="venue" (72px type floor) because these are the one
-   surface that is ONLY ever seen in the room. Rotates between panels on its
-   own — nobody is operating a pit TV. */
+   The one surface that is ONLY ever seen in the room, so it carries its own
+   enlarged type scale locally (72px floor, docs/08-motion.md) now that the
+   broadcast overlay runs a single scale. Rotates between panels on its own.
+   Nobody is operating a pit TV. */
+:root {
+  --t-hero: 220px;
+  --t-title: 84px;
+  --t-body:  76px;
+  --t-label: 72px;   /* hard floor for room-only surfaces */
+  --gap: 28px;
+  --ch:  34px;       /* chamfer scales with the type, or it vanishes */
+  --rule: 6px solid var(--cg-gold);
+  --tex-perf-size: 22px 22px;
+  --wdth-display: 125;
+  /* Width the corner QR block claims: label + gap + code. Header text keeps
+     out of it. */
+  --qr-zone: 500px;
+}
 #stage {
   background-color: var(--cg-purple-void);
   background-image: var(--tex-perf), var(--atmo);
@@ -20,52 +35,158 @@
 .panel-screen { position: absolute; inset: 0; display: none; padding: var(--safe-y) var(--safe-x); }
 .panel-screen[data-active] { display: flex; flex-direction: column; }
 
+/* Line heights are pinned rather than left to the font's default leading.
+   At 72-84px a default 1.4 line box adds ~90px of invisible padding to the
+   header, and the deck rows below pay for it by losing their own. */
 h1 {
-  margin: 0 0 8px; font-family: var(--font-cond); font-weight: 700;
+  margin: 0 0 20px; line-height: 1;
+  font-family: var(--font-cond); font-weight: 700;
   font-size: var(--t-title); letter-spacing: .2em; text-transform: uppercase;
   color: var(--cg-gold);
 }
+/* The header text stops short of the QR block rather than running under it.
+   One reserved zone, used by both the title and the subtitle, so a long
+   status message can never reach the corner.
+
+   `flex: none` matters: these are items in a column flex panel, and once the
+   subtitle clips its overflow it becomes shrinkable, so a full deck squashes
+   it to a band of half-height letters. */
+h1, .sub, .tick { flex: none; }
+h1, .sub { max-width: calc(100% - var(--qr-zone)); }
 .sub { font-family: var(--font-cond); font-size: var(--t-label); color: var(--cg-white-dim);
-  letter-spacing: .1em; text-transform: uppercase; margin-bottom: 22px; }
-.tick { height: 6px; background: var(--tick); margin-bottom: 26px; }
+  letter-spacing: .1em; text-transform: uppercase; margin-bottom: 16px; line-height: 1.1;
+  /* Never wrap: a second line pushes the last deck row off the bottom of the
+     screen. `fitLine()` steps the size down instead. */
+  white-space: nowrap; overflow: hidden; }
+.tick { height: 6px; background: var(--tick); margin-bottom: 20px; }
 
 /* ---- on deck ---- */
-.deck { display: flex; flex-direction: column; gap: var(--gap); flex: 1; }
+/* min-height:0 is load-bearing: a flex item defaults to min-height:auto, which
+   pins this to its content height and pushes the last row off the screen
+   instead of letting the rows share what the header left. */
+.deck { display: flex; flex-direction: column; gap: var(--gap); flex: 1; min-height: 0; }
+/* Rows split whatever the header leaves rather than sizing to content: with
+   four rows plus a start estimate under each name, content-sizing overflowed
+   the bottom of the screen by a few pixels and clipped the last time. */
 .deck-row {
-  display: grid; grid-template-columns: 260px 1fr 1fr; gap: var(--gap); align-items: center;
+  position: relative; flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 200px 1fr 1fr; gap: var(--gap); align-items: center;
   background-color: var(--cg-purple);
   background-image: var(--tex-perf); background-size: var(--tex-perf-size);
   clip-path: var(--chamfer); padding: 18px 26px;
 }
-.deck-row:first-child { box-shadow: inset 0 8px 0 var(--cg-gold); }
+/* kill the leading so centering is optical; a playoff ShortName like
+   "SF2-3", or the fallback to the full LongName when Cheesy sends no
+   ShortName at all, must stay one line and step down rather than wrap:
+   this column is fixed-width, and a wrapped second line pushes into the
+   row below instead of just being smaller. */
+.deck-name { line-height: 1; white-space: nowrap; overflow: hidden; }
+/* Honest start estimate from actual cycle pace, not the printed fiction. */
+.deck-eta {
+  margin-top: 10px;
+  font-family: var(--font-cond); font-weight: 600; font-size: 34px; line-height: 1;
+  letter-spacing: .06em; color: var(--cg-gold);
+}
+/* Next-up highlight as a real filled edge: this surface runs under a luma
+   key, which strips box-shadows, so a shadow edge would never be seen. */
+.deck-row:first-child::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 8px;
+  background: var(--cg-gold);
+}
 .deck-name {
   font-family: var(--font-num); font-weight: 900; font-size: var(--t-title);
   letter-spacing: -.02em;
 }
+.deck-name[data-fit="1"] { font-size: 68px; }
+.deck-name[data-fit="2"] { font-size: 56px; }
+/* Three fixed columns, one team each, so station 1 lines up with station 1
+   on every row down the screen. Spacing never drifts with digit count.
+   Alliance blocks carry the family chamfer, echoing their purple plate. */
 .deck-teams {
+  display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); align-items: center;
+  align-self: stretch;
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 700; font-size: var(--t-body); letter-spacing: .04em;
-  padding: 10px 18px;
+  font-weight: 700; font-size: 72px; line-height: 1;
+  padding: 10px 16px; overflow: hidden; white-space: nowrap;
+  clip-path: var(--chamfer); --ch: 14px;
 }
+.deck-teams span { display: block; text-align: center; }
+/* Auto-fit: paint() steps these on when a 5-digit rookie number overflows
+   its column. Slightly under the 72px floor beats clipped digits. */
+.deck-teams[data-fit="1"] { font-size: 62px; }
+.deck-teams[data-fit="2"] { font-size: 54px; }
 .deck-teams--red  { background: var(--alliance-red);  border-left: var(--rule); }
 .deck-teams--blue { background: var(--alliance-blue); border-left: var(--rule); }
 
-/* ---- rankings ---- */
-.rank-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px var(--gap); align-content: start; }
-.rank-row {
-  display: grid; grid-template-columns: 90px 1fr auto; gap: 16px; align-items: baseline;
-  background: var(--cg-purple); clip-path: var(--chamfer); --ch: 14px;
-  padding: 12px 20px;
-}
-.rank-n { font-family: var(--font-num); font-weight: 900; font-size: var(--t-body); color: var(--cg-gold); }
-.rank-team { font-family: var(--font-cond); font-weight: 600; font-size: var(--t-body);
-  text-transform: uppercase; letter-spacing: .04em; overflow: hidden; white-space: nowrap; }
-.rank-team b { font-family: var(--font-num); font-weight: 900; margin-right: 10px; }
-.rank-rp { font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-weight: 900; font-size: var(--t-body); }
+/* ---- rankings ----
+   Column-first: ranks 1-6 run down the LEFT, 7-12 down the right, then the
+   next page. Fixed sub-columns inside each row (rank | number | name | RP)
+   so every name starts at the same x down the whole screen.
 
+   Rows are 1fr, not min-content: six min-content rows left about 170px of
+   dead purple below a full 12-team page, with the whole block pinned to the
+   top instead of using the panel. 1fr rows share out whatever the header
+   leaves, the same rule the on-deck rows below already follow. */
+.rank-grid {
+  flex: 1; display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(6, 1fr);
+  grid-auto-flow: column;
+  gap: 10px var(--gap);
+}
+.rank-row {
+  display: grid; grid-template-columns: 72px 195px 1fr auto;
+  gap: 12px; align-items: center;
+  background: var(--cg-purple); clip-path: var(--chamfer); --ch: 14px;
+  padding: 14px 20px;
+}
+.rank-n { font-family: var(--font-num); font-weight: 900; font-size: 56px;
+  line-height: 1; color: var(--cg-gold); }
+/* Numbers left-align tight to the rank; the column is fixed at 5-digit width
+   so every NAME still starts at the same x: the variable space lands between
+   number and name, never in front of the number. */
+.rank-num { font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: 60px; line-height: 1; text-align: left; }
+/* Names run smaller than the numerals: the number is what the back half of
+   the room needs; the name is for whoever walks up to the TV. The fit pass
+   steps long ones down rather than ever cutting them off. */
+.rank-team { font-family: var(--font-cond); font-weight: 600; font-size: 48px;
+  line-height: 1.15; text-transform: uppercase; letter-spacing: .03em;
+  overflow: hidden; white-space: nowrap; }
+.rank-team[data-fit="1"] { font-size: 42px; }
+.rank-team[data-fit="2"] { font-size: 35px; }
+.rank-rp { font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: 60px; line-height: 1; }
+
+/* A lone "nothing yet" line is still just the first flex/grid item, so
+   without this it sits pinned to the top-left of a mostly empty panel
+   instead of reading as a designed empty state. */
 .empty { color: var(--cg-white-dim); font-family: var(--font-cond);
-  font-size: var(--t-body); letter-spacing: .1em; text-transform: uppercase; }
+  font-size: var(--t-body); letter-spacing: .1em; text-transform: uppercase;
+  display: flex; align-items: center; justify-content: center; text-align: center; }
+.deck .empty { flex: 1; }
+.rank-grid .empty { grid-row: 1 / -1; grid-column: 1 / -1; }
+
+/* Corner QR: your schedule on your phone. Top-right header zone (the one
+   spot both rotating panels leave empty). Big enough to scan from a few feet. */
+#qrBox {
+  position: absolute; right: var(--safe-x); top: var(--safe-y);
+  display: flex; align-items: center; gap: 22px;
+}
+#qrBox[hidden] { display: none; }
+#qrLabel {
+  /* Fixed so the reserved zone above is a real number, not a guess. */
+  width: 250px;
+  font-family: var(--font-cond); font-weight: 600; font-size: 40px; line-height: 1.2;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--cg-white-dim);
+  text-align: right;
+}
+/* Sized to clear the tick rule under the header. The rule sits at
+   safe-y + h1 + sub + their margins, so the block gets the space above it
+   minus a real gap rather than filling every pixel up to the line. Still
+   comfortably scannable: a venue TV renders this around 9cm across. */
+#qrImg { width: 160px; height: 160px; }
+#qrImg svg { width: 100%; height: 100%; clip-path: var(--chamfer); --ch: 12px; }
 </style>
 </head>
 <body>
@@ -85,71 +206,167 @@ h1 {
     <div class="rank-grid" id="rank"></div>
   </section>
 
+  <div id="qrBox" hidden>
+    <div id="qrLabel">Your team's<br>schedule</div>
+    <div id="qrImg"></div>
+  </div>
+
 </div></div>
 
 <script type="module">
-import { connect, applyDisplayMode, restart } from '/shared/desk-client.js';
+import { connect, applyDisplayMode, fitStage, restart } from '/shared/desk-client.js';
+import { qrSvg } from '/shared/qr.js';
 
 applyDisplayMode();
 const $ = id => document.getElementById(id);
 const desk = connect('side');
 
-const stage = $('stage');
-const fit = () => {
-  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
-  stage.style.transform = `translate(-50%, -50%) scale(${s})`;
-};
-addEventListener('resize', fit); fit();
+fitStage($('stage'));
 
 // Rotate on a timer. A pit TV has no operator, and a screen that shows one
-// thing forever stops being looked at.
-const PANELS = ['deck', 'rank'];
+// thing forever stops being looked at. The rankings walk through EVERY page
+// (12 teams at a time, left column first) before the deck comes back. For
+// example, a 36-team field shows pages 1-12, 13-24, 25-36, then on-deck again.
 const DWELL_MS = 14_000;
-let panel = 0;
+const PAGE_SIZE = 12;
+let onDeck = true;
+let rankPage = 0;
+let lastState = null;
 
-function show(i) {
-  panel = i % PANELS.length;
-  PANELS.forEach((p, n) => $(`scr-${p}`).toggleAttribute('data-active', n === panel));
+function show(deck) {
+  onDeck = deck;
+  $('scr-deck').toggleAttribute('data-active', deck);
+  $('scr-rank').toggleAttribute('data-active', !deck);
 }
-setInterval(() => show(panel + 1), DWELL_MS);
+
+function advance() {
+  const pages = Math.max(1, Math.ceil((lastState?.rankings?.length ?? 0) / PAGE_SIZE));
+  if (onDeck) {
+    rankPage = 0;
+    renderRank();
+    show(false);
+  } else if (rankPage + 1 < pages) {
+    rankPage++;
+    renderRank();
+  } else {
+    show(true);
+  }
+}
+setInterval(advance, DWELL_MS);
 
 function paint(s) {
   if (!s) return;
+  lastState = s;
 
   // ---- on deck ----
-  const up = s.upcoming ?? [];
-  $('deckSub').textContent = s.match?.displayName
-    ? `Now playing · ${s.match.displayName}`
-    : 'Waiting for the field';
+  const up = (s.upcoming ?? []).slice(0, 4);
+  const clock = ts => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const behind = s.pace?.behindMin;
+  const behindText = behind == null || Math.abs(behind) < 2 ? ''
+    : behind > 0 ? `${behind} min behind` : `${-behind} min ahead`;
+  // "Now playing" is dropped when the event is off schedule: the match name is
+  // already the first row below, and the drift is the part nobody else tells
+  // them. Both forms are short enough to hold the 72px room-only floor.
+  $('deckSub').textContent = s.status
+    ? `${s.status.message}${s.status.backAt ? ` · back ~${clock(s.status.backAt)}` : ''}`
+    : (s.match?.displayName
+        ? (behindText
+            ? `${s.match.displayName} · ${behindText}`
+            : `Now playing · ${s.match.displayName}`)
+        : 'Waiting for the field');
+  fitLine($('deckSub'));
+  const teamSpans = list => list.map(n => `<span>${n}</span>`).join('');
+  // Estimated start per row: the projected next start plus one median cycle
+  // per queue position. Only shown once the pace model has real signal.
+  const eta = i => s.pace?.nextStartAt && s.pace?.cycleSec
+    ? `<div class="deck-eta">~${clock(s.pace.nextStartAt + i * s.pace.cycleSec * 1000)}</div>`
+    : '';
   $('deck').innerHTML = up.length
-    ? up.map(m => `
+    ? up.map((m, i) => `
         <div class="deck-row">
-          <div class="deck-name num">${escapeHtml(m.shortName || m.name)}</div>
-          <div class="deck-teams deck-teams--red">${m.red.join('&nbsp;&nbsp;')}</div>
-          <div class="deck-teams deck-teams--blue">${m.blue.join('&nbsp;&nbsp;')}</div>
+          <div><div class="deck-name num">${escapeHtml(m.shortName || m.name)}</div>${eta(i)}</div>
+          <div class="deck-teams deck-teams--red num" style="--n:${Math.max(1, m.red.length)}">${teamSpans(m.red)}</div>
+          <div class="deck-teams deck-teams--blue num" style="--n:${Math.max(1, m.blue.length)}">${teamSpans(m.blue)}</div>
         </div>`).join('')
     : '<div class="empty">Schedule not published yet</div>';
+  // Fit pass, per station column: a 5-digit rookie number steps its block
+  // down (72 -> 62 -> 54) rather than ever bleeding into the next column.
+  for (const el of document.querySelectorAll('.deck-teams')) {
+    delete el.dataset.fit;
+    const overflowing = () =>
+      [...el.children].some(sp => sp.scrollWidth > sp.clientWidth);
+    if (overflowing()) el.dataset.fit = '1';
+    if (overflowing()) el.dataset.fit = '2';
+  }
+  // Same fit pass for the match name: a playoff ShortName ("SF2-3", "QF10-3")
+  // or a LongName fallback steps down rather than wrapping into row two.
+  for (const el of document.querySelectorAll('.deck-name')) {
+    delete el.dataset.fit;
+    const overflowing = () => el.scrollWidth > el.clientWidth;
+    if (overflowing()) el.dataset.fit = '1';
+    if (overflowing()) el.dataset.fit = '2';
+  }
 
-  // ---- rankings ----
-  const rows = (s.rankings ?? []).slice(0, 16);
-  $('rankSub').textContent = s.highestPlayedMatch
-    ? `Through ${s.highestPlayedMatch}`
+  renderRank();
+}
+
+// One page of rankings: PAGE_SIZE rows, ranks running DOWN the left column
+// first (the grid is column-flow). Names auto-fit instead of clipping.
+function renderRank() {
+  const all = lastState?.rankings ?? [];
+  const start = rankPage * PAGE_SIZE;
+  const rows = all.slice(start, start + PAGE_SIZE);
+  const through = lastState?.highestPlayedMatch
+    ? `Through ${lastState.highestPlayedMatch}`
     : 'No matches played';
+  $('rankSub').textContent = rows.length
+    ? `${through} · ${start + 1}-${start + rows.length} of ${all.length}`
+    : through;
+  fitLine($('rankSub'));
   $('rank').innerHTML = rows.length
     ? rows.map(r => `
         <div class="rank-row">
           <span class="rank-n num">${r.rank}</span>
-          <span class="rank-team"><b>${r.team}</b>${escapeHtml(r.name)}</span>
+          <span class="rank-num num">${r.team}</span>
+          <span class="rank-team">${escapeHtml(r.name)}</span>
           <span class="rank-rp num">${r.rankingPoints}</span>
         </div>`).join('')
     : '<div class="empty">No rankings yet</div>';
+  for (const el of document.querySelectorAll('.rank-team')) {
+    delete el.dataset.fit;
+    if (el.scrollWidth > el.clientWidth) el.dataset.fit = '1';
+    if (el.scrollWidth > el.clientWidth) el.dataset.fit = '2';
+  }
 }
 
 desk.on('state', paint);
 desk.on('ready', () => paint(desk.state));
 
+// Corner QR to the phone-facing schedule page, using the LAN base the server
+// computed, since this page's own host may be localhost on the desk box.
+fetch('/api/urls').then(r => r.json()).then(({ base }) => {
+  if (!base) return;
+  $('qrImg').innerHTML = qrSvg(`${base}/s/next`);
+  $('qrBox').hidden = false;
+}).catch(() => { /* QR is a bonus, never a blocker */ });
+
 // A new match loading is the one thing worth interrupting the rotation for.
-desk.on('match.loaded', () => { show(0); restart($('scr-deck'), 'data-active'); });
+desk.on('match.loaded', () => { show(true); restart($('scr-deck'), 'data-active'); });
+
+/**
+ * Hold a header line to one line.
+ *
+ * A custom status message can be any length, so the size steps down rather
+ * than wrapping. 48px is the floor: below that it stops being readable from
+ * the queueing line, and a message that long belongs on the program overlay
+ * where there is room for it.
+ */
+function fitLine(el) {
+  for (const px of [72, 64, 56, 48]) {
+    el.style.fontSize = `${px}px`;
+    if (el.scrollWidth <= el.clientWidth) break;
+  }
+}
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en" data-surface="console">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Head referee review · CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+/* Read-only review for the head referee.
+ *
+ * Chezy Champs ran video review in 2025 and the community has asked for it for
+ * a decade, so an offseason that wants it should be able to have it. The whole
+ * design of this page is about what it CANNOT do: there is no cut button, no
+ * send-to-program, no publish, and no telestrator push. It grabs frames with
+ * `send: false` and shows them here. Nothing it does reaches the broadcast,
+ * and nothing it does reaches Cheesy Arena, which is a separate process on a
+ * separate machine that this page has no route to.
+ *
+ * Frame stepping is a server round trip per frame (ffmpeg seek plus a jpeg),
+ * so expect a beat between presses. That is still faster than the argument. */
+body { font-size: 16px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 16px 20px 50px; }
+header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
+h1 { font-size: 24px; font-variation-settings: "wdth" 118; margin: 0; }
+.hint { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+.spacer { margin-left: auto; }
+
+.readonly { display: flex; align-items: center; gap: 10px;
+  background: var(--surface-sunken); border-left: 4px solid var(--st-ok);
+  padding: 9px 14px; margin-bottom: 14px;
+  font-family: var(--font-cond); font-size: 14px; letter-spacing: .04em; }
+.readonly b { color: var(--st-ok); }
+
+section { background: var(--surface-raised); padding: 14px 18px; margin-bottom: 14px;
+  clip-path: var(--chamfer); --ch: 14px; }
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 10px; }
+
+/* Capped so the step buttons stay on screen: a ref reviewing a call should
+   never have to scroll between looking and stepping. */
+.viewer { background: #000; aspect-ratio: 16 / 9; max-height: 46vh; margin: 0 auto;
+  display: grid; place-items: center;
+  clip-path: var(--chamfer); --ch: 10px; overflow: hidden; }
+.viewer img { width: 100%; height: 100%; object-fit: contain; }
+.viewer p { color: var(--text-dim); font-family: var(--font-cond); letter-spacing: .06em; }
+
+.at { display: flex; align-items: baseline; gap: 16px; margin: 12px 0 8px; flex-wrap: wrap; }
+.at .big { font-family: var(--font-num); font-weight: 900; font-size: 34px; color: var(--accent); }
+.at .sub { font-family: var(--font-cond); font-size: 14px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-dim); }
+
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+input[type="range"]:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 4px; }
+
+.steps { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+button { cursor: pointer; border: 0; padding: 10px 14px; clip-path: var(--chamfer); --ch: 8px;
+  background: var(--surface-sunken); color: var(--text);
+  font-family: var(--font-cond); font-weight: 700; font-size: 14px;
+  letter-spacing: .08em; text-transform: uppercase; }
+button:hover { background: var(--btn-hover); }
+button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+button.key { background: var(--accent); color: var(--cg-black); }
+button[disabled] { opacity: .45; cursor: not-allowed; }
+select { padding: 9px 12px; background: var(--surface-sunken); color: var(--text);
+  border: 2px solid #3A1349; font-family: var(--font-cond); font-size: 14px; }
+
+.marks { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.mark { display: grid; grid-template-columns: 68px 1fr auto; gap: 12px; align-items: center;
+  text-align: left; width: 100%; background: var(--surface-sunken);
+  padding: 9px 12px; clip-path: var(--chamfer); --ch: 8px;
+  font-family: inherit; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.mark:hover { background: var(--btn-hover); }
+.mark .c { font-family: var(--font-num); font-weight: 900; color: var(--accent); font-size: 17px; }
+.mark .l { font-size: 15px; }
+.mark .k { font-family: var(--font-cond); font-size: 14px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-dim); }
+.mark[data-p="3"] { border-left: 3px solid var(--accent); }
+
+/* --st-bad (#C13030) is only 3.17:1 on this panel. Errors are the one
+   thing an operator must be able to read at a glance, so this uses the
+   lightened console red the rest of the dark surfaces use. */
+.err { color: #FF6B6B; font-size: 14px; min-height: 20px; margin-top: 8px; }
+kbd { font-family: var(--font-num); background: var(--surface-sunken); padding: 1px 6px;
+  clip-path: var(--chamfer); --ch: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Head referee review</h1>
+    <span class="hint">Frame-step the recording. Nothing here reaches the broadcast or the field.</span>
+    <span class="spacer"></span>
+    <select id="src" aria-label="Camera"></select>
+  </header>
+
+  <div class="readonly">
+    <b>Read-only.</b>
+    <span>No cut, no replay to air, no publish, no telestrator. This page cannot change
+      a score: it has no route to Cheesy Arena, which owns the official result.</span>
+  </div>
+
+  <section>
+    <h2>Review</h2>
+    <div class="viewer" id="viewer"><p>Pick a moment below, or jump to a marker.</p></div>
+
+    <div class="at">
+      <span class="big num" id="atLabel">0:00</span>
+      <span class="sub" id="atSub">match clock</span>
+      <span class="spacer"></span>
+      <span class="hint">Arrow keys step. <kbd>&larr;</kbd> <kbd>&rarr;</kbd> one frame,
+        with <kbd>Shift</kbd> one second.</span>
+    </div>
+
+    <input type="range" id="scrub" min="-20" max="150" step="0.1" value="0"
+      aria-label="Match clock position">
+
+    <div class="steps">
+      <button data-step="-1">&minus;1 s</button>
+      <button data-step="-0.2">&minus;0.2 s</button>
+      <button data-step="-0.0333">&minus;1 frame</button>
+      <button class="key" id="grab">Grab frame</button>
+      <button data-step="0.0333">+1 frame</button>
+      <button data-step="0.2">+0.2 s</button>
+      <button data-step="1">+1 s</button>
+    </div>
+    <p class="err" id="err" aria-live="polite"></p>
+  </section>
+
+  <section>
+    <h2>Moments the desk flagged · <span id="matchName">no match loaded</span></h2>
+    <div class="marks" id="marks"><p class="hint">No markers yet.</p></div>
+  </section>
+</div>
+
+<script type="module">
+import { mountNav } from '/shared/nav.js';
+mountNav('var');
+import { PHASE_LABEL, clockDisplay, connect, phaseAt } from '/shared/desk-client.js';
+
+// The ref says "twelve seconds left", not "second 128", so the big number is
+// the countdown the whole gym saw. The phase underneath keeps it unambiguous,
+// since the countdown restarts when teleop does.
+const clockLabel = c => clockDisplay(c);
+
+const $ = id => document.getElementById(id);
+const desk = connect('var');
+
+let startedAt = null;         // wall clock of the match under review
+let at = 0;                   // match clock, seconds
+let busy = false;
+
+desk.on('state', s => {
+  startedAt = s.matchStartedAt ?? s.lastMatchStartedAt ?? null;
+  $('matchName').textContent = s.match?.displayName ?? 'no match loaded';
+});
+
+// ---- camera list ----------------------------------------------------------
+const sources = await fetch('/api/recorder').then(r => r.json()).catch(() => null);
+if (sources?.sources?.length) {
+  $('src').innerHTML = sources.sources
+    .map(s => `<option value="${s.id}">${esc(s.label ?? s.id)}</option>`).join('');
+} else {
+  $('src').innerHTML = '<option value="program">program</option>';
+  if (!sources?.available) {
+    fail('Recording is not running, so there is nothing to review.');
+    $('grab').disabled = true;
+  }
+}
+
+// ---- position -------------------------------------------------------------
+function setAt(next) {
+  at = Math.max(-20, Math.min(150, Math.round(next * 1000) / 1000));
+  $('scrub').value = String(at);
+  $('atLabel').textContent = clockLabel(at);
+  $('atSub').textContent = PHASE_LABEL[phaseAt(at)] ?? 'match clock';
+  $('scrub').setAttribute('aria-valuetext', `${clockLabel(at)} ${PHASE_LABEL[phaseAt(at)] ?? ''}`.trim());
+}
+
+$('scrub').oninput = e => setAt(Number(e.target.value));
+
+for (const b of document.querySelectorAll('[data-step]')) {
+  b.onclick = () => { setAt(at + Number(b.dataset.step)); void grab(); };
+}
+$('grab').onclick = () => void grab();
+
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault();
+  const dir = e.key === 'ArrowRight' ? 1 : -1;
+  setAt(at + dir * (e.shiftKey ? 1 : 0.0333));
+  void grab();
+});
+
+// ---- the one server call this page makes ----------------------------------
+async function grab() {
+  if (busy) return;
+  if (startedAt === null) return fail('No match has started, so there is no clock to seek against.');
+  busy = true;
+  $('err').textContent = '';
+  try {
+    const res = await fetch('/api/frame', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      // send:false is the whole safety story: grab it, show it here, tell nobody.
+      body: JSON.stringify({
+        sourceId: $('src').value,
+        atMs: Math.round(startedAt + at * 1000),
+        send: false,
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+    $('viewer').innerHTML = `<img alt="Frame at ${clockLabel(at)}" src="${body.url}?t=${Date.now()}">`;
+  } catch (err) {
+    fail(err.message);
+  } finally {
+    busy = false;
+  }
+}
+
+function fail(message) { $('err').textContent = message; }
+
+// ---- markers --------------------------------------------------------------
+async function loadMarkers() {
+  let marks = [];
+  try { marks = await fetch('/api/markers').then(r => r.json()); } catch { return; }
+  if (!marks.length) return;
+  $('marks').innerHTML = marks.map(m => `
+    <button class="mark" data-p="${m.priority}" data-c="${m.matchClock ?? ''}">
+      <span class="c">${m.matchClock === null ? '--' : clockLabel(m.matchClock)}</span>
+      <span class="l">${esc(m.label)}</span>
+      <span class="k">${esc(m.kind.replace(/_/g, ' '))}</span>
+    </button>`).join('');
+  for (const b of document.querySelectorAll('.mark')) {
+    b.onclick = () => {
+      if (b.dataset.c === '') return;
+      setAt(Number(b.dataset.c));
+      void grab();
+    };
+  }
+}
+loadMarkers();
+setInterval(loadMarkers, 10_000);
+
+function esc(x) {
+  return String(x ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+setAt(0);
+</script>
+</body>
+</html>
