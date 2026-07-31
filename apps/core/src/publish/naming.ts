@@ -29,7 +29,7 @@ const ORDINAL: Record<string, number> = { one: 1, two: 2, three: 3 };
  * official naming, plus its TBA key.
  *
  * Playoff matches use the modern double-elimination scheme: FIRST shows
- * "Match 7 (R3)" and TBA keys them `sf7m1`. Finals are `f1m1`, `f1m2`, and the
+ * "Match 7 (R2)" and TBA keys them `sf7m1`. Finals are `f1m1`, `f1m2`, and the
  * tiebreaker is `f1m3`.
  */
 /** Practice matches run during load-in and pit walkthroughs; never published. */
@@ -90,16 +90,20 @@ export function identify(displayName: string): MatchIdentity {
 }
 
 /**
- * Round number for a 13-match double-elimination bracket, matching the (Rn)
+ * Round number for the 13-match double-elimination bracket, matching the (Rn)
  * suffix FIRST puts on playoff titles.
+ *
+ * The official bracket has five rounds: matches 1-4, 5-8, 9-10, 11-12, 13.
+ * An earlier version invented seven rounds and mislabeled everything past
+ * match 6, which the test pins down because a wrong title is not fixable
+ * once it is on uploaded videos.
  */
 export function roundOf(matchNumber: number): number {
   if (matchNumber <= 4) return 1;
-  if (matchNumber <= 6) return 2;
-  if (matchNumber <= 8) return 3;
-  if (matchNumber <= 10) return 4;
-  if (matchNumber <= 11) return 5;
-  return matchNumber <= 12 ? 6 : 7;
+  if (matchNumber <= 8) return 2;
+  if (matchNumber <= 10) return 3;
+  if (matchNumber <= 12) return 4;
+  return 5;
 }
 
 /** `Qualification 42 - CalGames` */
@@ -165,7 +169,7 @@ export type SegmentId = keyof typeof SEGMENTS;
 /**
  * Title an event segment. A known id gets the standard name; anything else is
  * taken as a literal, which is how a single award gets its own video
- * ("Chairman's Award - CalGames").
+ * ("FIRST Impact Award - CalGames").
  */
 export const segmentName = (idOrName: string): string =>
   SEGMENTS[idOrName as SegmentId] ?? idOrName.trim();

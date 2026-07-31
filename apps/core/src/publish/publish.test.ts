@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+import { DEFAULTS } from '../config.ts';
+import type { EventBus } from '../bus.ts';
 import { SEGMENTS, segmentDescription, segmentName } from './naming.ts';
-import { QC_BOUNDS, qcHold } from './queue.ts';
+import { PublishQueue, QC_BOUNDS, qcHold } from './queue.ts';
 
 test('a known segment id gets the standard name, anything else stands as written', () => {
   assert.equal(segmentName('selection'), SEGMENTS.selection);
   assert.equal(segmentName('awards'), 'Awards Ceremony');
-  assert.equal(segmentName("  Chairman's Award  "), "Chairman's Award");
+  assert.equal(segmentName("  FIRST Impact Award  "), "FIRST Impact Award");
 });
 
 test('a segment description carries no alliances and no score', () => {
@@ -50,4 +55,44 @@ test('the hold reason tells the operator what to do about it', () => {
   assert.match(reason, /11s/);
   assert.match(reason, /60-900s/);
   assert.match(reason, /release/i);
+});
+
+test('release marks items released and the flag survives a restart', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pubq-'));
+  // enabled=false keeps the worker inert, so nothing touches the network.
+  const cfg = structuredClone(DEFAULTS);
+  cfg.publish.enabled = false;
+  cfg.publish.mode = 'deferred';
+  const bus = { emit: () => {} } as unknown as EventBus;
+
+  try {
+    const q = new PublishQueue(root, cfg, bus, null);
+    await q.load();
+    const item = await q.add({
+      kind: 'segment', label: 'Awards Ceremony', sourceId: 'program',
+      ranges: [{ fromMs: 0, toMs: 120_000 }], matchKey: null,
+      meta: { title: 'Awards Ceremony - CalGames', description: '' },
+    }, 'QC hold: test');
+    // A flagged item must enter the queue already held. Holding it a moment
+    // after adding left a window where a running worker picked it up.
+    assert.equal(item.state, 'held');
+    item.clipPath = join(root, 'clip.mp4');
+
+    assert.equal(await q.release(), 1);
+    assert.equal(item.state, 'cut');
+    assert.equal(item.released, true,
+      'without the durable flag the cut branch re-parks the item on the spot');
+
+    // Let the kicked worker settle before reading the file back, so the
+    // restart below sees whatever it last persisted.
+    await new Promise(r => setTimeout(r, 400));
+
+    // Restart. The go-ahead must come back from disk, or an overnight crash
+    // would silently re-park everything the operator already released.
+    const q2 = new PublishQueue(root, cfg, bus, null);
+    await q2.load();
+    assert.equal(q2.items[0]?.released, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

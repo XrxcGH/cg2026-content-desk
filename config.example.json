@@ -20,6 +20,11 @@
     "rpTraversalTower": 50
   },
 
+  "kiosk": {
+    "//fieldStreamUrl": "Field picture for pit monitors at /s/watch. A YouTube live URL, an MJPEG stream off a capture box, or any video URL a browser plays. Blank draws the CalGames backdrop instead. Served to the open pit-monitor pages through /api/urls, so never point it at anything you would not put on a projector.",
+    "fieldStreamUrl": ""
+  },
+
   "publish": {
     "//enabled": "Master switch. Nothing uploads while this is false.",
     "enabled": false,
@@ -35,7 +40,7 @@
     "publicAfterLink": true,
 
     "//playlists": "YouTube playlist IDs (PL...). Leave blank to skip playlist insertion.",
-    "playlists": { "match": "", "analysis": "", "segment": "" },
+    "playlists": { "match": "", "segment": "" },
 
     "//credit": "Closing lines of every description, mirroring the official channel's layout. FIRST's own videos end '(c) 2026 FIRST Robotics Competition' (that is theirs to claim). CalGames is a WRRF off-season event, so these default to WRRF.",
     "credit": "Uploaded by the CalGames Content Desk",
@@ -51,7 +56,7 @@
   },
 
   "youtube": {
-    "//": "Google Cloud project -> OAuth 2.0 Client ID (Desktop app), with the YouTube Data API v3 enabled. Scope needed: https://www.googleapis.com/auth/youtube.upload",
+    "//": "Google Cloud project -> OAuth 2.0 Client ID (Desktop app), with the YouTube Data API v3 enabled. Scopes needed: https://www.googleapis.com/auth/youtube.upload and https://www.googleapis.com/auth/youtube. The second covers the flip-to-public after TBA linking, and playlists. `npm run auth:youtube` requests both.",
     "//refreshToken": "Obtained once via the OAuth consent flow. Run `npm run auth:youtube` for the walkthrough.",
     "//before-the-event": "Use WRRF's established, verified channel (a new channel's per-day upload cap is low and separate from API quota). Enable live streaming 24h in advance.",
     "clientId": "",

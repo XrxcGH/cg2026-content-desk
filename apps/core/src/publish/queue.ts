@@ -18,7 +18,10 @@ import { TbaClient } from './tba.ts';
 import { description, identify, isPractice, segmentDescription, segmentName, videoTitle } from './naming.ts';
 import { YouTubeClient, watchUrl, type VideoMeta } from './youtube.ts';
 
-export type ItemKind = 'match' | 'analysis' | 'segment';
+// There is no 'analysis' kind: the docs once promised automatic detection of
+// telestrator sessions, but no detector was ever built, so the kind was
+// unreachable dead weight. Analysis clips go up through the segment flow.
+export type ItemKind = 'match' | 'segment';
 
 export type ItemState =
   | 'pending'    // queued, nothing done
@@ -38,6 +41,12 @@ export interface QueueItem {
   matchKey: string | null;
   meta: { title: string; description: string };
   state: ItemState;
+  /**
+   * The operator's go-ahead. Without a durable flag, the cut branch re-parked
+   * every deferred-mode item the moment release() woke it, so the end-of-day
+   * upload could never actually happen.
+   */
+  released: boolean;
   clipPath: string | null;
   videoId: string | null;
   sessionUrl: string | null;
@@ -61,7 +70,6 @@ const MAX_ATTEMPTS = 6;
  */
 export const QC_BOUNDS: Record<ItemKind, { minSec: number; maxSec: number }> = {
   match: { minSec: 60, maxSec: 900 },
-  analysis: { minSec: 20, maxSec: 1800 },
   segment: { minSec: 30, maxSec: 7200 },
 };
 
@@ -101,9 +109,21 @@ export class PublishQueue {
     return { youtube: this.#yt.configured, tba: this.#tba.configured };
   }
 
+  /**
+   * Register the stream on TBA GameDay. The list REPLACES what TBA has, so
+   * the caller sends every webcast the event should show. Exposed here
+   * rather than handing out the TbaClient: the queue owns all TBA writes.
+   */
+  registerWebcasts(urls: string[]): Promise<unknown> {
+    if (!this.#tba.configured) return Promise.resolve(null);
+    return this.#tba.setWebcasts(urls);
+  }
+
   async load(): Promise<void> {
     try {
       this.#items = JSON.parse(await readFile(this.#file, 'utf8')) as QueueItem[];
+      // Queue files written before the released flag existed lack the field.
+      for (const item of this.#items) item.released ??= false;
       const unfinished = this.#items.filter(i => i.state !== 'done').length;
       if (this.#items.length) {
         console.log(`[publish] restored ${this.#items.length} item(s), ${unfinished} unfinished`);
@@ -119,22 +139,27 @@ export class PublishQueue {
     await rename(tmp, this.#file);
   }
 
-  async add(init: Omit<QueueItem, 'id' | 'state' | 'clipPath' | 'videoId' | 'sessionUrl'
-    | 'attempts' | 'error' | 'progress' | 'createdAt' | 'updatedAt'>): Promise<QueueItem> {
+  async add(init: Omit<QueueItem, 'id' | 'state' | 'released' | 'clipPath' | 'videoId'
+    | 'sessionUrl' | 'attempts' | 'error' | 'progress' | 'createdAt' | 'updatedAt'>,
+    hold: string | null = null): Promise<QueueItem> {
     const item: QueueItem = {
       ...init,
       id: `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
       // In deferred mode items are cut but parked. The live stream must never
       // compete with an upload for the venue uplink.
-      state: 'pending',
+      // A QC-flagged item enters the queue already held: pushing it pending
+      // and holding a moment later left a window where a running worker
+      // picked it up and later overwrote the hold with 'cut'.
+      state: hold ? 'held' : 'pending',
+      released: false,
       clipPath: null, videoId: null, sessionUrl: null,
-      attempts: 0, error: null, progress: 0,
+      attempts: 0, error: hold, progress: 0,
       createdAt: Date.now(), updatedAt: Date.now(),
     };
     this.#items.push(item);
     await this.#save();
-    this.#bus.emit({ type: 'graphic.show', source: 'cue', payload: { publish: item.id } });
-    this.kick();
+    if (hold) console.warn(`[publish] ${item.label} held for QC`);
+    else this.kick();
     return item;
   }
 
@@ -168,7 +193,7 @@ export class PublishQueue {
     // operator eyeballs it and releases, reusing the deferred-mode go-ahead.
     const hold = qcHold('match', ranges.reduce((s, r) => s + (r.toMs - r.fromMs) / 1000, 0));
 
-    const item = await this.add({
+    return this.add({
       kind: 'match',
       label: name,
       sourceId: this.#cfg.publish.sourceId,
@@ -185,10 +210,7 @@ export class PublishQueue {
           copyright: this.#cfg.publish.copyright,
         }),
       },
-    });
-
-    if (hold) await this.#hold(item, hold);
-    return item;
+    }, hold);
   }
 
   /**
@@ -215,8 +237,9 @@ export class PublishQueue {
     const name = segmentName(opts.segment);
     const title = videoTitle(name, this.#cfg.event.name);
     const ranges: Range[] = [{ fromMs: opts.fromMs, toMs: opts.toMs }];
+    const hold = qcHold('segment', (opts.toMs - opts.fromMs) / 1000);
 
-    const item = await this.add({
+    return this.add({
       kind: 'segment',
       label: name,
       sourceId: opts.sourceId ?? this.#cfg.publish.sourceId,
@@ -232,11 +255,7 @@ export class PublishQueue {
           copyright: this.#cfg.publish.copyright,
         }),
       },
-    });
-
-    const hold = qcHold('segment', (opts.toMs - opts.fromMs) / 1000);
-    if (hold) await this.#hold(item, hold);
-    return item;
+    }, hold);
   }
 
   async #hold(item: QueueItem, reason: string): Promise<void> {
@@ -257,7 +276,17 @@ export class PublishQueue {
   async release(): Promise<number> {
     let n = 0;
     for (const item of this.#items) {
-      if (item.state === 'held') { item.state = item.clipPath ? 'cut' : 'pending'; n++; }
+      if (item.state === 'held') {
+        // The durable flag is what lets the cut branch proceed in deferred
+        // mode; changing only the state sent the item straight back to held.
+        item.released = true;
+        item.state = item.clipPath ? 'cut' : 'pending';
+        // An operator go-ahead earns a fresh retry budget, same as retry().
+        item.attempts = 0;
+        item.error = null;
+        item.updatedAt = Date.now();
+        n++;
+      }
     }
     if (n) { await this.#save(); this.kick(); }
     return n;
@@ -316,16 +345,34 @@ export class PublishQueue {
           sourceId: item.sourceId, ranges: item.ranges, label: item.label,
         });
         item.clipPath = clip.path;
-        item.state = 'cut';
-        item.error = null;
         item.updatedAt = Date.now();
         this.#bus.emit({ type: 'replay.clip_ready', source: 'replay', payload: { ...clip, kind: item.kind } });
+        // Queue-time QC only saw the requested ranges. The probed duration of
+        // the real file is the truth: a recorder with only part of the match
+        // on disk cuts short, and that must hold here rather than upload.
+        const hold = qcHold(item.kind, clip.seconds);
+        if (hold) { await this.#hold(item, hold); return true; }
+        item.state = 'cut';
+        item.error = null;
+        // A fresh retry budget per stage: an auto-queued match routinely
+        // burns cut attempts waiting for the score reveal to land on disk,
+        // and that must not starve the upload of retries.
+        item.attempts = 0;
         return true;
       }
 
       if (item.state === 'cut') {
+        // The master switch outranks everything, including a release.
         if (!this.#cfg.publish.enabled) { item.state = 'held'; return true; }
-        if (this.#cfg.publish.mode === 'deferred') { item.state = 'held'; return true; }
+        if (this.#cfg.publish.mode === 'deferred' && !item.released) { item.state = 'held'; return true; }
+        if (this.#cfg.publish.mode === 'trickle' && this.#bus.state.matchStartedAt !== null) {
+          // Trickle's promise is that an upload never starts against a live
+          // match. Stay 'cut', block the loop, and look again shortly.
+          if (!this.#timer) {
+            this.#timer = setTimeout(() => { this.#timer = null; void this.#work(); }, 15_000);
+          }
+          return false;
+        }
         if (!this.#yt.configured) throw new Error('YouTube credentials are not configured.');
 
         const meta: VideoMeta = {
@@ -336,13 +383,22 @@ export class PublishQueue {
         };
         item.videoId = await this.#yt.upload(item.clipPath!, meta, {
           sessionUrl: item.sessionUrl ?? undefined,
-          onSession: url => { item.sessionUrl = url; },
+          // Persist the session now, not at the end of the step: it is only
+          // useful to a process that crashed mid-upload, and that process
+          // never reaches the save after this step. Without it a restart
+          // re-uploaded from byte zero, and a session that had quietly
+          // finished became a duplicate video on the channel.
+          onSession: url => { item.sessionUrl = url; void this.#save(); },
           onProgress: (sent, total) => { item.progress = total ? sent / total : 0; },
         });
         item.progress = 1;
         item.state = 'uploaded';
         item.error = null;
+        item.attempts = 0;
         item.updatedAt = Date.now();
+        // A crash between here and the playlist insert must restart as
+        // 'uploaded' with this video id, not re-upload a duplicate.
+        await this.#save();
 
         const playlist = this.#cfg.publish.playlists[item.kind];
         if (playlist) await this.#yt.addToPlaylist(item.videoId, playlist);

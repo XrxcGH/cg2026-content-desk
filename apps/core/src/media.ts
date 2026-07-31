@@ -3,7 +3,7 @@
  * See docs/07-team-media.md.
  *
  * The validation here exists because of one specific, predictable failure:
- * most FRC robots are bare aluminium and white polycarbonate, shot on a white
+ * most FRC robots are bare aluminum and white polycarbonate, shot on a white
  * backdrop, so an automated background remover eats holes in them, and you
  * don't notice until it's on a screen at 1080p. Catching a bad cutout at
  * upload time on Friday is worth a lot more than catching it Sunday.
@@ -73,7 +73,8 @@ export class MediaLibrary {
 
   get manifest(): Manifest { return this.#manifest; }
 
-  /** Rebuild from disk on boot: the manifest file is a cache, not the truth. */
+  /** Rebuild from disk on boot: the manifest lives in memory, built from each
+   *  team's meta.json. No manifest file exists on disk, deliberately. */
   async scan(): Promise<void> {
     const teamsDir = join(this.#root, 'teams');
     await mkdir(teamsDir, { recursive: true });

@@ -52,7 +52,8 @@ export interface Config {
     enabled: boolean;
     /**
      * deferred: queue during the event, upload after the venue closes.
-     * trickle:  upload during the event, throttled, paused during matches.
+     * trickle:  upload during the event; no upload starts while a match is
+     *           live, and there is no bandwidth cap beyond that.
      * live:     upload as soon as a video is cut.
      * Default is deferred: the live stream must never compete with an upload.
      */
@@ -64,7 +65,7 @@ export interface Config {
     /** Uploaded unlisted, flipped to public only once TBA linking succeeds. */
     privacy: 'private' | 'unlisted' | 'public';
     publicAfterLink: boolean;
-    playlists: { match: string; analysis: string; segment: string };
+    playlists: { match: string; segment: string };
     /**
      * Closing lines of every description. FIRST's own videos end
      * "(c) 2026 FIRST Robotics Competition", theirs to claim. CalGames is a
@@ -107,7 +108,7 @@ export const DEFAULTS: Config = {
     sourceId: 'program',
     privacy: 'unlisted',
     publicAfterLink: true,
-    playlists: { match: '', analysis: '', segment: '' },
+    playlists: { match: '', segment: '' },
     credit: 'Uploaded by the CalGames Content Desk',
     copyright: '(c) 2026 Western Region Robotics Forum',
   },
@@ -141,7 +142,11 @@ export async function loadConfig(root: string): Promise<Config> {
     const raw = await readFile(join(root, 'config.json'), 'utf8');
     return merge(DEFAULTS, JSON.parse(raw)) as Config;
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      // First run on a fresh machine. Say so now, or the missing publish
+      // credentials get discovered at upload time.
+      console.log('[config] no config.json, using defaults. Copy config.example.json to configure publishing.');
+    } else {
       console.warn(`[config] config.json could not be read (${(err as Error).message}), using defaults.`);
     }
     return structuredClone(DEFAULTS);

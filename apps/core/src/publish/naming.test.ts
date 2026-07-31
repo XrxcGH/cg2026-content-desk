@@ -12,8 +12,14 @@ test('qualification naming matches the official channel', () => {
 test('playoff matches get the (Rn) suffix and sf keys', () => {
   assert.deepEqual(identify('Match 1 (R1)'), { name: 'Match 1 (R1)', key: 'sf1m1' });
   assert.deepEqual(identify('Playoff 1'), { name: 'Match 1 (R1)', key: 'sf1m1' });
+  // The official bracket has five rounds: matches 1-4, 5-8, 9-10, 11-12, 13.
+  // Every boundary is pinned because a wrong (Rn) is unfixable once uploaded.
   assert.deepEqual(identify('Match 5'), { name: 'Match 5 (R2)', key: 'sf5m1' });
-  assert.deepEqual(identify('Match 13'), { name: 'Match 13 (R7)', key: 'sf13m1' });
+  assert.deepEqual(identify('Match 7'), { name: 'Match 7 (R2)', key: 'sf7m1' });
+  assert.deepEqual(identify('Match 9'), { name: 'Match 9 (R3)', key: 'sf9m1' });
+  assert.deepEqual(identify('Match 11'), { name: 'Match 11 (R4)', key: 'sf11m1' });
+  assert.deepEqual(identify('Match 12'), { name: 'Match 12 (R4)', key: 'sf12m1' });
+  assert.deepEqual(identify('Match 13'), { name: 'Match 13 (R5)', key: 'sf13m1' });
 });
 
 test('finals and the tiebreaker', () => {

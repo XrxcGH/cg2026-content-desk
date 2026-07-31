@@ -41,12 +41,44 @@ const has = (name: string): boolean => arg(name) !== undefined;
 
 const port = Number(arg('port') || process.env['PORT'] || 8720);
 const host = arg('host') || process.env['HOST'] || '0.0.0.0';
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  console.error(`[core] the port must be a whole number between 1 and 65535, ` +
+    `got "${arg('port') ?? process.env['PORT']}". Try --port 8720.`);
+  process.exit(1);
+}
+
+// A stray rejected promise must not take the desk down mid-show. Every
+// subsystem here already degrades on its own; log loudly and keep going,
+// because the overlay dying is always the worse outcome.
+process.on('unhandledRejection', reason => {
+  console.error('[core] unhandled rejection:', reason);
+});
+
+// A synchronous crash is still fatal, but the commonest one deserves words
+// instead of a stack: the port already being held, usually by a copy of the
+// desk forgotten in another window.
+process.on('uncaughtException', err => {
+  if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+    console.error(`[core] port ${port} is already in use, probably by another copy of the desk. ` +
+      'Close it, or start this one with --port <n>.');
+  } else {
+    console.error('[core] fatal:', err);
+  }
+  process.exit(1);
+});
 
 const bus = new EventBus();
 const media = new MediaLibrary(join(ROOT, 'media'));
 
-await media.scan();
-await bus.openLog(logPathFor(join(ROOT, 'data', 'events')));
+try { await media.scan(); } catch (err) {
+  console.warn('[media] scan failed, robot cutouts unavailable:', (err as Error).message);
+}
+try {
+  await bus.openLog(logPathFor(join(ROOT, 'data', 'events')));
+} catch (err) {
+  console.warn('[bus] event log disabled, this session cannot be replayed later:',
+    (err as Error).message);
+}
 
 // Automatic replay markers: bursts, lead changes, climbs, phase boundaries.
 // The replay operator should never hunt.
@@ -93,8 +125,16 @@ if (!tools) {
         bitrate: arg('bitrate') || '12M',
         sources,
       });
-      await recorder.start();
-      console.log(`[core] recording ${sources.length} source(s) to ${REC_ROOT}`);
+      try {
+        await recorder.start();
+        console.log(`[core] recording ${sources.length} source(s) to ${REC_ROOT}`);
+      } catch (err) {
+        // Usually an unwritable rec directory. The show must still run; only
+        // recording and replay are lost.
+        recorder = null;
+        console.warn('[rec] recorder failed to start, continuing without recording:',
+          (err as Error).message);
+      }
     }
   }
 }
@@ -128,7 +168,19 @@ const arcade = new ArcadeStore(bus);
 // Crowd trivia, the other gap-filler, played from the audience's phones.
 // A per-event bank in data/trivia.json replaces the default questions.
 const trivia = new TriviaStore(bus, await loadTriviaBank(join(ROOT, 'data', 'trivia.json')));
-trivia.setJoinUrl(`http://${lanAddress() ?? 'localhost'}:${port}/s/quiz`);
+
+const lan = lanAddress();
+if (!lan) {
+  console.warn('[core] no LAN address found: QR codes will say localhost and only work on this machine.');
+} else if (!process.env['LAN_IP']) {
+  const others = lanCandidates().filter(a => a !== lan);
+  if (others.length) {
+    console.log(`[core] QR codes will use ${lan} (also saw ${others.join(', ')}). ` +
+      'If phones cannot reach it, set LAN_IP to the right address.');
+  }
+}
+const lanBase = `http://${lan ?? 'localhost'}:${port}`;
+trivia.setJoinUrl(`${lanBase}/s/quiz`);
 
 async function loadTriviaBank(path: string) {
   try {
@@ -142,15 +194,31 @@ async function loadTriviaBank(path: string) {
   return DEFAULT_QUESTIONS;
 }
 
-/** First non-internal IPv4: what a phone on the venue wifi can reach. */
-function lanAddress(): string | null {
-  const nets = os.networkInterfaces();
-  for (const list of Object.values(nets)) {
+/** Every plausible IPv4, real adapters ranked ahead of virtual ones. */
+function lanCandidates(): string[] {
+  // WSL, Hyper-V, VPN and container adapters all report internal:false, and
+  // os.networkInterfaces() is not ordered by route priority, so "first match"
+  // used to hand the projector QR codes an address no phone could reach.
+  // The regex lives in here rather than at module scope: this function runs
+  // before this point in the module, and a module-scope const would still be
+  // in its temporal dead zone then.
+  const virtualAdapter = /vethernet|wsl|hyper-v|vmware|virtualbox|docker|tailscale|zerotier|loopback/i;
+  const real: string[] = [];
+  const virtual: string[] = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
     for (const net of list ?? []) {
-      if (net.family === 'IPv4' && !net.internal) return net.address;
+      if (net.family !== 'IPv4' || net.internal) continue;
+      // 169.254.x.x means DHCP never answered; nothing else can reach it.
+      if (net.address.startsWith('169.254.')) continue;
+      (virtualAdapter.test(name) ? virtual : real).push(net.address);
     }
   }
-  return null;
+  return [...real, ...virtual];
+}
+
+/** What a phone on the venue wifi can reach. LAN_IP overrides the guess. */
+function lanAddress(): string | null {
+  return process.env['LAN_IP'] || lanCandidates()[0] || null;
 }
 
 // ---- show automation --------------------------------------------------------
@@ -236,12 +304,24 @@ await publish.load();
       [...missing.youtube, ...missing.tba].join(', '));
   } else {
     console.log(`[publish] ready · mode=${config.publish.mode} · event=${config.event.key}`);
+
+    // Register the stream on TBA GameDay once per boot. Idempotent on the TBA
+    // side (the list replaces itself), and a failure is a warning, not a
+    // crash: the show runs fine without GameDay.
+    if (config.stream.webcastUrl) {
+      publish.registerWebcasts([config.stream.webcastUrl])
+        .then(r => { if (r !== null) console.log('[publish] webcast registered on TBA GameDay'); })
+        .catch(err => console.warn('[publish] webcast registration failed:', (err as Error).message));
+    }
   }
 }
 
 // A match video is queued when the score is posted, not at the buzzer: the
 // cut needs the score-reveal timestamp to know where its second part starts.
-if (config.publish.autoQueueMatches) {
+// Not in demo mode: simulated matches look exactly like field data here, and
+// autoQueueMatches defaults on, so a --demo session would otherwise queue
+// fake "Qualification N" uploads.
+if (config.publish.autoQueueMatches && !has('demo')) {
   bus.subscribe(ev => {
     if (ev.type !== 'match.score_posted') return;
     void publish.queueMatch().then(item => {
@@ -252,8 +332,7 @@ if (config.publish.autoQueueMatches) {
 
 const server = startServer({
   bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
-  arcade, trivia,
-  lanBase: `http://${lanAddress() ?? 'localhost'}:${port}`,
+  arcade, trivia, lanBase,
 });
 
 // Phase boundaries are time-driven, not event-driven: endgame lockdown and
@@ -263,14 +342,28 @@ const ticker = setInterval(() => bus.advance(), 100);
 const replayFile = arg('replay');
 if (replayFile) {
   const speed = Number(process.argv[process.argv.indexOf('--replay') + 2] || 1);
-  void bus.replay(resolve(ROOT, replayFile), Number.isFinite(speed) ? speed : 1);
+  // A mistyped path used to surface as an unhandled rejection stack. One
+  // readable line, and the desk stays up.
+  void bus.replay(resolve(ROOT, replayFile), Number.isFinite(speed) ? speed : 1)
+    .catch(err => console.error(`[bus] replay of ${replayFile} failed: ${(err as Error).message}`));
 } else if (has('demo')) {
-  // The demo also seeds dummy standings, schedule, arcade, and trivia so
-  // every surface can be judged aesthetically without a field.
-  startDemo(bus, { arcade, trivia });
+  if (cheesy) {
+    // Demo events are indistinguishable from field data downstream. Mixing
+    // them would corrupt the event log and every surface at once.
+    console.error('[demo] not started: --cheesy is active, and simulated matches ' +
+      'must never mix with real field data. Drop one of the two flags.');
+  } else {
+    // The demo also seeds dummy standings, schedule, arcade, and trivia so
+    // every surface can be judged aesthetically without a field.
+    startDemo(bus, { arcade, trivia });
+  }
 }
 
+let shuttingDown = false;
 const shutdown = (): void => {
+  // A second Ctrl-C means "now"; never make the operator ask twice.
+  if (shuttingDown) process.exit(1);
+  shuttingDown = true;
   console.log('\n[core] shutting down');
   clearInterval(ticker);
   cheesy?.stop();
@@ -278,11 +371,13 @@ const shutdown = (): void => {
   cues.detach();
   obs?.close();
   server.close();
+  if (!recorder) process.exit(0);
   // Give ffmpeg a moment to finalise the segment it's mid-way through:
   // SIGKILL would leave the most recent file unplayable, which is exactly the
-  // one you'd want after a crash.
-  void recorder?.stop().finally(() => process.exit(0));
-  if (!recorder) process.exit(0);
+  // one you'd want after a crash. Capped, because a child that already died
+  // never answers, and shutdown must not hang on it.
+  setTimeout(() => process.exit(0), 5000);
+  void recorder.stop().finally(() => process.exit(0));
 };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

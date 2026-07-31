@@ -131,7 +131,20 @@ export class ClipStore {
 
   get outDir(): string { return this.#outDir; }
 
+  /**
+   * Source ids get joined into filesystem paths (the segment directory here,
+   * the frame filename in frameAt), so anything but a bare id is either a
+   * typo or a path traversal attempt. Both stop before any path is built.
+   */
+  #checkSourceId(sourceId: string): void {
+    if (!/^[\w-]+$/.test(sourceId)) {
+      throw new Error(`"${sourceId}" is not a recorder source id. ` +
+        `Use the id from the recorder config, e.g. "program".`);
+    }
+  }
+
   async index(sourceId: string): Promise<Segment[]> {
+    this.#checkSourceId(sourceId);
     const dir = join(this.#recRoot, sourceId);
     let names: string[];
     try { names = await readdir(dir); } catch { return []; }
@@ -182,6 +195,33 @@ export class ClipStore {
         `Is the recorder running, and is that window still on disk?`);
     }
 
+    // Overlap is not coverage. A restarted encoder leaves a hole between
+    // segments, and the tail of a range may simply not be on disk yet; the
+    // concat demuxer splices over either case with exit 0 and ships a clip
+    // that is quietly wrong, which is worse than failing. Half a second of
+    // slack absorbs normal segment-boundary jitter without hiding a real
+    // restart (the supervisor's backoff alone is at least a second).
+    const SLACK_MS = 500;
+    const when = (ms: number): string => new Date(ms).toLocaleTimeString();
+    if (segs[0]!.startMs > fromMs + SLACK_MS) {
+      throw new Error(`Recording of "${sourceId}" starts at ${when(segs[0]!.startMs)}, ` +
+        `after the requested ${when(fromMs)}. The head of this range was never recorded.`);
+    }
+    let coveredTo = segs[0]!.startMs;
+    for (const seg of segs) {
+      if (seg.startMs > coveredTo + SLACK_MS) {
+        throw new Error(`Recording of "${sourceId}" has a gap from ${when(coveredTo)} to ` +
+          `${when(seg.startMs)} inside the requested range. The encoder likely restarted ` +
+          `there; this window cannot be cut cleanly from what is on disk.`);
+      }
+      coveredTo = Math.max(coveredTo, seg.startMs + seg.seconds * 1000);
+    }
+    if (coveredTo < toMs - SLACK_MS) {
+      throw new Error(`Recording of "${sourceId}" ends at ${when(coveredTo)}, short of the ` +
+        `requested ${when(toMs)}. If the recorder is still writing that footage, ` +
+        `retrying shortly will pick it up.`);
+    }
+
     // Trim relative to the first covering segment, since the recording almost
     // never starts exactly on the boundary we want.
     const offset = Math.max(0, (fromMs - segs[0]!.startMs) / 1000);
@@ -200,13 +240,20 @@ export class ClipStore {
       filters.push('minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:vsbmc=1');
     }
 
+    // Output-side -ss/-t measure the timeline AFTER the filter chain runs,
+    // where setpts has already stretched it by 1/speed. Seek and duration
+    // must stretch the same way, or a slow-mo clip seeks to the wrong
+    // footage and comes out at the realtime length.
+    const outSeek = offset / speed;
+    const outLen = wanted / speed;
+
     const { code, stderr } = await run(this.#tools.ffmpeg, [
       '-hide_banner', '-loglevel', 'error', '-y',
       '-f', 'concat', '-safe', '0', '-i', listFile,
       // -ss AFTER -i is the accurate (decode-and-discard) seek. Before -i is
       // faster but keyframe-bound, which lands replays on the wrong moment.
-      '-ss', offset.toFixed(3),
-      '-t', wanted.toFixed(3),
+      '-ss', outSeek.toFixed(3),
+      '-t', outLen.toFixed(3),
       ...(filters.length ? ['-vf', filters.join(',')] : []),
       '-c:v', this.#encoder.encoder, ...this.#encoder.args,
       '-an',
@@ -227,6 +274,7 @@ export class ClipStore {
    * slightly wrong. See docs/04.
    */
   async frameAt(sourceId: string, atMs: number): Promise<{ path: string; url: string }> {
+    this.#checkSourceId(sourceId);
     const segs = await this.covering(sourceId, atMs, atMs + 1);
     if (!segs.length) {
       throw new Error(`No footage for "${sourceId}" at ${new Date(atMs).toLocaleTimeString()}.`);

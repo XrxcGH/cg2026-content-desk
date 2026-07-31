@@ -12,6 +12,12 @@ import type { ArcadeStore } from './arcade/store.ts';
 import type { TriviaStore } from './trivia/store.ts';
 import { REBUILT, type Alliance, type RankingRow, type UpcomingMatch } from './types.ts';
 
+// Every demo emission carries this one tag, so a simulated match can never
+// pass for field data in a log, a publish decision, or a confidence check.
+// index.ts additionally refuses --demo alongside --cheesy and keeps demo
+// matches out of the publish auto-queue.
+const DEMO_SOURCE = 'demo';
+
 const RED = [
   { number: 846, name: 'The Funky Monkeys' },
   { number: 1868, name: 'Space Cookies' },
@@ -73,11 +79,13 @@ const scheduledAt = (matchNumber: number): string =>
   new Date(scheduleAnchor + (matchNumber - 42) * 170_000).toISOString();
 
 const upcomingFrom = (n: number): UpcomingMatch[] => {
+  // Every roster team must exist in DEMO_RANKINGS: surfaces join rosters
+  // against the standings, and an unknown number renders nameless.
   const rosters: [number[], number[]][] = [
     // 25801 in the worst slot on purpose: the on-deck fit has to survive it.
-    [[254, 25801, 199], [1678, 649, 8033]],
+    [[254, 25801, 1072], [1678, 649, 8033]],
     [[846, 100, 649], [253, 115, 5940]],
-    [[1868, 8033, 254], [670, 199, 1678]],
+    [[1868, 8033, 254], [670, 1072, 1678]],
     [[115, 253, 846], [25801, 670, 1868]],
     // Beyond the side screens' four: the phone schedule view sees these.
     [[604, 668, 972], [841, 852, 192]],
@@ -142,18 +150,18 @@ function seedTrivia(trivia: TriviaStore): void {
 function seedSelection(bus: EventBus): void {
   const picked = new Set([
     254, 846, 1678, 25801, 100, 1868, 649, 8033,
-    115, 253, 199, 5940, 670, 604, 668, 751, 841, 852, 972,
+    115, 253, 1072, 5940, 670, 604, 668, 751, 841, 852, 972,
   ]);
   bus.emit({
     type: 'alliance_selection.update',
-    source: 'cheesy',
+    source: DEMO_SOURCE,
     payload: {
       // Four per alliance, captain first: CalGames picks a fourth rather than
       // calling a backup later, the way Championship divisions do.
       alliances: [
         { id: 1, teams: [254, 846, 1678, 25801] },
         { id: 2, teams: [100, 1868, 649, 8033] },
-        { id: 3, teams: [115, 253, 199, 5940] },
+        { id: 3, teams: [115, 253, 1072, 5940] },
         { id: 4, teams: [670, 604, 668, 751] },
         { id: 5, teams: [841, 852] },
         { id: 6, teams: [972] },
@@ -182,12 +190,12 @@ export function startDemo(bus: EventBus, extras: DemoExtras = {}): void {
   let matchNumber = 41;
 
   bus.emit({
-    type: 'rankings.updated', source: 'cheesy',
+    type: 'rankings.updated', source: DEMO_SOURCE,
     payload: { rankings: DEMO_RANKINGS, highestPlayedMatch: `Q${matchNumber}` },
   });
   // +2: the loop is about to load matchNumber+1, which is playing, not on deck.
   bus.emit({
-    type: 'queue.updated', source: 'cheesy',
+    type: 'queue.updated', source: DEMO_SOURCE,
     payload: { upcoming: upcomingFrom(matchNumber + 2) },
   });
   try { if (extras.arcade) seedArcade(extras.arcade); } catch (err) {
@@ -203,7 +211,7 @@ export function startDemo(bus: EventBus, extras: DemoExtras = {}): void {
       matchNumber++;
       bus.emit({
         type: 'match.loaded',
-        source: 'cheesy',
+        source: DEMO_SOURCE,
         payload: {
           id: `q${matchNumber}`,
           displayName: `Qualification ${matchNumber}`,
@@ -214,9 +222,9 @@ export function startDemo(bus: EventBus, extras: DemoExtras = {}): void {
       await sleep(6000);
       // Field ready: program flips to the score bar here, ahead of the
       // announcer's countdown, exactly like the real arming signal.
-      bus.emit({ type: 'match.armed', source: 'cheesy' });
+      bus.emit({ type: 'match.armed', source: DEMO_SOURCE });
       await sleep(2500);
-      bus.emit({ type: 'match.start', source: 'cheesy' });
+      bus.emit({ type: 'match.start', source: DEMO_SOURCE });
 
       const score = { red: { fuel: 0, tower: 0 }, blue: { fuel: 0, tower: 0 } };
 
@@ -232,7 +240,7 @@ export function startDemo(bus: EventBus, extras: DemoExtras = {}): void {
           const amount = 1 + Math.floor(Math.random() * 4);
           score[side].fuel += amount;
           bus.emit({
-            type: 'score.delta', source: 'cheesy',
+            type: 'score.delta', source: DEMO_SOURCE,
             payload: { alliance: side, field: 'fuel', amount },
           });
         }
@@ -243,7 +251,7 @@ export function startDemo(bus: EventBus, extras: DemoExtras = {}): void {
           const level = (1 + Math.floor(Math.random() * 3)) as 1 | 2 | 3;
           score[side].tower += REBUILT.TOWER_TELEOP[level];
           bus.emit({
-            type: 'score.delta', source: 'cheesy',
+            type: 'score.delta', source: DEMO_SOURCE,
             payload: { alliance: side, field: 'tower', amount: REBUILT.TOWER_TELEOP[level] },
           });
         }
@@ -253,23 +261,25 @@ export function startDemo(bus: EventBus, extras: DemoExtras = {}): void {
       clearInterval(scoring);
 
       await sleep(2500);
-      bus.emit({ type: 'match.score_posted', source: 'cheesy' });
+      bus.emit({ type: 'match.score_posted', source: DEMO_SOURCE });
 
       // The event moves on: the played match leaves the queue and the
       // standings tick over, so the side screens stay believable.
       bus.emit({
-        type: 'rankings.updated', source: 'cheesy',
+        type: 'rankings.updated', source: DEMO_SOURCE,
         payload: { highestPlayedMatch: `Q${matchNumber}` },
       });
       bus.emit({
-        type: 'queue.updated', source: 'cheesy',
+        type: 'queue.updated', source: DEMO_SOURCE,
         payload: { upcoming: upcomingFrom(matchNumber + 1) },
       });
       await sleep(9000);
     }
   };
 
-  void loop();
+  // The process-level rejection hook would catch this too, but with a message
+  // nobody would connect to the demo going quiet.
+  void loop().catch(err => console.warn('[demo] loop stopped:', (err as Error).message));
 }
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));

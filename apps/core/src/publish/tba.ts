@@ -9,6 +9,10 @@
  * doesn't merely conflict, it DELETES everything not included. Cheesy Arena
  * publishes those natively, so calling them from here would silently destroy
  * the event's results. Hence a hard path allowlist rather than a convention.
+ *
+ * info/update is on the allowlist for one reason: the Trusted API has no
+ * webcast endpoint, the webcast list rides on info/update, and the handler
+ * only touches the keys it is sent. This client only ever sends `webcasts`.
  */
 
 import { createHash } from 'node:crypto';
@@ -17,14 +21,15 @@ const BASE = 'https://www.thebluealliance.com';
 const PREFIX = '/api/trusted/v1';
 
 /**
- * The only four paths this client may ever request. Anything else throws
- * before a request is built.
+ * The only three paths this client may ever request. Anything else throws
+ * before a request is built. These are checked against TBA's actual route
+ * table (py3, trusted_api_main.py): earlier revisions listed webcasts/update
+ * and match_videos/delete, which do not exist and would 404 upstream.
  */
 const ALLOWED = [
   'match_videos/add',
-  'match_videos/delete',
   'media/add',
-  'webcasts/update',
+  'info/update',
 ] as const;
 
 export type AllowedOp = typeof ALLOWED[number];
@@ -74,7 +79,7 @@ export class TbaClient {
     return `${PREFIX}/event/${this.#eventKey}/${op}`;
   }
 
-  async #send(op: AllowedOp, payload: unknown, method: 'POST' | 'PATCH' | 'DELETE' = 'POST'): Promise<unknown> {
+  async #send(op: AllowedOp, payload: unknown): Promise<unknown> {
     if (!this.configured) throw new Error('TBA credentials are not configured (see config.json).');
 
     const path = this.#path(op);
@@ -82,7 +87,8 @@ export class TbaClient {
     const body = JSON.stringify(payload);
 
     const res = await fetch(BASE + path, {
-      method,
+      // Every Trusted API write is POST. The API has no PATCH or DELETE.
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-TBA-Auth-Id': this.#auth.authId,
@@ -101,18 +107,26 @@ export class TbaClient {
     return this.#send('match_videos/add', { [matchKey]: youtubeId });
   }
 
-  /** Event-level video: analysis segments, between-match content. */
+  /**
+   * Event-level video: ceremony segments, between-match content.
+   *
+   * The API parses this body as a bare list of YouTube id strings. An object
+   * shape ({type, foreign_key}) fails its validation with a 400, which burned
+   * every attempt and left segment videos unlisted forever.
+   */
   addEventMedia(youtubeId: string): Promise<unknown> {
-    return this.#send('media/add', [{ type: 'youtube', foreign_key: youtubeId }]);
+    return this.#send('media/add', [youtubeId]);
   }
 
-  /** Register the live stream so the event shows up on TBA GameDay. */
-  setWebcast(url: string): Promise<unknown> {
-    return this.#send('webcasts/update', { add: [{ type: 'youtube', channel: url }] }, 'PATCH');
-  }
-
-  removeWebcast(url: string): Promise<unknown> {
-    return this.#send('webcasts/update', { remove: [{ type: 'youtube', channel: url }] }, 'DELETE');
+  /**
+   * Register the live stream so the event shows up on TBA GameDay.
+   *
+   * The webcast list REPLACES whatever TBA has stored, it is not a delta:
+   * send every webcast the event should show, and an empty list takes them
+   * all down at end of day.
+   */
+  setWebcasts(urls: string[]): Promise<unknown> {
+    return this.#send('info/update', { webcasts: urls.map(url => ({ url })) });
   }
 }
 

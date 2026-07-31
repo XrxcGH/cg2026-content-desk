@@ -26,7 +26,14 @@ const BASE = `http://127.0.0.1:${CORE_PORT}`;
 
 const procs = [];
 const boot = (label, args) => {
-  const p = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  // Clear the event PIN for the children. The docs tell operators to set
+  // REMOTE_PIN for the whole shell session, the spawned core inherits it, and
+  // the /api/markers and /api/cheesy checks at the end then 401 after minutes
+  // of green checkpoints. The harness must always talk to an open desk.
+  const p = spawn(process.execPath, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, REMOTE_PIN: '' },
+  });
   p.stdout.on('data', d => process.stdout.write(`  [${label}] ${d}`.replace(/\n(.)/g, '\n  [' + label + '] $1')));
   p.stderr.on('data', d => process.stderr.write(`  [${label}!] ${d}`));
   procs.push(p);
