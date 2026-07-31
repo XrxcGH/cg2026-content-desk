@@ -35,6 +35,8 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
   text-indent: .12em; box-sizing: border-box;
   box-shadow: inset -1px 0 0 rgba(0,0,0,.12); }
 #phases div[data-p="auto"] { background: var(--btn-hover); color: var(--text); }
+/* Bespoke deep gold: the segment must still read as gold while keeping the
+   gold-hi text above 4.5:1, and even --cg-gold-lo is too light for that. */
 #phases div[data-p="endgame"] { background: #4A3305; color: var(--cg-gold-hi); }
 
 #track { position: absolute; left: 0; right: 0; top: 34px; height: 34px;
@@ -51,8 +53,12 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
 .mk[data-a="red"]  { box-shadow: 0 34px 0 -30px var(--alliance-red); }
 .mk[data-a="blue"] { box-shadow: 0 34px 0 -30px var(--alliance-blue); }
 .mk:hover::after, .mk:focus-visible::after { content: attr(data-label); position: absolute; bottom: -22px; left: 0;
-  white-space: nowrap; background: var(--cg-purple); color: #fff; padding: 3px 7px;
+  white-space: nowrap; background: var(--cg-purple); color: var(--cg-white); padding: 3px 7px;
   font-size: 13px; z-index: 5; }
+/* Late-match markers hang their label to the LEFT: the section's chamfer
+   clip-path cuts anything painted past its edge, and the endgame markers are
+   exactly the ones whose labels matter most. Set in paintMarkers. */
+.mk[data-edge]:hover::after, .mk[data-edge]:focus-visible::after { left: auto; right: 0; }
 .mk:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 #ticks { position: absolute; top: 72px; left: 0; right: 0; height: 16px;
   font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
@@ -79,13 +85,16 @@ input, select { padding: 8px 10px; font-family: var(--font-display); font-size: 
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 
 .cols { display: grid; grid-template-columns: 1fr 330px; gap: 14px; align-items: start; }
-video { width: 100%; background: #000; clip-path: var(--chamfer); --ch: 10px; }
+video { width: 100%; background: var(--cg-black); clip-path: var(--chamfer); --ch: 10px; }
 #clips div { display: grid; grid-template-columns: 1fr auto; gap: 6px; padding: 7px 0;
   border-bottom: 1px solid var(--surface-sunken); font-size: 14px; }
 #clips a { color: var(--accent); text-decoration: none; font-weight: 600; }
 .mono { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); }
 #status { font-size: 14px; min-height: 18px; }
-#status[data-err] { color: var(--st-bad); }
+/* --st-bad (#C13030) is only 3.17:1 on this panel. Errors are the one thing
+   the operator must read at a glance, so this uses the lightened console red
+   the other dark surfaces use. */
+#status[data-err] { color: #FF6B6B; }
 </style>
 </head>
 <body>

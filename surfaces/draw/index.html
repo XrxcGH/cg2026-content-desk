@@ -19,7 +19,7 @@ body {
   touch-action: none; -webkit-user-select: none; user-select: none;
 }
 
-/* 16:9 pad, letterboxed to match the programme's aspect, so a circle drawn here
+/* 16:9 pad, letterboxed to match the program's aspect, so a circle drawn here
    lands as a circle on air. */
 #pad {
   flex: 1; min-height: 0; position: relative;
@@ -32,7 +32,7 @@ body {
    cases entirely, which is what you want in a broadcast tool. */
 #frameBox {
   position: relative;
-  background: #000;
+  background: var(--cg-black);
   box-shadow: inset 0 0 0 3px var(--cg-gold-lo);
   overflow: hidden;
 }
@@ -80,7 +80,9 @@ body {
 
 .ink { width: 44px; height: 44px; border: 0; cursor: pointer; padding: 0;
   clip-path: var(--chamfer); --ch: 7px; box-shadow: inset 0 0 0 3px transparent; }
-.ink[aria-pressed="true"] { box-shadow: inset 0 0 0 4px var(--cg-white); }
+/* Two-tone ring: a plain white ring was invisible on the white "note" swatch,
+   so the analyst could not tell which ink was active. */
+.ink[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--cg-black), inset 0 0 0 6px var(--cg-white); }
 .tool:focus-visible, .ink:focus-visible, .tag:focus-visible {
   outline: 3px solid var(--focus-ring); outline-offset: 2px;
 }
@@ -91,6 +93,9 @@ body {
 #status { position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; gap: 8px;
   font-family: var(--font-mono); font-size: 12px; color: var(--cg-white-dim); opacity: .5; }
+/* Only the healthy state is dimmed. When the link is down the word is the
+   whole point, and at half opacity it fell below AA contrast on this bar. */
+#status:has(.dot:not([data-up="true"])) { opacity: 1; }
 #status .dot[data-up="true"] + #statusText { display: none; }
 .dot { width: 8px; height: 8px; clip-path: var(--chamfer); --ch: 3px; background: var(--st-bad); }
 .dot[data-up="true"] { background: var(--st-ok); }
@@ -136,7 +141,7 @@ body {
   <div class="grp">
     <button class="tool" id="undo">Undo<small>Z</small></button>
     <button class="tool" id="clear">Clear<small>C</small></button>
-    <button class="tool" id="hide">Hide<small>H</small></button>
+    <button class="tool" id="hide" aria-pressed="false">Hide<small>H</small></button>
   </div>
 
   <div id="status" aria-live="polite"><span class="dot" id="dot" aria-hidden="true"></span><span id="statusText">connecting</span></div>
@@ -232,7 +237,9 @@ canvas.addEventListener('pointerdown', e => {
   const id = `s${Date.now().toString(36)}${seq++}`;
   const width = e.pressure > 0 && e.pointerType === 'pen'
     ? Math.round(4 + e.pressure * 8)   // stylus pressure -> stroke width
-    : 7;
+    // From the token, so the pad and the shared renderer agree on one number.
+    : parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue('--ink-width')) || 7;
 
   const init = { k: 'begin', id, tool, ink, width };
   book.begin(init);
@@ -316,9 +323,18 @@ for (const b of document.querySelectorAll('[data-ink]')) {
 
 const doUndo = () => { book.undo(); relay({ k: 'undo' }); };
 const doClear = () => { book.clear(); relay({ k: 'clear' }); desk.emit({ type: 'telestrator.clear' }); };
+// Hide is a toggle. The reducer's only path back to hidden:false is a
+// telestrator.frame emit, so a one-way Hide stranded the analyst drawing into
+// a blanked render with no way back from the pad. Re-emitting the current
+// frame (even null) unhides without changing what is frozen.
+const doHide = () => {
+  const tele = desk.state?.telestrator;
+  if (tele?.hidden) desk.emit({ type: 'telestrator.frame', payload: { frame: tele.frame ?? null } });
+  else desk.emit({ type: 'telestrator.hide' });
+};
 $('undo').onclick = doUndo;
 $('clear').onclick = doClear;
-$('hide').onclick = () => desk.emit({ type: 'telestrator.hide' });
+$('hide').onclick = doHide;
 
 // ---- team tags, built from the loaded match --------------------------------
 function buildTags(state) {
@@ -351,11 +367,47 @@ desk.on('state', s => {
     buildTags.lastMatch = s.match?.id ?? null;
     buildTags(s);
   }
+  // The pad keeps drawing locally while the render is blanked, so the button
+  // is the only place the analyst can see the output is hidden.
+  const hidden = !!s.telestrator?.hidden;
+  if (String(hidden) !== $('hide').getAttribute('aria-pressed')) {
+    $('hide').setAttribute('aria-pressed', String(hidden));
+    $('hide').innerHTML = hidden ? 'Hidden<small>H</small>' : 'Hide<small>H</small>';
+  }
 });
 
+// Strokes are write traffic. After a desk restart or an expired cookie the
+// socket reconnects read-only: every relay is rejected and the analyst would
+// draw into the void behind a green dot. Latch the failure; the only way back
+// is a reload through /signin.
+let signedOut = false;
+function markSignedOut() {
+  signedOut = true;
+  $('dot').dataset.up = 'false';
+  $('statusText').textContent = 'signed out: reload this page';
+}
+desk.on('denied', markSignedOut);
+// The server only says 'denied' once a stroke is actually sent, so ask it
+// directly on every reconnect instead of waiting for ink to vanish on air.
+async function checkSession() {
+  try {
+    const status = await fetch('/api/auth/status').then(r => r.json());
+    if (status.required && !status.authed) markSignedOut();
+  } catch { /* transient; the denied latch still covers it */ }
+}
 desk.on('link', up => {
+  if (signedOut) return;
   $('dot').dataset.up = String(up);
   $('statusText').textContent = up ? 'linked' : 'reconnecting…';
+  if (up) {
+    checkSession();
+    // If the socket dropped mid-stroke, tele's copy of that stroke is still
+    // open: it never got the 'end' and would sit at full alpha until Clear.
+    // Close out anything the pad has already finished locally.
+    for (const s of book.strokes) {
+      if (s.done) relay({ k: 'end', id: s.id });
+    }
+  }
 });
 
 // ---- render loop -----------------------------------------------------------
@@ -371,11 +423,14 @@ startTicker(() => {
 // ---- keyboard (for a laptop fallback; the tablet uses the toolbar) ---------
 const KEYS = { p: 'pen', a: 'arrow', e: 'ellipse', s: 'spotlight', r: 'path' };
 addEventListener('keydown', e => {
+  // Bare keys only: a reflexive Ctrl+C (copy) or Cmd+H (hide the browser)
+  // must never wipe or blank the on-air drawing.
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key.toLowerCase();
   if (KEYS[k]) { setTool(KEYS[k]); return; }
   if (k === 'z') doUndo();
   if (k === 'c') doClear();
-  if (k === 'h') desk.emit({ type: 'telestrator.hide' });
+  if (k === 'h') doHide();
 });
 </script>
 </body>

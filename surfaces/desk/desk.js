@@ -13,7 +13,19 @@ const $ = id => document.getElementById(id);
 const desk = connect('desk');
 
 // ---- connection ------------------------------------------------------------
+// A core restart regenerates the session token, so this page's cookie goes
+// stale while the socket reconnects and reports healthy: every emit then
+// fails behind a green dot. This page has no PIN UI, so the only way back in
+// is a reload through /signin. Latch the message so a later reconnect cannot
+// paint the dot green again over a session that is still dead.
+let signedOut = false;
+desk.on('denied', () => {
+  signedOut = true;
+  $('dot').dataset.up = 'false';
+  $('linkText').textContent = 'signed out: reload this page to sign in again';
+});
 desk.on('link', up => {
+  if (signedOut) return;
   $('dot').dataset.up = String(up);
   $('linkText').textContent = up ? 'core connected' : 'reconnecting…';
 });
@@ -176,8 +188,15 @@ const KEYS = {
 };
 
 addEventListener('keydown', e => {
+  // Browser chords stay with the browser. Without this, Ctrl+0 (reset zoom,
+  // pressed constantly on laptops) aborted the live match, and Ctrl+A
+  // published a phantom blue score.
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   // Never steal keys from a field the operator is typing in.
   if (e.target.matches('input, select, textarea')) return;
+  // Space on a focused button must press that button, not drop a marker:
+  // preventDefault on keydown would swallow the activation entirely.
+  if (e.key === ' ' && e.target.closest('button')) return;
   const fn = KEYS[e.key.toLowerCase()];
   if (!fn) return;
   e.preventDefault();

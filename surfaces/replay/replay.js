@@ -20,7 +20,9 @@ const PHASES = [
   ['transition', 'Trans', 0, REBUILT.TRANSITION_END],
   ['shift1', 'Shift 1', 10, 35], ['shift2', 'Shift 2', 35, 60],
   ['shift3', 'Shift 3', 60, 85], ['shift4', 'Shift 4', 85, 110],
-  ['endgame', 'Endgame', REBUILT.ENDGAME_START, T1],
+  // 'End game', two words, to match PHASE_LABEL: the desk console sits next
+  // to this one and the two must not spell the same phase differently.
+  ['endgame', 'End game', REBUILT.ENDGAME_START, T1],
 ];
 
 $('phases').innerHTML = PHASES.map(([id, label, a, b]) =>
@@ -36,6 +38,13 @@ $('ticks').innerHTML = TICK_CLOCKS.map((c, i) => {
 }).join('');
 
 function pct(clock) { return ((clock - T0) / SPAN) * 100; }
+
+// Marker and clip labels derive from operator-typed text (match display
+// names); a stray < must not eat the row. Same helper as the var console.
+function esc(x) {
+  return String(x ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
 
 // ---- state ----------------------------------------------------------------
 let markers = [];
@@ -60,7 +69,9 @@ function paintSelection() {
   if (inClock === null) { sel.style.display = 'none'; $('bounds').textContent = 'in - · out - · -'; return; }
   sel.style.display = 'block';
   sel.style.left = `${pct(inClock)}%`;
-  sel.style.width = `${Math.max(0.4, pct(outClock) - pct(inClock))}%`;
+  // outClock may run past the buzzer on purpose (T1 + 20, for the celebration),
+  // but nothing clips #sel, so the painted bar must stop at the track edge.
+  sel.style.width = `${Math.max(0.4, Math.min(100, pct(outClock)) - pct(inClock))}%`;
   $('bounds').textContent =
     `in ${clockDisplay(inClock)} · out ${clockDisplay(outClock)} · ${(outClock - inClock).toFixed(1)}s`;
 }
@@ -77,17 +88,23 @@ function paintMarkers() {
   for (const el of document.querySelectorAll('.mk')) el.remove();
   for (const m of markers) {
     if (m.matchClock === null || m.matchClock === undefined) continue;
+    // Manual markers can arrive label-less; "undefined" on a tooltip is worse
+    // than a plain name.
+    const label = m.label ?? 'Manual mark';
     const el = document.createElement('div');
     el.className = 'mk';
     el.dataset.pri = String(m.priority ?? 2);
     if (m.alliance) el.dataset.a = m.alliance;
-    el.dataset.label = m.label;
+    el.dataset.label = label;
     el.style.left = `${pct(m.matchClock)}%`;
+    // Past 60% of the track a left-anchored tooltip runs into the section's
+    // chamfer clip-path and gets cut; those anchor right instead (see CSS).
+    if (pct(m.matchClock) > 60) el.dataset.edge = '';
     // Keyboard-reachable: an operator tabbing through the page (or a screen
     // reader) can jump to a marker the same way a mouse click does.
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
-    el.setAttribute('aria-label', `Frame ${m.label} at ${clockDisplay(m.matchClock)}`);
+    el.setAttribute('aria-label', `Frame ${label} at ${clockDisplay(m.matchClock)}`);
     // Frame the marker: enough lead-in to see the build-up, enough tail to see
     // the result. A human hits the button late, so the marker itself already
     // sits 2s back (see the desk console).
@@ -107,7 +124,7 @@ function paintMarkers() {
   $('markers').innerHTML = markers.length
     ? [...markers].reverse().map(m =>
         `<div style="padding:4px 0;border-bottom:1px solid var(--surface-sunken)">
-           <b>${m.label}</b>
+           <b>${esc(m.label ?? 'Manual mark')}</b>
            <span class="mono"> ${m.matchClock === null ? '-' : clockDisplay(m.matchClock)}</span>
          </div>`).join('')
     : '<i>None yet. They appear as the match runs.</i>';
@@ -190,7 +207,7 @@ function showClip(clip) {
   $('preview').src = clip.url;
   $('clipsEmpty')?.remove();
   const row = document.createElement('div');
-  row.innerHTML = `<a href="${clip.url}" target="_blank">${clip.label}</a>` +
+  row.innerHTML = `<a href="${clip.url}" target="_blank">${esc(clip.label)}</a>` +
     `<span class="mono">${clip.seconds.toFixed(1)}s${clip.speed !== 1 ? ` ${clip.speed}×` : ''}</span>`;
   $('clips').prepend(row);
   while ($('clips').children.length > 12) $('clips').lastChild.remove();
@@ -199,7 +216,20 @@ function showClip(clip) {
 async function sendFrame() {
   if (!lastClip) return say('Cut a clip first, then pause on the frame you want.', true);
   // The frame the operator is actually looking at, mapped back to wall clock.
-  const atMs = lastClip.ranges[0].fromMs + ($('preview').currentTime * 1000 * (lastClip.speed ?? 1));
+  // A multi-part match video plays its ranges back to back with the referee
+  // delay removed, so the pause position is walked range by range: mapping it
+  // all onto ranges[0] used to point part-2 frames into the removed gap.
+  const speed = lastClip.speed ?? 1;
+  let t = $('preview').currentTime;
+  // The last range absorbs any float overshoot at the very end of playback,
+  // and the clamp keeps the result inside it.
+  let range = lastClip.ranges[lastClip.ranges.length - 1];
+  for (const r of lastClip.ranges.slice(0, -1)) {
+    const dur = (r.toMs - r.fromMs) / 1000 / speed;
+    if (t <= dur) { range = r; break; }
+    t -= dur;
+  }
+  const atMs = Math.min(range.toMs, range.fromMs + t * 1000 * speed);
   say('Sending frame…');
   try {
     await post('/api/frame', { sourceId: lastClip.sourceId, atMs: Math.round(atMs) });
@@ -209,6 +239,9 @@ async function sendFrame() {
 
 function take() {
   if (!lastClip) return say('Nothing cut yet.', true);
+  // emit() drops silently on a closed socket, so "Sent" would be a lie there.
+  // A server-side rejection comes back as 'denied' and overwrites this line.
+  if (!desk.connected) return say('Link is down. Wait for the dot, then try again.', true);
   desk.emit({ type: 'replay.play', payload: lastClip });
   say('Sent to program.');
 }
@@ -228,14 +261,29 @@ for (const b of document.querySelectorAll('[data-nudge]')) {
 }
 
 addEventListener('keydown', e => {
-  if (e.target.matches('input, select, textarea, video')) return;
+  // Bare keys only: Ctrl+F must stay find-in-page, not become send-frame.
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Buttons and links included: Enter on a focused button must activate that
+  // button, not fire cut() over it (preventDefault cancels the activation).
+  if (e.target.closest('button, a, input, select, textarea, video')) return;
   if (e.key === 'Enter') { e.preventDefault(); cut(); }
   if (e.key.toLowerCase() === 'f') { e.preventDefault(); sendFrame(); }
   if (e.key.toLowerCase() === 't') { e.preventDefault(); take(); }
 });
 
 // ---- live wiring -----------------------------------------------------------
+// A core restart regenerates the session, so the cookie can die while the
+// socket reconnects and reports healthy: every take is then rejected behind a
+// green dot. Latch the failure; the only way back is a reload through /signin.
+let signedOut = false;
+desk.on('denied', () => {
+  signedOut = true;
+  $('dot').dataset.up = 'false';
+  $('linkText').textContent = 'signed out: reload this page';
+  say('Signed out. Reload this page and sign in again.', true);
+});
 desk.on('link', up => {
+  if (signedOut) return;
   $('dot').dataset.up = String(up);
   $('linkText').textContent = up ? 'linked' : 'reconnecting…';
   if (up) { loadSources(); loadMarkers(); }

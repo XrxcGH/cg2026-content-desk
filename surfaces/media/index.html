@@ -32,7 +32,10 @@ p.sub { color: var(--text-dim); margin: 0 0 22px; line-height: 1.6; }
   overflow-wrap: anywhere; }
 .meta div { color: var(--text-dim); font-size: 14px; margin-top: 2px; }
 .warn { color: var(--st-warn); font-size: 14px; margin-top: 4px; line-height: 1.5; }
-.err { color: var(--st-bad); font-size: 14px; margin-top: 4px; line-height: 1.5; }
+/* --st-bad (#C13030) is only 3.17:1 on the raised card. A failed upload is
+   the one thing the photographer must notice, so this uses the lightened
+   console red the other dark surfaces use. */
+.err { color: #FF6B6B; font-size: 14px; margin-top: 4px; line-height: 1.5; }
 input[type=number] { width: 92px; padding: 8px 10px; font-family: var(--font-num);
   font-size: 15px; background: var(--page-bg); color: var(--text);
   border: 2px solid var(--surface-sunken); }
@@ -67,7 +70,7 @@ input:focus { outline: none; border-color: var(--accent); }
 
   <div class="tips">
     <h2>Shooting notes</h2>
-    <b>The white-backdrop trap:</b> most FRC robots are bare aluminium and white
+    <b>The white-backdrop trap:</b> most FRC robots are bare aluminum and white
     polycarbonate. That's exactly what an automated background remover deletes.
     Add a rim light from behind. Expose the backdrop about a stop brighter than
     the robot but <b>not</b> blown to pure white. Around 235-245 still cuts cleanly
@@ -132,9 +135,13 @@ function row(file) {
   input.value = guessTeam(file.name);
   queue.prepend(el);
 
+  // Guards the double fire when Enter commits a change: keydown and change
+  // both call upload for the same number. Cleared on failure so Enter retries.
+  let lastSent = null;
   const upload = async () => {
     const team = Number(input.value);
-    if (!team) return;
+    if (!team || team === lastSent) return;
+    lastSent = team;
     const st = el.querySelector('.st');
     st.textContent = 'uploading…';
     try {
@@ -150,6 +157,7 @@ function row(file) {
       const w = el.querySelector('.warn');
       if (body.warnings?.length) { w.hidden = false; w.textContent = body.warnings.join(' '); }
     } catch (err) {
+      lastSent = null;
       st.textContent = 'failed';
       const e = el.querySelector('.err');
       e.hidden = false;
@@ -158,7 +166,15 @@ function row(file) {
   };
 
   input.addEventListener('change', upload);
-  if (input.value) upload();
+  // Enter always confirms: `change` only fires on an edit, so a prefilled
+  // guess the volunteer merely agrees with would otherwise never upload.
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') upload(); });
+  // Only a filename that IS the team number uploads unprompted. A looser
+  // guess ("Screenshot 2026-10-16.png" contains 2026) once replaced that
+  // team's robot cutout before anyone could correct it.
+  const sure = /^\d{1,5}(?:\s*v\d+)?$/i.test(file.name.replace(/\.png$/i, '').trim());
+  if (input.value && sure) upload();
+  else if (input.value) el.querySelector('.st').textContent = 'check the team number, then press Enter';
 }
 </script>
 </body>

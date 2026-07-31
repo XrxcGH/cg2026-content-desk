@@ -60,7 +60,10 @@ input.wide { flex: 1; min-width: 180px; }
 #bracket .bset[data-state="live"] .bstate { color: var(--accent); }
 .mono { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); }
 #status { font-size: 14px; min-height: 18px; }
-#status[data-err] { color: var(--st-bad); }
+/* --st-bad (#C13030) is only 3.17:1 on this panel. Errors are the one thing
+   the operator must read at a glance, so this uses the lightened console red
+   the other dark surfaces use. */
+#status[data-err] { color: #FF6B6B; }
 </style>
 </head>
 <body>
@@ -85,6 +88,10 @@ input.wide { flex: 1; min-width: 180px; }
       </select>
       <label class="in" for="round">Round</label>
       <input id="round" class="wide" placeholder="Winners Semifinal" value="Winners Semifinal">
+      <select id="bestOf" aria-label="Set length">
+        <option value="3" selected>Best of 3</option>
+        <option value="5">Best of 5</option>
+      </select>
     </div>
     <div class="row">
       <input id="p1" class="wide" placeholder="Player 1" aria-label="Player 1 name">
@@ -105,7 +112,7 @@ input.wide { flex: 1; min-width: 180px; }
 
     <div class="mid" id="setRound" style="margin:12px 0 8px" aria-live="polite">no set running</div>
     <div id="scoreRows" aria-live="polite"><p class="hint">Start a set and score buttons appear here,
-      one row per player. Versus sets end on their own at 2 wins; free-for-alls end
+      one row per player. Versus sets end on their own at 2 wins (3 for a best-of-5 grand final); free-for-alls end
       when you press End set.</p></div>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="endSet">End set</button>
@@ -255,6 +262,9 @@ function paint(s) {
   for (const rowEl of document.querySelectorAll('#gpRows button[data-racer]')) {
     rowEl.onclick = () => {
       const cur = $('order').value.trim();
+      // A double-tap must not enter the racer twice: the store would credit
+      // them with two finishing positions from one race.
+      if (cur.split(',').some(s => s.trim().toLowerCase() === rowEl.dataset.racer.toLowerCase())) return;
       $('order').value = cur ? `${cur}, ${rowEl.dataset.racer}` : rowEl.dataset.racer;
     };
   }
@@ -265,9 +275,17 @@ function paint(s) {
 
 // Bracket metadata from start.gg. Load pre-fills the set form, but the operator
 // still starts the set and types every score, which is the whole point.
+let hadBracketSets = false;
 function paintBracket(sets) {
   const open = sets.filter(b => b.state !== 'complete').slice(0, 10);
-  if (!open.length) return;   // keep the how-to hint until there is real data
+  if (!open.length) {
+    // Keep the how-to hint until there is real data. But once sets have been
+    // painted, an empty list means the bracket FINISHED: without this repaint
+    // the last open sets stayed on screen forever, live Load buttons and all.
+    if (hadBracketSets) $('bracket').innerHTML = '<p class="hint">All bracket sets are complete.</p>';
+    return;
+  }
+  hadBracketSets = true;
   const label = p => escapeHtml(p.team ? `${p.team} ${p.name}` : p.name);
   $('bracket').innerHTML = open.map((b, i) =>
     `<div class="bset" data-state="${b.state}">` +
@@ -306,7 +324,8 @@ $('startSet').onclick = async () => {
     });
   }
   try {
-    await post('set', { game: $('game').value, round: $('round').value, players });
+    await post('set', { game: $('game').value, round: $('round').value, players,
+      bestOf: Number($('bestOf').value) });
     say(players.length > 2 ? `Free-for-all live · ${players.length} players.` : 'Versus set live.');
   } catch (e) { say(e.message, true); }
 };
@@ -329,6 +348,9 @@ $('recordRace').onclick = async () => {
   const order = names.map(n => snap.gp.racers.find(r =>
     r.name.toLowerCase() === n.toLowerCase() || String(r.team) === n)?.id).filter(Boolean);
   if (order.length !== names.length) return say('Some names did not match a racer.', true);
+  // Duplicates pass the length check because both arrays grow together, and
+  // the store records the order verbatim: one racer would score twice.
+  if (new Set(order).size !== order.length) return say('A racer appears twice in the order.', true);
   try { await post('race', { order }); $('order').value = ''; say('Race recorded.'); }
   catch (e) { say(e.message, true); }
 };

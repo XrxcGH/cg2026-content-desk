@@ -39,7 +39,7 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
 
 /* Capped so the step buttons stay on screen: a ref reviewing a call should
    never have to scroll between looking and stepping. */
-.viewer { background: #000; aspect-ratio: 16 / 9; max-height: 46vh; margin: 0 auto;
+.viewer { background: var(--cg-black); aspect-ratio: 16 / 9; max-height: 46vh; margin: 0 auto;
   display: grid; place-items: center;
   clip-path: var(--chamfer); --ch: 10px; overflow: hidden; }
 .viewer img { width: 100%; height: 100%; object-fit: contain; }
@@ -62,8 +62,9 @@ button:hover { background: var(--btn-hover); }
 button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
 button.key { background: var(--accent); color: var(--cg-black); }
 button[disabled] { opacity: .45; cursor: not-allowed; }
-select { padding: 9px 12px; background: var(--surface-sunken); color: var(--text);
-  border: 2px solid #3A1349; font-family: var(--font-cond); font-size: 14px; }
+/* Background, color and border come from the shared console field rule in
+   tokens.css; only the sizing is local. */
+select { padding: 9px 12px; font-family: var(--font-cond); font-size: 14px; }
 
 .marks { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
 .mark { display: grid; grid-template-columns: 68px 1fr auto; gap: 12px; align-items: center;
@@ -136,7 +137,7 @@ kbd { font-family: var(--font-num); background: var(--surface-sunken); padding: 
 <script type="module">
 import { mountNav } from '/shared/nav.js';
 mountNav('var');
-import { PHASE_LABEL, clockDisplay, connect, phaseAt } from '/shared/desk-client.js';
+import { PHASE_LABEL, REBUILT, clockDisplay, connect, phaseAt } from '/shared/desk-client.js';
 
 // The ref says "twelve seconds left", not "second 128", so the big number is
 // the countdown the whole gym saw. The phase underneath keeps it unambiguous,
@@ -202,26 +203,37 @@ async function grab() {
   if (busy) return;
   if (startedAt === null) return fail('No match has started, so there is no clock to seek against.');
   busy = true;
+  // Steps that land while a grab is in flight move `at` but are dropped by
+  // the busy guard, so remember which position this grab is for.
+  const wanted = at;
   $('err').textContent = '';
   try {
     const res = await fetch('/api/frame', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       // send:false is the whole safety story: grab it, show it here, tell nobody.
+      // matchStartedAt is the wall time of clock -20 (auto start), not clock 0,
+      // so the offset is part of the mapping: without it every frame sat 20s
+      // early of its label. Must match replay.js wallAt(), because a referee
+      // and a replay operator comparing screens have to see the same frame.
       body: JSON.stringify({
         sourceId: $('src').value,
-        atMs: Math.round(startedAt + at * 1000),
+        atMs: Math.round(startedAt + (wanted - REBUILT.AUTO_START) * 1000),
         send: false,
       }),
     });
     const body = await res.json();
     if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-    $('viewer').innerHTML = `<img alt="Frame at ${clockLabel(at)}" src="${body.url}?t=${Date.now()}">`;
+    $('viewer').innerHTML = `<img alt="Frame at ${clockLabel(wanted)}" src="${body.url}?t=${Date.now()}">`;
   } catch (err) {
     fail(err.message);
   } finally {
     busy = false;
   }
+  // The label already shows the newest position; without a trailing grab the
+  // frame on screen would silently stay at the position it had when the last
+  // request left, which on a review tool is a real hazard.
+  if (at !== wanted) void grab();
 }
 
 function fail(message) { $('err').textContent = message; }

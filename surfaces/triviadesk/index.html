@@ -48,7 +48,10 @@ input:focus { outline: none; border-color: var(--accent); }
 #standings div { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px;
   padding: 6px 0; border-bottom: 1px solid var(--surface-sunken); font-size: 13px; }
 #status { font-size: 14px; min-height: 18px; }
-#status[data-err] { color: var(--st-bad); }
+/* --st-bad (#C13030) is only 3.17:1 on this panel. Errors are the one thing
+   the host must read at a glance, so this uses the lightened console red the
+   other dark surfaces use. */
+#status[data-err] { color: #FF6B6B; }
 /* ---- question bank editor ---- */
 #bank { display: flex; flex-direction: column; gap: 8px; }
 .qrow { display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: center;
@@ -185,7 +188,9 @@ function paint(s) {
     : `question ${s.questionIndex + 1} of ${s.questionCount} · ${s.phase}`;
 
   const q = s.question;
-  $('cat').textContent = q?.category ?? ' ';
+  // The escaped nbsp holds the line box like the markup's &nbsp; does. A
+  // plain space collapses, .cat loses its height, and the question jumps.
+  $('cat').textContent = q?.category ?? '\u00a0';
   $('qText').textContent = q?.text ??
     (s.questionIndex >= s.questionCount
       ? 'Bank exhausted. Reset to run it again.'
@@ -201,8 +206,8 @@ function paint(s) {
   $('standings').innerHTML = s.standings.length
     ? s.standings.map(row =>
         `<div><span class="mono">${row.rank}</span>` +
-        `<span>${esc(row.player.name)}${row.player.team ? ' · ' + row.player.team : ''}</span>` +
-        `<span class="mono">${row.player.score} pts · ${row.player.correct} right</span></div>`).join('')
+        `<span>${esc(row.name)}${row.team ? ' · ' + row.team : ''}</span>` +
+        `<span class="mono">${row.score} pts · ${row.correct} right</span></div>`).join('')
     : '<p class="hint">Nobody in yet. The overlay shows the join URL.</p>';
 }
 

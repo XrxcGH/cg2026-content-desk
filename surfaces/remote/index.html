@@ -39,8 +39,11 @@ h1 { margin: 0; font-size: 19px; font-variation-settings: "wdth" 118; }
   clip-path: var(--chamfer); --ch: 14px; padding: 14px 16px; margin-bottom: 12px;
 }
 .now .s { font-family: var(--font-num); font-weight: 900; font-size: 40px; line-height: 1; }
-.now .s.red { color: var(--alliance-red); }
-.now .s.blue { color: var(--alliance-blue); text-align: right; }
+/* Official alliance red/blue fail even the 3:1 large-text floor on the purple
+   panel (2.9:1 and 2.1:1). Lightened console-only variants, same as the desk
+   and talent views; broadcast surfaces keep the exact official hex as fills. */
+.now .s.red { color: #FF6B6B; }
+.now .s.blue { color: #6FB6FF; text-align: right; }
 .now .mid { text-align: center; }
 .now .clk { font-family: var(--font-num); font-weight: 900; font-size: 26px; line-height: 1; color: var(--cg-gold); }
 /* Tracking adds a trailing space to every glyph, so centered tracked text
@@ -110,7 +113,9 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-sp
 <div id="gate">
   <div class="box">
     <h2>Enter show PIN</h2>
-    <input id="pin" inputmode="numeric" autocomplete="off" placeholder="••••">
+    <!-- type=password masks the PIN from shoulder surfers in a crowded venue;
+         inputmode=numeric keeps the digit keypad, same pairing as /signin. -->
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="••••">
     <button class="b b--go b--wide" id="unlock" style="width:100%">Unlock</button>
     <p class="hint">Anyone who can reach this page can drive the broadcast.
       The PIN is set with <code>REMOTE_PIN</code> on the desk.</p>
@@ -141,6 +146,10 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-sp
       <button class="b" data-screen="match">Match</button>
       <button class="b" data-screen="score">Score</button>
       <button class="b b--warn" data-screen="blank">Blank</button>
+      <!-- Every take above holds the screen until Auto releases it. Without
+           this button one tap here would freeze the show's automation with no
+           way back from the phone. -->
+      <button class="b b--wide" data-screen="auto">Auto<small>follow the match</small></button>
     </div>
   </section>
 
@@ -148,7 +157,9 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-sp
     <h2>Match</h2>
     <div class="grid three">
       <button class="b" data-emit="match.preview">Preview</button>
-      <button class="b" data-emit="match.prestart">Prestart</button>
+      <!-- Arm, not Prestart: armed flips program to the score bar before the
+           countdown; prestart is a field-reset signal nothing here consumes. -->
+      <button class="b" data-emit="match.armed">Arm</button>
       <button class="b b--go" data-emit="match.start">Start</button>
       <button class="b" data-emit="match.end">End</button>
       <button class="b" data-emit="match.score_posted">Post</button>
@@ -181,7 +192,7 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-sp
 <div id="toast"></div>
 
 <script type="module">
-import { connect, clockDisplay, phaseAt, PHASE_LABEL, startTicker } from '/shared/desk-client.js';
+import { connect, clockDisplay, clockDisplayFor, phaseFor, PHASE_LABEL, startTicker } from '/shared/desk-client.js';
 
 const $ = id => document.getElementById(id);
 const desk = connect('remote');
@@ -243,8 +254,10 @@ desk.on('state', s => {
 
 startTicker(() => {
   const c = desk.matchClock;
-  $('clk').textContent = clockDisplay(c);
-  $('phase').textContent = PHASE_LABEL[phaseAt(c)] ?? '';
+  // The For variants disambiguate a null clock: a finished match reads
+  // Final 0:00 here, never Pre-match 0:20.
+  $('clk').textContent = clockDisplayFor(desk.state, c);
+  $('phase').textContent = PHASE_LABEL[phaseFor(desk.state, c)] ?? '';
 });
 
 // ---- actions ---------------------------------------------------------------
