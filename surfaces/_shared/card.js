@@ -73,6 +73,18 @@ function fitText(ctx, text, maxWidth, startPx, font, minPx = 12) {
 }
 
 /**
+ * Centered tracked text: canvas letterSpacing, like CSS, adds a trailing
+ * advance after the last glyph, so centered ink sits half a track left. The
+ * CSS side corrects with text-indent; here the same correction is half the
+ * track added to x. Sets the tracking, draws, resets to 0.
+ */
+function trackedCenter(ctx, text, x, y, trackPx) {
+  ctx.letterSpacing = `${trackPx}px`;
+  ctx.fillText(text, x + trackPx / 2, y);
+  ctx.letterSpacing = '0px';
+}
+
+/**
  * @param {CanvasRenderingContext2D} ctx
  * @param {object} card
  *   { eventName, matchName, red:{teams:[{number,name}], score, rp}, blue:{...},
@@ -97,9 +109,7 @@ export function drawCard(ctx, card) {
   ctx.font = cond(700)(34);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  ctx.letterSpacing = '6px';
-  ctx.fillText((card.eventName ?? '').toUpperCase(), S / 2, 92);
-  ctx.letterSpacing = '0px';
+  trackedCenter(ctx, (card.eventName ?? '').toUpperCase(), S / 2, 92, 6);
 
   ctx.fillStyle = p.white;
   const mSize = fitText(ctx, card.matchName ?? '', S - 160, 66, num(900));
@@ -140,9 +150,7 @@ export function drawCard(ctx, card) {
     ctx.textAlign = 'center';
     ctx.fillStyle = p.white;
     ctx.font = cond(700)(30);
-    ctx.letterSpacing = '5px';
-    ctx.fillText(label.toUpperCase(), x + blockW / 2, blockY + 74);
-    ctx.letterSpacing = '0px';
+    trackedCenter(ctx, label.toUpperCase(), x + blockW / 2, blockY + 74, 5);
 
     ctx.font = num(900)(150);
     if (card.estimated) {
@@ -159,9 +167,7 @@ export function drawCard(ctx, card) {
     if (isWinner) {
       ctx.fillStyle = p.gold;
       ctx.font = cond(700)(28);
-      ctx.letterSpacing = '4px';
-      ctx.fillText('WINNER', x + blockW / 2, blockY + 264);
-      ctx.letterSpacing = '0px';
+      trackedCenter(ctx, 'WINNER', x + blockW / 2, blockY + 264, 4);
     } else if (won === 'tie') {
       ctx.fillStyle = p.dim;
       ctx.font = cond(600)(26);
@@ -213,8 +219,7 @@ export function drawCard(ctx, card) {
       ctx.letterSpacing = '2px';
       const nameSize = fitText(ctx, name, blockW - 40, 26, cond(600));
       ctx.font = cond(600)(nameSize);
-      ctx.fillText(name, x + blockW / 2, y + 28);
-      ctx.letterSpacing = '0px';
+      trackedCenter(ctx, name, x + blockW / 2, y + 28, 2);
     });
   };
   drawTeams(60, card.red?.teams);
@@ -253,9 +258,7 @@ export function drawCard(ctx, card) {
       ctx.textAlign = 'center';
       ctx.fillStyle = p.dim;
       ctx.font = cond(600)(16);
-      ctx.letterSpacing = '2px';
-      ctx.fillText(b.label.toUpperCase(), px + bw / 2, rpY + bh + 26);
-      ctx.letterSpacing = '0px';
+      trackedCenter(ctx, b.label.toUpperCase(), px + bw / 2, rpY + bh + 26, 2);
 
       px += bw + sp;
     }
@@ -269,9 +272,7 @@ export function drawCard(ctx, card) {
   ctx.textAlign = 'center';
   ctx.fillStyle = p.dim;
   ctx.font = cond(600)(26);
-  ctx.letterSpacing = '4px';
-  ctx.fillText((card.footer ?? '').toUpperCase(), S / 2, S - 52);
-  ctx.letterSpacing = '0px';
+  trackedCenter(ctx, (card.footer ?? '').toUpperCase(), S / 2, S - 52, 4);
 }
 
 /** Build the card model from a DeskState snapshot. */

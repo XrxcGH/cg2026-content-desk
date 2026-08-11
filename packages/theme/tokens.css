@@ -225,7 +225,8 @@
   --btn-hover:      #3A1349;
   --focus-ring:     var(--cg-gold-hi);
   /* Error text on console purples. Lightened past the official alliance red
-     because #ED1C24 reads 2.9:1 on --surface-raised; this reads 6.4:1. */
+     because #ED1C24 reads 4.1:1 on --surface-raised (and only 2.9:1 on brand
+     purple); this reads 6.4:1. */
   --st-bad-text:    #FF6B6B;
 }
 :root[data-surface="console"] body { background: var(--page-bg); }
@@ -468,7 +469,7 @@ html, body {
 /* Operator buttons: fast and tactile. Over 150ms feels laggy to someone
    hitting it 40 times a match. Hover and focus use semantic tokens so the
    light operator surfaces can remap them: raw purple-hi under black text is
-   2.6:1, and a gold focus ring on white is invisible. */
+   2.5:1, and a gold focus ring on white is invisible. */
 .btn {
   font-family: var(--font-cond);
   font-weight: 600; letter-spacing: .1em; text-transform: uppercase;

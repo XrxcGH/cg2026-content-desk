@@ -160,8 +160,9 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       case 'match.aborted':
         return { ...state, matchStartedAt: null, screen: auto(state, 'match') };
 
-      // Keep matchStartedAt so the clip cutter can still map the match onto
-      // wall clock after the buzzer. The clock itself stops via matchEndedAt.
+      // Clearing matchStartedAt is what stops the clock; matchEndedAt
+      // disambiguates the post-match display. The clip cutter still maps the
+      // match onto wall clock via lastMatchStartedAt, set at match.start.
       case 'match.end':
         return { ...state, matchEndedAt: ev.ts, matchStartedAt: null };
 

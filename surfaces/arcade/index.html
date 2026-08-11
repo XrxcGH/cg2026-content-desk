@@ -179,7 +179,8 @@
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--ch)),
                      calc(100% - var(--ch)) 100%, var(--ch) 100%, 0 calc(100% - var(--ch)));
   font-family: var(--font-cond); font-weight: 700; font-size: 28px;
-  letter-spacing: .14em; text-transform: uppercase; color: var(--cg-white);
+  /* text-indent balances the trailing letter-space so the label centers. */
+  letter-spacing: .14em; text-indent: .14em; text-transform: uppercase; color: var(--cg-white);
   white-space: nowrap;
 }
 .ffa-tab::before {

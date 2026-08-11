@@ -115,7 +115,7 @@ export function defaultCues(): Cue[] {
     {
       id: 'hold-celebration',
       name: 'Hold on the buzzer',
-      does: 'Stay on the field wide for four seconds after the buzzer. Do not cut early.',
+      does: 'Re-take the field wide at the buzzer so the celebration stays on air until the score reveal cues.',
       when: ev => ev.type === 'match.end',
       run: async ctx => { await ctx.scene('match'); },
     },

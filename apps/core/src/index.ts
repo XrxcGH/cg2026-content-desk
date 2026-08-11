@@ -40,6 +40,18 @@ function arg(name: string): string | undefined {
 }
 const has = (name: string): boolean => arg(name) !== undefined;
 
+// A value-carrying flag typed bare used to fail silently: `--port` with
+// nothing after it fell through to the default without complaint, and a bare
+// `--replay` booted a normal desk with no replay and no message at all.
+// Refuse at the door — a mistyped launch line must never half-work.
+for (const name of ['port', 'host', 'ffmpeg-dir', 'encoder', 'segment',
+  'bitrate', 'cheesy-host', 'display-id', 'obs-host', 'replay']) {
+  if (arg(name) === '') {
+    console.error(`[core] --${name} needs a value after it, and none was given.`);
+    process.exit(1);
+  }
+}
+
 const port = Number(arg('port') || process.env['PORT'] || 8720);
 const host = arg('host') || process.env['HOST'] || '0.0.0.0';
 if (!Number.isInteger(port) || port < 1 || port > 65535) {

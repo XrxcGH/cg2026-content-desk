@@ -86,8 +86,8 @@ Derived from `matchTiming` (Cheesy) or hard-coded + `Match Start` trigger (FMS).
 Deliberately a superset of Cheesy Arena's notifiers so the Cheesy adapter is near-pass-through.
 
 **Match lifecycle**: `match.loaded` · `match.prestart` · `match.preview` · `match.armed` ·
-`match.start` · `match.auto_end` · `match.shift_change` · `match.endgame` · `match.end` ·
-`match.aborted` · `match.score_posted`
+`match.start` · `match.auto_end` · `match.teleop_start` · `match.shift_change` · `match.endgame` ·
+`match.end` · `match.aborted` · `match.score_posted`
 
 **Live state**: `score.realtime` · `score.delta` · `hub.state` · `arena.status` ·
 `card.issued` · `foul.called`

@@ -122,7 +122,7 @@ Audience display modes: `blank`, `intro`, `match`, `score`, `logo`, `logoLuma`, 
 ### Cheesy Arena's AV integration (worth copying)
 
 - Audience Display runs in **Chrome fullscreen** on a Mac Mini at
-  `http://10.0.100.1:8080/displays/audience`, out to a secondary monitor.
+  `http://10.0.100.5:8080/displays/audience`, out to a secondary monitor.
 - That output goes into a **Blackmagic 4K switcher as a downstream key (using LUMA keying, not
   chroma)**, because chroma key isn't available on the DSK. **Black = transparent.**
 - Overlay audio goes to the venue mixer over RCA.

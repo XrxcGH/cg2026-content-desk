@@ -5,7 +5,7 @@
  * lists `h264_nvenc` on a machine where NVENC cannot actually open, because
  * ffmpeg's required NVENC API version outruns the installed NVIDIA driver.
  * We hit exactly that (needs driver 610.00+, had 596.49). So `probeEncoder`
- * runs a real one-frame encode and believes the result, not the list.
+ * runs a real two-frame encode and believes the result, not the list.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';

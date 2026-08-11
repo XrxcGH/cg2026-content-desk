@@ -325,8 +325,18 @@ export function startServer(opts: ServerOpts) {
         if (authBlocked(addr)) {
           return json(res, 429, { error: 'Too many wrong PINs. Wait a minute, then try again.' });
         }
-        const body = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8')) as
-          { pin?: string };
+        // Malformed JSON is the caller's mistake, not a server error: answer
+        // 400 instead of letting the parse throw into the generic 500 handler.
+        let body: { pin?: string };
+        try {
+          body = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8')) as
+            { pin?: string };
+        } catch (err) {
+          if (err instanceof SyntaxError) {
+            return json(res, 400, { error: 'Body must be JSON, like {"pin":"1234"}.' });
+          }
+          return json(res, 422, { error: (err as Error).message }); // e.g. body too large
+        }
         const ok = !!REMOTE_PIN && safeEqual(String(body.pin ?? ''), REMOTE_PIN);
         if (!ok) {
           noteAuthFail(addr);
@@ -828,7 +838,12 @@ export function startServer(opts: ServerOpts) {
       // Save a rendered post-match card PNG to the desk, so it's on disk for
       // batch posting or the publish flow rather than only in a browser tab.
       if (path.startsWith('/api/cards/') && req.method === 'POST') {
-        const raw = decodeURIComponent(path.slice('/api/cards/'.length));
+        // A bad percent-escape (%zz) throws URIError; that is the caller's
+        // mistake, not a server error, so answer 400 rather than falling
+        // through to the generic 500 below.
+        let raw: string;
+        try { raw = decodeURIComponent(path.slice('/api/cards/'.length)); }
+        catch { return json(res, 400, { error: 'Bad percent-encoding in card name.' }); }
         const name = (raw.replace(/[^\w.-]+/g, '_').slice(0, 80) || 'match');
         try {
           const body = await readBody(req, 8 * 1024 * 1024);

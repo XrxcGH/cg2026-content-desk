@@ -29,7 +29,10 @@ export const ALLOWED_SOCKETS = [
   '/displays/bracket/websocket',
 ] as const;
 
-/** GET-only REST endpoints. */
+/** GET-only REST endpoints. Note that get() parses every response as JSON, so
+ *  the binary entries (/api/bracket/svg, and /api/teams/{id}/avatar under the
+ *  /api/teams/ prefix) are allowlisted for the future but need a raw-bytes
+ *  variant of get() before anything can actually fetch them. */
 export const ALLOWED_PATHS = [
   '/api/matches/',
   '/api/rankings',

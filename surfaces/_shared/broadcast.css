@@ -295,6 +295,10 @@
                      100% 100%, 0 100%, 0 var(--ch));
 }
 .hub > * { position: relative; }
+/* The trailing letter-space widens the label's box past its ink, so the
+   dot+label group sat half a track left inside the shell. The tab is a flex
+   row, so text-indent can't fix it; trim the phantom advance instead. */
+.hub > :last-child { margin-right: -.14em; }
 .hub[data-on="none"] { display: none; }
 .hub-dot { width: 22px; height: 22px; clip-path: var(--chamfer); --ch: 7px; background: var(--cg-white-dim); }
 .hub[data-on="red"]  .hub-dot { background: var(--alliance-red); }
