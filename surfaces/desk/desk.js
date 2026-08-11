@@ -725,3 +725,40 @@ void loadCoverage();
 // Slow poll: a reconciliation that changes only when a match ends or an upload
 // finishes does not need to be live, and this walks the whole queue.
 setInterval(() => { if (!document.hidden) void loadCoverage(); }, 60_000);
+
+// ---- vitals -----------------------------------------------------------------
+// One health report across every subsystem. Polled slowly on purpose: several
+// checks talk to OBS, and a panel that hammers the switcher every second is
+// itself a production risk.
+async function loadVitals() {
+  try {
+    const res = await fetch('/api/vitals');
+    if (!res.ok) return;
+    const r = await res.json();
+    $('vitalsDot').dataset.l = r.worst;
+
+    $('vitals').replaceChildren(...r.checks.map(c => {
+      const row = document.createElement('div');
+      row.className = 'v';
+      row.dataset.l = c.level;
+      const dot = document.createElement('i');
+      const label = document.createElement('b');
+      label.textContent = c.label;
+      const detail = document.createElement('span');
+      detail.textContent = c.detail;
+      row.append(dot, label, detail);
+      if (c.fix) {
+        const fix = document.createElement('span');
+        fix.className = 'fix';
+        fix.textContent = c.fix;
+        row.append(fix);
+      }
+      return row;
+    }));
+  } catch { /* transient */ }
+}
+
+$('vitalsCheck').onclick = loadVitals;
+$('vitalsPrint').onclick = () => window.print();
+void loadVitals();
+setInterval(() => { if (!document.hidden) void loadVitals(); }, 30_000);

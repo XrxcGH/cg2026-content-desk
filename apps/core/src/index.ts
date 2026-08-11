@@ -35,6 +35,7 @@ import { chooseEncoder, findFfmpeg } from './ffmpeg.ts';
 import { Recorder, type SourceConfig } from './recorder.ts';
 import { ClipStore } from './clips.ts';
 import { CoverageLedger } from './coverage.ts';
+import { Vitals } from './vitals.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..', '..', '..');
@@ -430,6 +431,14 @@ await publish.load();
 const coverage = new CoverageLedger(publish);
 coverage.attach(bus);
 
+// One place to ask "is this thing ready", and one place to find out which
+// single subsystem broke. See vitals.ts: the failures worth catching are the
+// ones nothing else complains about.
+const vitals = new Vitals({
+  bus, config, root: ROOT, recorder, publish, obs, cheesy, audio, coverage,
+  recordBytesPerSec: undefined,
+});
+
 {
   const missing = publishReadiness(config);
   if (!config.publish.enabled) {
@@ -493,7 +502,7 @@ if (config.publish.autoQueueArcade && !has('demo') && !has('replay')) {
 
 const server = startServer({
   bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
-  arcade, trivia, audio, audioClips, profiles, coverage, lanBase,
+  arcade, trivia, audio, audioClips, profiles, coverage, vitals, lanBase,
 });
 // From here on, an uncaught throw logs and continues instead of killing every
 // overlay at once — see the handler at the top of this file.

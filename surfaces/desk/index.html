@@ -99,6 +99,23 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
 #audClips .btn { font-size: 13px; padding: 7px 11px; }
 #audClips .btn b { font-family: var(--font-num); color: var(--accent); margin-right: 6px; }
 #audioHint[data-warn] { color: var(--st-bad-text); }
+/* ---- vitals ---- */
+.vdot { display: inline-block; width: 12px; height: 12px; margin-left: 6px;
+  clip-path: var(--chamfer); --ch: 4px; background: var(--text-dim); vertical-align: middle; }
+.vdot[data-l="ok"] { background: var(--st-ok); }
+.vdot[data-l="warn"] { background: var(--st-warn); }
+.vdot[data-l="fail"] { background: var(--st-bad); }
+#vitals .v { display: grid; grid-template-columns: 14px 118px 1fr; gap: 10px;
+  align-items: baseline; padding: 6px 8px; margin-bottom: 4px; font-size: 13px;
+  background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 6px; }
+#vitals .v[data-l="off"] { opacity: .5; }
+#vitals .v i { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px;
+  background: var(--text-dim); align-self: center; }
+#vitals .v[data-l="ok"] i { background: var(--st-ok); }
+#vitals .v[data-l="warn"] i { background: var(--st-warn); }
+#vitals .v[data-l="fail"] i { background: var(--st-bad); }
+#vitals .v b { font-weight: 700; }
+#vitals .v .fix { grid-column: 3; color: var(--st-warn); }
 /* ---- coverage ---- */
 #covGaps .gap { display: grid; grid-template-columns: auto 1fr; gap: 10px;
   padding: 7px 10px; margin-bottom: 5px; font-size: 13px;
@@ -405,6 +422,18 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
         <p class="hint">Renames the live YouTube broadcast for the day, so Sunday's
           stream is not titled Day 1.</p>
         <p class="hint" id="streamMsg" aria-live="polite"></p>
+      </section>
+
+      <section>
+        <h2>Doors check <span class="vdot" id="vitalsDot"></span></h2>
+        <p class="hint">Everything the desk can check about itself. The point is the
+          failures nothing else complains about: a muted announcer mic, a disk that
+          will fill during playoffs, a stream dropping frames.</p>
+        <div id="vitals"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="vitalsCheck">Run the check</button>
+          <button class="btn" id="vitalsPrint">Print</button>
+        </div>
       </section>
 
       <section>

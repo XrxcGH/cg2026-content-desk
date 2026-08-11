@@ -30,6 +30,7 @@ import type { HouseAudio, HouseSource } from './audio/store.ts';
 import type { ClipLibrary } from './audio/library.ts';
 import type { ProfileBook, ProfileInput } from './profiles.ts';
 import type { CoverageLedger } from './coverage.ts';
+import type { Vitals } from './vitals.ts';
 
 /** How many people the panel graphic can render and still be readable. */
 const PANEL_MAX = 6;
@@ -108,6 +109,8 @@ export interface ServerOpts {
   profiles?: ProfileBook | null;
   /** Every match played, and what happened to its video. */
   coverage?: CoverageLedger | null;
+  /** One health report across every subsystem. */
+  vitals?: Vitals | null;
   /** LAN-reachable base URL, e.g. "http://10.0.100.23:8720", for QR codes. */
   lanBase?: string | null;
 }
@@ -116,7 +119,7 @@ export function startServer(opts: ServerOpts) {
   const { bus, media, root, port, host, recorder = null, clips = null,
           publish = null, config = null, cheesy = null, cues = null, obs = null,
           arcade = null, trivia = null, audio = null, audioClips = null,
-          profiles = null, coverage = null, lanBase = null } = opts;
+          profiles = null, coverage = null, vitals = null, lanBase = null } = opts;
 
   // Crash policy lives in index.ts, in the ONE uncaughtException handler for
   // the whole process: fatal during boot, log-and-continue once the show is
@@ -520,6 +523,14 @@ export function startServer(opts: ServerOpts) {
         } catch (err) {
           return json(res, 422, { error: (err as Error).message });
         }
+      }
+
+      // ---- vitals -----------------------------------------------------------
+      // Everything the desk can check about itself, in one answer. A read, so
+      // it can be polled by a panel and printed before doors.
+      if (path === '/api/vitals') {
+        if (!vitals) return json(res, 503, { error: 'Vitals are not available.' });
+        return json(res, 200, await vitals.report());
       }
 
       // ---- coverage ---------------------------------------------------------
