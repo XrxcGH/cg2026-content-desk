@@ -807,6 +807,16 @@ export function startServer(opts: ServerOpts) {
             // Pick the round to play in this gap. Resumes a half-finished one
             // rather than replaying it.
             case 'session': return json(res, 200, trivia.startSession(String(body['name'] ?? '')));
+            // Whatever gets past the name filter, taken off the big screen in
+            // one action while it is up there.
+            case 'kick': {
+              // Answers with the snapshot like every other trivia action, so
+              // the console's shared post() can paint the result. `removed`
+              // rides along, because "that name was not found" and "removed"
+              // look identical from a snapshot alone.
+              const { removed } = trivia.kick(String(body['name'] ?? ''));
+              return json(res, 200, { ...trivia.snapshot(), removed });
+            }
             case 'reset':  return json(res, 200, trivia.reset(body['hard'] === true));
             default: return json(res, 404, { error: `Unknown trivia action "${action}"` });
           }

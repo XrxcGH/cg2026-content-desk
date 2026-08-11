@@ -14,6 +14,7 @@ import {
   type PublicStanding, type TriviaAnswer, type TriviaPhase, type TriviaPlayer, type TriviaQuestion,
 } from './model.ts';
 import { DEFAULT_QUESTIONS } from './questions.ts';
+import { screenName } from './names.ts';
 
 const MAX_PLAYERS = 500;
 const MAX_NAME = 24;
@@ -198,6 +199,12 @@ export class TriviaStore {
     // full room without ever joining.
     const name = String(rawName ?? '').trim().slice(0, MAX_NAME);
     if (!name) throw new Error('A name is required.');
+    // This name goes on a projector in front of a room full of children and
+    // the school that lent us the building. Screened BEFORE eviction, with
+    // every other validation, so a phone posting names it knows will be
+    // refused cannot cost real players their slots.
+    const verdict = screenName(name);
+    if (!verdict.ok) throw new Error(verdict.reason ?? 'Pick a different name.');
     if (this.#players.size >= MAX_PLAYERS) this.#evictOneIdle();
     if (this.#players.size >= MAX_PLAYERS) throw new Error('Trivia is full: 500 players.');
     const id = `p${(++this.#seq).toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -472,6 +479,28 @@ export class TriviaStore {
     this.#phase = 'idle';
     this.#publish();
     return this.snapshot();
+  }
+
+  /**
+   * Remove one player, by name, from the host console.
+   *
+   * The filter is a doorstop and not a guarantee, so the host needs a way to
+   * take something off the big screen in one action while it is up there. By
+   * name rather than id: the host is reading the leaderboard, not a database,
+   * and the id is deliberately never published.
+   */
+  kick(name: string): { removed: number } {
+    const wanted = String(name ?? '').trim().toLowerCase();
+    if (!wanted) throw new Error('Name the player to remove.');
+    let removed = 0;
+    for (const [id, p] of this.#players) {
+      if (p.name.trim().toLowerCase() !== wanted) continue;
+      this.#players.delete(id);
+      this.#answers.delete(id);
+      removed++;
+    }
+    if (removed) this.#publish();
+    return { removed };
   }
 
   /** Reset scores and progress. Players stay unless `hard`. */

@@ -156,6 +156,16 @@ input:focus { outline: none; border-color: var(--accent); }
   </section>
 
   <section>
+    <h2>Take a name off the screen</h2>
+    <p class="hint">Names are screened on join, but that is a doorstop and not a guarantee.
+      This removes a player and their score immediately.</p>
+    <div class="row">
+      <input id="kickName" placeholder="Name exactly as it appears" style="flex:2 1 200px">
+      <button class="btn" id="kickGo">Remove</button>
+    </div>
+  </section>
+
+  <section>
     <h2>Standings</h2>
     <div id="standings" aria-live="polite"><p class="hint">Nobody in yet. The overlay shows the join URL.</p></div>
   </section>
@@ -269,6 +279,22 @@ function paint(s) {
     : '<p class="hint">Nobody in yet. The overlay shows the join URL.</p>';
 }
 
+// The filter screens names on join; this is for whatever gets past it, while
+// it is on the big screen. By name because the host is reading the leaderboard.
+$('kickGo').onclick = async () => {
+  const name = $('kickName').value.trim();
+  if (!name) return;
+  try {
+    const snap = await post('kick', { name });
+    $('kickName').value = '';
+    // "Not found" and "removed" look identical from a snapshot, and the host
+    // is typing a name off a screen, so they may well have it slightly wrong.
+    say(snap.removed
+      ? `Removed "${name}".`
+      : `No player called "${name}". Check the spelling on the leaderboard.`,
+    !snap.removed);
+  } catch (err) { say(err.message, true); }
+};
 $('open').onclick = () => post('open', { seconds: Number($('secs').value) || 20 })
   .then(() => say('Question is live.')).catch(e => say(e.message, true));
 $('reveal').onclick = () => post('reveal')
