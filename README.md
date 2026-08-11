@@ -61,6 +61,7 @@ That's the whole architecture. Everything else is adapters and CSS.
 | [docs/11-distribution.md](docs/11-distribution.md) | Recording, YouTube live + upload, TBA video/webcast publishing |
 | [docs/12-community-research.md](docs/12-community-research.md) | What the FRC community complains about, mapped against this desk: the sourced gap list |
 | [docs/13-deployment.md](docs/13-deployment.md) | The volunteer launcher: one exe that unpacks the desk, installs a private Node, finds the field, and starts everything |
+| [docs/14-gap-research.md](docs/14-gap-research.md) | What it takes to run the whole event program, and to become a standard other events can adopt: the ranked, sourced roadmap |
 | [packages/theme/tokens.css](packages/theme/tokens.css) | Design tokens + motion system, shared by every surface |
 | [prototypes/overlay.html](prototypes/overlay.html) | Runnable proof-of-concept |
 
