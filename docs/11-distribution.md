@@ -25,7 +25,7 @@ or two taps on the desk console. Nothing needs a video editor.
 | Qualification and playoff matches | automatically, when the score posts | YouTube + TBA `match_videos/add` |
 | Practice matches | automatically (`publish.autoQueuePractice`, default on); queueing one by hand always works | YouTube only: TBA has no practice keys |
 | The arcade tournament | automatically, each set when it ends (`publish.autoQueueArcade`, default on) | YouTube + TBA `media/add` |
-| Analysis desk sections | automatically, detected from telestrator strokes | YouTube + TBA `media/add` |
+| Analysis desk sections | two taps: the pre-named `analysis` segment id, mark in, mark out | YouTube + TBA `media/add` |
 | Team interviews, exhibition matches, mentor matches | two taps: a pre-named segment id, mark in, mark out | YouTube + TBA `media/add` |
 | Ceremonies and alliance selection | same two taps, same pre-named ids | YouTube + TBA `media/add` |
 | Anything else | same two taps with a typed literal title (`FIRST Impact Award - CalGames`) | YouTube + TBA `media/add` |
@@ -264,12 +264,14 @@ to a single continuous 187s cut, and a match whose score is never posted falls b
 | Content type | In | Out | Destination |
 | --- | --- | --- | --- |
 | **match** | two-part cut above | | YouTube + `match_videos/add`; practice matches upload without the TBA step |
-| **analysis** | first `telestrator.stroke` - 20s | last stroke + 15s | YouTube + `media/add` |
 | **segment** | desk marks in, or `set.startedAt` for an arcade set | desk marks out, or the clock at `set_end` | YouTube + `media/add` |
 
-Analysis segments are detected automatically. The telestrator already emits one durable
-`telestrator.stroke` event per finished stroke, so "did this match get analysis?" is a query, not a
-checkbox somebody has to remember to tick. The desk can still force one on or off.
+Analysis-desk sections go up through the segment flow with the pre-named `analysis` id: the
+operator marks in and out like any other segment. An automatic detector keyed off
+`telestrator.stroke` events was designed here once, but it was never built and the queue carries
+no `analysis` item kind — writing it up as shipped sent operators hunting for a feature that
+does not exist. If it is ever built, the durable one-event-per-stroke record is the hook it
+would hang from.
 
 Extraction is the same ffmpeg concat-and-trim the replay service uses, at different bounds. One
 implementation.

@@ -55,17 +55,26 @@ process.on('unhandledRejection', reason => {
   console.error('[core] unhandled rejection:', reason);
 });
 
-// A synchronous crash is still fatal, but the commonest one deserves words
-// instead of a stack: the port already being held, usually by a copy of the
-// desk forgotten in another window.
+// A synchronous crash during BOOT is fatal — a half-initialized desk is worse
+// than none, and the commonest boot failure deserves words instead of a stack:
+// the port already being held by a copy of the desk forgotten in another
+// window. Once the show is up, the policy flips: a throw nobody anticipated
+// (a socket callback, a bad payload) must log and keep the show running,
+// because every overlay dying at once is always the worse outcome. This is the
+// ONLY uncaughtException handler in the process — a second one registered
+// later could never run, since this one would exit first.
+let bootComplete = false;
 process.on('uncaughtException', err => {
   if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
     console.error(`[core] port ${port} is already in use, probably by another copy of the desk. ` +
       'Close it, or start this one with --port <n>.');
-  } else {
-    console.error('[core] fatal:', err);
+    process.exit(1);
   }
-  process.exit(1);
+  if (!bootComplete) {
+    console.error('[core] fatal during startup:', err);
+    process.exit(1);
+  }
+  console.error('[core] uncaught exception, continuing (the show stays up):', err);
 });
 
 const bus = new EventBus();
@@ -156,6 +165,7 @@ function validRecordingSources(raw: unknown): SourceConfig[] {
     return [];
   }
   const out: SourceConfig[] = [];
+  const seenIds = new Set<string>();
   raw.forEach((entry, i) => {
     const skip = (field: string, want: string): void =>
       console.warn(`[core] recording.sources[${i}] skipped: "${field}" ${want}.`);
@@ -166,11 +176,22 @@ function validRecordingSources(raw: unknown): SourceConfig[] {
     const e = entry as Record<string, unknown>;
     const id = e['id'], label = e['label'], role = e['role'], input = e['input'];
     if (typeof id !== 'string' || !id.trim()) return skip('id', 'must be a non-empty string');
+    // ClipStore refuses anything but a bare [A-Za-z0-9_-] id (ids become
+    // filesystem paths). Accepting a looser id here would record all day and
+    // then fail every replay cut and frame grab from that camera.
+    if (!/^[\w-]+$/.test(id)) {
+      return skip('id', 'may only use letters, digits, "_" and "-" (it becomes a folder name)');
+    }
+    // Recorder keys its ffmpeg processes by id: a duplicate would spawn two
+    // encoders clobbering one segment directory, with the first process
+    // orphaned at shutdown — never stopped, never finalized.
+    if (seenIds.has(id)) return skip('id', `"${id}" is already used by an earlier source`);
     if (typeof label !== 'string' || !label.trim()) return skip('label', 'must be a non-empty string');
     if (role !== 'program' && role !== 'iso') return skip('role', 'must be "program" or "iso"');
     if (!Array.isArray(input) || !input.length || input.some(a => typeof a !== 'string')) {
       return skip('input', 'must be a non-empty array of ffmpeg argument strings');
     }
+    seenIds.add(id);
     out.push({
       id, label, role, input: input as string[],
       ...(typeof e['enabled'] === 'boolean' ? { enabled: e['enabled'] } : {}),
@@ -356,10 +377,11 @@ await publish.load();
 
 // A match video is queued when the score is posted, not at the buzzer: the
 // cut needs the score-reveal timestamp to know where its second part starts.
-// Not in demo mode: simulated matches look exactly like field data here, and
-// autoQueueMatches defaults on, so a --demo session would otherwise queue
-// fake "Qualification N" uploads.
-if (config.publish.autoQueueMatches && !has('demo')) {
+// Not in demo mode OR replay mode: simulated and replayed matches look exactly
+// like field data here, and autoQueueMatches defaults on, so either would
+// otherwise queue bogus "Qualification N" uploads — a replayed log restamps
+// event times to now, so the cut bounds even look plausible.
+if (config.publish.autoQueueMatches && !has('demo') && !has('replay')) {
   bus.subscribe(ev => {
     if (ev.type !== 'match.score_posted') return;
     void publish.queueMatch().then(item => {
@@ -371,8 +393,11 @@ if (config.publish.autoQueueMatches && !has('demo')) {
 // Arcade sets queue themselves the same way: set_end closes the video's
 // bounds, and the set has carried its own startedAt since it began. A set
 // shorter than the segment QC floor queues held, which is the right answer
-// for a 20-second bracket mistake.
-if (config.publish.autoQueueArcade && !has('demo')) {
+// for a 20-second bracket mistake. The replay guard matters more here than for
+// matches: a replayed set_end carries its original-day startedAt in the
+// payload (payloads are not restamped), so the cut range would span from the
+// recording day to now.
+if (config.publish.autoQueueArcade && !has('demo') && !has('replay')) {
   bus.subscribe(ev => {
     if (ev.type !== 'arcade.set_end') return;
     const set = (ev.payload as {
@@ -394,6 +419,9 @@ const server = startServer({
   bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
   arcade, trivia, lanBase,
 });
+// From here on, an uncaught throw logs and continues instead of killing every
+// overlay at once — see the handler at the top of this file.
+bootComplete = true;
 
 // Phase boundaries are time-driven, not event-driven: endgame lockdown and
 // the auto-end marker have to land even if nothing else is happening.
@@ -431,13 +459,19 @@ const shutdown = (): void => {
   cues.detach();
   obs?.close();
   server.close();
-  if (!recorder) process.exit(0);
-  // Give ffmpeg a moment to finalize the segment it's mid-way through:
-  // SIGKILL would leave the most recent file unplayable, which is exactly the
-  // one you'd want after a crash. Capped, because a child that already died
-  // never answers, and shutdown must not hang on it.
+  // Flush the event log before exiting: a WriteStream holds its tail in
+  // memory, and exiting without end() loses the last events of the session —
+  // exactly the ones a post-mortem replay would want. Capped alongside the
+  // recorder wait, because shutdown must never hang on a dead stream either.
   setTimeout(() => process.exit(0), 5000);
-  void recorder.stop().finally(() => process.exit(0));
+  const flushes: Promise<unknown>[] = [bus.closeLog()];
+  if (recorder) {
+    // Give ffmpeg a moment to finalize the segment it's mid-way through:
+    // SIGKILL would leave the most recent file unplayable, which is exactly
+    // the one you'd want after a crash.
+    flushes.push(recorder.stop());
+  }
+  void Promise.allSettled(flushes).then(() => process.exit(0));
 };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

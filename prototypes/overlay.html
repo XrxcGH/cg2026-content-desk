@@ -506,7 +506,10 @@ const S = { clock: -22, red:{fuel:0,tower:0}, blue:{fuel:0,tower:0}, autoWinner:
 let running = params.get('demo') !== '0';
 
 function phaseOf(c) {
-  if (c < -20) return ['Pre-match', 'both'];
+  // 'none' outside the match, matching production semantics: no hub is live
+  // before the robots are enabled or after Final, and the tab hides rather
+  // than claiming "Both hubs live" over an empty field.
+  if (c < -20) return ['Pre-match', 'none'];
   if (c < 0)   return ['Auto', 'both'];
   if (c < 10)  return ['Transition', 'both'];
   if (c < 110) {
@@ -520,7 +523,7 @@ function phaseOf(c) {
     return [`Shift ${shift}`, shift % 2 ? loser : S.autoWinner];
   }
   if (c < 140) return ['End game', 'both'];
-  return ['Final', 'both'];
+  return ['Final', 'none'];
 }
 function clockText(c) {
   const rem = c < 0 ? -c : 140 - c;
@@ -536,7 +539,10 @@ function render() {
   $('#phase').textContent = phase;
 
   const dot = $('#hubDot'); dot.dataset.on = hub;
-  $('#hubText').textContent = hub === 'both' ? 'Both hubs live' : `${hub} hub live`;
+  const hubEl = $('.hub');
+  hubEl.style.display = hub === 'none' ? 'none' : '';
+  $('#hubText').textContent = hub === 'both' ? 'Both hubs live'
+    : hub === 'none' ? '' : `${hub} hub live`;
 
   for (const a of ['red','blue']) {
     roll($(`#${a}Fuel`),  S[a].fuel);

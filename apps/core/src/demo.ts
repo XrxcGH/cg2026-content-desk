@@ -193,10 +193,14 @@ export function startDemo(bus: EventBus, extras: DemoExtras = {}): void {
     type: 'rankings.updated', source: DEMO_SOURCE,
     payload: { rankings: DEMO_RANKINGS, highestPlayedMatch: `Q${matchNumber}` },
   });
-  // +2: the loop is about to load matchNumber+1, which is playing, not on deck.
+  // +1: nothing is playing yet at boot, so the queue head is the match the
+  // loop is about to load and start — the same convention every post-commit
+  // update below follows. Starting the head one further along (+2) made pace
+  // latch the first match's behind-schedule figure against the SECOND match's
+  // scheduled time, reading ~3 minutes ahead on a demo running dead on time.
   bus.emit({
     type: 'queue.updated', source: DEMO_SOURCE,
-    payload: { upcoming: upcomingFrom(matchNumber + 2) },
+    payload: { upcoming: upcomingFrom(matchNumber + 1) },
   });
   try { if (extras.arcade) seedArcade(extras.arcade); } catch (err) {
     console.warn('[demo] arcade seed failed:', (err as Error).message);

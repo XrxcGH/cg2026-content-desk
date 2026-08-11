@@ -105,6 +105,8 @@ export class CheesyAdapter {
   #last: Record<Alliance, Totals> = { red: zero(), blue: zero() };
   #matchState: MatchState = MatchState.PreMatch;
   #started = false;
+  /** Teams the previous arenaStatus frame saw linked, for the drop edge. */
+  #prevLinked = new Set<number>();
   /** Auto fuel per alliance: the only thing that decides the auto winner. */
   #autoFuel: Record<Alliance, number> = { red: 0, blue: 0 };
   #autoWinnerSent = false;
@@ -276,13 +278,19 @@ export class CheesyAdapter {
     // Cheesy replays its matchLoad snapshot whenever a display (re)subscribes,
     // so a mid-match websocket reconnect delivers the SAME load again. Treating
     // that as a fresh load wiped the live score, killed the clock, and flipped
-    // program back to the overview mid-match. Skip the reset while this exact
-    // match is being played; a re-load of the same match with the field idle
-    // (a scorekeeper replay) still resets.
+    // program back to the overview mid-match. PostMatch counts as in progress
+    // here: the buzzer-to-score-posted window runs minutes while referees
+    // deliberate, and a socket blip in it used to wipe the just-finished score
+    // off air, yank program to the overview, and diff the replayed score
+    // snapshot against zero — minting phantom burst/climb replay markers for a
+    // match that was already over. A genuine scorekeeper replay of the same
+    // match arrives after the field has returned to PreMatch, so it still
+    // resets.
     const inProgress = this.#matchState === MatchState.StartMatch
       || this.#matchState === MatchState.AutoPeriod
       || this.#matchState === MatchState.PausePeriod
-      || this.#matchState === MatchState.TeleopPeriod;
+      || this.#matchState === MatchState.TeleopPeriod
+      || this.#matchState === MatchState.PostMatch;
     if (inProgress && match.id === this.#loadedMatchId) return;
 
     this.#last = { red: zero(), blue: zero() };
@@ -476,6 +484,7 @@ export class CheesyAdapter {
     // "What happened to 846?" is the replay marker nobody thinks to hit,
     // because it happens while everyone is watching the other end of the field.
     const down: number[] = [];
+    const linkedNow = new Set<number>();
     let fielded = 0;
     let linked = 0;
     for (const station of Object.values(msg.AllianceStations ?? {})) {
@@ -485,15 +494,29 @@ export class CheesyAdapter {
       // Readiness needs a positive link: a station with no DS data yet is
       // not linked, it is unknown. "Down" stays explicit-false only, so the
       // dropped-robot marker never fires off missing data.
-      if (station?.Ds?.RobotLinked === true) linked++;
+      if (station?.Ds?.RobotLinked === true) { linked++; linkedNow.add(team); }
       if (station?.Ds && station.Ds.RobotLinked === false) down.push(team);
     }
+
+    // `down` is level state for the station-health strip and repeats on every
+    // frame. The replay marker needs the EDGE: Cheesy re-sends arenaStatus
+    // continuously, so marking every frame flooded the timeline with
+    // duplicates for one dropped robot, and the pre-match link-up (robots
+    // connecting one by one) minted a bogus "lost comms" for every robot
+    // before every match. A team is newly down only if the previous frame saw
+    // it linked, and only while the match is actually running — a DS
+    // disconnecting during post-match teardown is normal, not a highlight.
+    const newlyDown = this.#started
+      ? down.filter(team => this.#prevLinked.has(team))
+      : [];
+    this.#prevLinked = linkedNow;
 
     this.#emit({
       type: 'arena.status',
       payload: {
         cheesy: true,
         down,
+        newlyDown,
         plcHealthy: msg.PlcIsHealthy ?? null,
         fieldEStop: msg.FieldEStop ?? false,
         ftaReady: msg.IsFtaReady ?? null,

@@ -10,6 +10,7 @@ import {
   clockDisplayFor, hubActiveAt, phaseFor, PHASE_LABEL, REBUILT,
 } from '/shared/desk-client.js';
 import { rpStrip } from '/shared/rp.js';
+import { allianceRoster } from '/shared/alliance.js';
 
 const params = applyDisplayMode();
 // ?mode=clean is the second-stream variant: minimal score bar and clock over a
@@ -326,8 +327,17 @@ function paintFinal(state) {
   $('finalMatchName').textContent = state.match?.displayName ?? '\u00a0';
   $('finalRed').textContent = r;
   $('finalBlue').textContent = b;
-  $('finalRedTeams').textContent = (state.match?.red ?? []).map(t => t.number).join(' · ');
-  $('finalBlueTeams').textContent = (state.match?.blue ?? []).map(t => t.number).join(' · ');
+  // Shadow-scored totals render OUTLINED here too, same contract as the score
+  // bar: the final screen is the one everyone screenshots, and it must never
+  // dress a desk-typed guess up as an official result.
+  const est = String(state.confidence === 'estimated');
+  $('finalRed').dataset.est = est;
+  $('finalBlue').dataset.est = est;
+  // The whole alliance, not just the three on the field: in a playoff the
+  // fourth pick won this match too, and the social card already names them.
+  // The on-air final screen and the card must agree.
+  $('finalRedTeams').textContent = allianceRoster(state, 'red').map(t => t.number).join(' · ');
+  $('finalBlueTeams').textContent = allianceRoster(state, 'blue').map(t => t.number).join(' · ');
   paintRp($('finalRedRp'), state.score.red.rp);
   paintRp($('finalBlueRp'), state.score.blue.rp);
 

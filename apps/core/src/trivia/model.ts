@@ -84,6 +84,13 @@ export interface TriviaPlayer {
   score: number;
   /** Correct answers, for the tie-break detail line. */
   correct: number;
+  /**
+   * Every answer ever locked, right or wrong. Eviction fairness runs on this,
+   * not on score: a player who answered five questions and got them all wrong
+   * has been PLAYING, and must never lose their slot before a joined-and-
+   * walked-away squatter who answered nothing.
+   */
+  answered: number;
   joinedAt: number;
 }
 

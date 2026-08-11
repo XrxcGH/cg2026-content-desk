@@ -150,6 +150,8 @@ body {
 </div>
 
 <script type="module">
+import { mountNav } from '/shared/nav.js';
+mountNav('draw');
 import { connect, applyDisplayMode, startTicker } from '/shared/desk-client.js';
 import { StrokeBook, render } from '/shared/telestrator.js';
 
@@ -323,7 +325,16 @@ for (const b of document.querySelectorAll('[data-ink]')) {
   };
 }
 
-const doUndo = () => { book.undo(); relay({ k: 'undo' }); };
+// The relay repaints the render surface; the emit is the durable record. The
+// archive keeps one telestrator.stroke per finished stroke, and without the
+// matching undo event a replayed log re-drew strokes the analyst had deleted
+// on air. (This was also the only reason the declared telestrator.undo event
+// type existed with nothing ever emitting it.)
+const doUndo = () => {
+  book.undo();
+  relay({ k: 'undo' });
+  desk.emit({ type: 'telestrator.undo' });
+};
 const doClear = () => { book.clear(); relay({ k: 'clear' }); desk.emit({ type: 'telestrator.clear' }); };
 // Hide is a toggle. The reducer's only path back to hidden:false is a
 // telestrator.frame emit, so a one-way Hide stranded the analyst drawing into

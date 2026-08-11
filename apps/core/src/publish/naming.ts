@@ -37,8 +37,13 @@ const ORDINAL: Record<string, number> = { one: 1, two: 2, three: 3 };
  * any other match ("Practice 3 - CalGames"), but TBA has no keys for them, so
  * they never link to a match. The automatic queue path is gated separately by
  * publish.autoQueuePractice; a manual queue always goes through.
+ *
+ * Bare "P3" counts: that is FMS's own practice short name. It used to fall
+ * through to the playoff regex's `p` alias, titling a scrimmage
+ * "Match 3 (R1)" and linking its video to the REAL playoff key sf3m1 on TBA.
  */
-export const isPractice = (displayName: string): boolean => /^practice/i.test(displayName.trim());
+export const isPractice = (displayName: string): boolean =>
+  /^p(?:ractice)?\s*#?\s*\d*$/i.test(displayName.trim());
 
 export function identify(displayName: string): MatchIdentity {
   const s = displayName.trim();
@@ -48,8 +53,12 @@ export function identify(displayName: string): MatchIdentity {
   if (qual) return { name: `Qualification ${Number(qual[1])}`, key: `qm${Number(qual[1])}` };
 
   // Practice matches publish under their own name; the null key tells the
-  // queue there is no TBA match to link.
-  if (isPractice(s)) return { name: s, key: null };
+  // queue there is no TBA match to link. "P3" normalizes to "Practice 3" so
+  // the FMS short name doesn't become a title.
+  if (isPractice(s)) {
+    const n = /(\d+)/.exec(s)?.[1];
+    return { name: n ? `Practice ${Number(n)}` : s, key: null };
+  }
 
   // Final Tiebreaker / Finals Tiebreaker / Final 3
   if (/^finals?\s*(tiebreaker|tie-breaker|tie breaker)$/i.test(s)) {
@@ -71,8 +80,10 @@ export function identify(displayName: string): MatchIdentity {
     return { name: `Match ${Number(withRound[1])} (R${Number(withRound[2])})`, key: `sf${Number(withRound[1])}m1` };
   }
 
-  // Playoff 7 / Match 7 / P7: derive the round from the match number.
-  const playoff = /^(?:playoff|elimination|elim|match|p)\s*#?\s*(\d+)$/i.exec(s);
+  // Playoff 7 / Match 7 / M7: derive the round from the match number. No bare
+  // `p` alias here — "P3" is FMS's PRACTICE short name and is handled above;
+  // claiming it minted a playoff title and a real TBA key for a scrimmage.
+  const playoff = /^(?:playoff|elimination|elim|match|m)\s*#?\s*(\d+)$/i.exec(s);
   if (playoff) {
     const n = Number(playoff[1]);
     return { name: `Match ${n} (R${roundOf(n)})`, key: `sf${n}m1` };
@@ -112,13 +123,23 @@ export function roundOf(matchNumber: number): number {
   return 5;
 }
 
-/** `Qualification 42 - CalGames` */
-export const videoTitle = (matchName: string, eventName: string): string =>
-  `${matchName} - ${eventName}`;
+/**
+ * "2026 CalGames": the event as titled, with the year exactly once. The year
+ * has to appear somewhere — WRRF's channel hosts every season, and yearless
+ * titles collide ("Qualification 1 - CalGames" every October). The
+ * contains-check keeps the obvious config (name: "2026 CalGames") from
+ * doubling into "2026 2026 CalGames".
+ */
+export const eventTitle = (year: number, eventName: string): string =>
+  eventName.includes(String(year)) ? eventName : `${year} ${eventName}`;
+
+/** `Qualification 42 - 2026 CalGames` (year omitted only if none is given). */
+export const videoTitle = (matchName: string, eventName: string, year?: number): string =>
+  `${matchName} - ${year != null ? eventTitle(year, eventName) : eventName}`;
 
 /** `2026 CalGames - Day 1` */
 export const streamTitle = (year: number, eventName: string, day: number): string =>
-  `${year} ${eventName} - Day ${day}`;
+  `${eventTitle(year, eventName)} - Day ${day}`;
 
 export interface DescriptionInput {
   title: string;

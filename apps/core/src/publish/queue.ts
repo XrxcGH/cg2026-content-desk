@@ -2,7 +2,8 @@
  * Durable publish queue: cut -> upload -> link on TBA.
  *
  * Deliberately boring. A JSON file, a state machine, exponential backoff, and
- * a panel showing what's stuck. It has to survive a crash, the venue internet
+ * `GET /api/publish` reporting what's stuck (there is no desk-console panel
+ * over it yet — see docs/11). It has to survive a crash, the venue internet
  * dropping, and the event ending. Nobody should have to SSH into anything on
  * a Sunday.
  *
@@ -133,6 +134,12 @@ export class PublishQueue {
       this.#items = JSON.parse(await readFile(this.#file, 'utf8')) as QueueItem[];
       // Queue files written before the released flag existed lack the field.
       for (const item of this.#items) item.released ??= false;
+      // Crash recovery is restore AND resume: without this kick, a machine
+      // that died mid-upload restarted with every item faithfully restored in
+      // 'cut'/'uploaded' and then did nothing — a second Release finds no
+      // 'held' items and returns 0, so the overnight batch silently never
+      // finished. If the restored file holds runnable work, start the worker.
+      if (this.#next()) this.kick();
       const unfinished = this.#items.filter(i => i.state !== 'done').length;
       if (this.#items.length) {
         console.log(`[publish] restored ${this.#items.length} item(s), ${unfinished} unfinished`);
@@ -189,7 +196,7 @@ export class PublishQueue {
 
     // Official FIRST-channel naming: "Qualification 42 - CalGames".
     const { name, key } = identify(displayName);
-    const title = videoTitle(name, this.#cfg.event.name);
+    const title = videoTitle(name, this.#cfg.event.name, this.#cfg.event.year);
 
     if (this.#items.some(i => i.kind === 'match' && i.label === name && i.state !== 'failed')) {
       return null;                                   // already queued
@@ -248,7 +255,7 @@ export class PublishQueue {
     }
 
     const name = segmentName(opts.segment);
-    const title = videoTitle(name, this.#cfg.event.name);
+    const title = videoTitle(name, this.#cfg.event.name, this.#cfg.event.year);
     const ranges: Range[] = [{ fromMs: opts.fromMs, toMs: opts.toMs }];
     const hold = qcHold('segment', (opts.toMs - opts.fromMs) / 1000);
 
@@ -285,21 +292,35 @@ export class PublishQueue {
     this.#timer = setTimeout(() => { this.#timer = null; void this.#work(); }, 250);
   }
 
-  /** Release everything parked in deferred mode: "the venue is closed, go". */
+  /**
+   * Release everything parked by DEFERRED MODE: "the venue is closed, go".
+   *
+   * QC-held items are deliberately NOT swept up. A QC hold means the cut's
+   * duration is implausible and a human must eyeball the clip; the routine
+   * end-of-day release is exactly the moment nobody is reviewing anything, so
+   * publishing them here would upload the one category of video the hold
+   * exists to stop. Each QC item is released individually via retry(id) once
+   * someone has actually looked at it.
+   */
   async release(): Promise<number> {
     let n = 0;
+    let qcSkipped = 0;
     for (const item of this.#items) {
-      if (item.state === 'held') {
-        // The durable flag is what lets the cut branch proceed in deferred
-        // mode; changing only the state sent the item straight back to held.
-        item.released = true;
-        item.state = item.clipPath ? 'cut' : 'pending';
-        // An operator go-ahead earns a fresh retry budget, same as retry().
-        item.attempts = 0;
-        item.error = null;
-        item.updatedAt = Date.now();
-        n++;
-      }
+      if (item.state !== 'held') continue;
+      if (item.error?.startsWith('QC hold')) { qcSkipped++; continue; }
+      // The durable flag is what lets the cut branch proceed in deferred
+      // mode; changing only the state sent the item straight back to held.
+      item.released = true;
+      item.state = item.clipPath ? 'cut' : 'pending';
+      // An operator go-ahead earns a fresh retry budget, same as retry().
+      item.attempts = 0;
+      item.error = null;
+      item.updatedAt = Date.now();
+      n++;
+    }
+    if (qcSkipped) {
+      console.warn(`[publish] release left ${qcSkipped} QC-held item(s) parked — ` +
+        'review each clip and use its Retry to publish it.');
     }
     if (n) { await this.#save(); this.kick(); }
     return n;
@@ -308,6 +329,11 @@ export class PublishQueue {
   async retry(id: string): Promise<void> {
     const item = this.#items.find(i => i.id === id);
     if (!item) return;
+    // Retrying a held item is the per-item go-ahead — it is how a QC-held cut
+    // gets published after someone has eyeballed it, so it carries the same
+    // durable released flag the bulk release sets. Without it, deferred mode
+    // would re-park the item the moment the worker looked at it.
+    if (item.state === 'held') item.released = true;
     item.state = item.videoId ? 'uploaded' : item.clipPath ? 'cut' : 'pending';
     item.attempts = 0;
     item.error = null;

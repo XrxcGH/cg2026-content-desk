@@ -91,7 +91,9 @@ test('the automatic path respects autoQueuePractice; a manual queue always works
 
     const item = await q.queueMatch({ manual: true });
     assert.ok(item, 'an operator pressing the button always wins over the gate');
-    assert.equal(item.meta.title, 'Practice 3 - CalGames');
+    // The year rides in the title: WRRF's channel hosts every season, and
+    // "Practice 3 - CalGames" would collide with next October's.
+    assert.equal(item.meta.title, 'Practice 3 - 2026 CalGames');
     assert.equal(item.matchKey, null, 'TBA has no keys for practice matches');
 
     assert.equal(await q.queueMatch({ manual: true }), null,
@@ -167,7 +169,7 @@ test('a keyless match skips TBA entirely; a segment still links as event media',
   }
 });
 
-test('release marks items released and the flag survives a restart', async () => {
+test('release lifts deferred holds but leaves QC holds for per-item review', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pubq-'));
   // enabled=false keeps the worker inert, so nothing touches the network.
   const cfg = structuredClone(DEFAULTS);
@@ -178,20 +180,28 @@ test('release marks items released and the flag survives a restart', async () =>
   try {
     const q = new PublishQueue(root, cfg, bus, null);
     await q.load();
-    const item = await q.add({
+    const qc = await q.add({
       kind: 'segment', label: 'Awards Ceremony', sourceId: 'program',
       ranges: [{ fromMs: 0, toMs: 120_000 }], matchKey: null,
       meta: { title: 'Awards Ceremony - CalGames', description: '' },
     }, 'QC hold: test');
     // A flagged item must enter the queue already held. Holding it a moment
     // after adding left a window where a running worker picked it up.
-    assert.equal(item.state, 'held');
-    item.clipPath = join(root, 'clip.mp4');
+    assert.equal(qc.state, 'held');
+    qc.clipPath = join(root, 'clip.mp4');
 
-    assert.equal(await q.release(), 1);
-    assert.equal(item.state, 'cut');
-    assert.equal(item.released, true,
-      'without the durable flag the cut branch re-parks the item on the spot');
+    // The routine end-of-day release must NOT publish a QC-held cut: the hold
+    // means a human has to eyeball the clip, and bulk release is exactly the
+    // moment nobody is reviewing anything.
+    assert.equal(await q.release(), 0);
+    assert.equal(qc.state, 'held', 'QC hold survives the bulk release');
+
+    // retry(id) is the per-item go-ahead once someone has looked at it, and it
+    // must carry the durable released flag or the deferred-mode cut branch
+    // re-parks the item on the spot.
+    await q.retry(qc.id);
+    assert.equal(qc.state, 'cut');
+    assert.equal(qc.released, true);
 
     // Let the kicked worker settle before reading the file back, so the
     // restart below sees whatever it last persisted.
@@ -202,6 +212,35 @@ test('release marks items released and the flag survives a restart', async () =>
     const q2 = new PublishQueue(root, cfg, bus, null);
     await q2.load();
     assert.equal(q2.items[0]?.released, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('release lifts a plain deferred hold', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pubq-'));
+  const cfg = structuredClone(DEFAULTS);
+  cfg.publish.enabled = false;
+  cfg.publish.mode = 'deferred';
+  const bus = { emit: () => {} } as unknown as EventBus;
+
+  try {
+    const q = new PublishQueue(root, cfg, bus, null);
+    await q.load();
+    const item = await q.add({
+      kind: 'segment', label: 'Alliance Selection', sourceId: 'program',
+      ranges: [{ fromMs: 0, toMs: 600_000 }], matchKey: null,
+      meta: { title: 'Alliance Selection - CalGames', description: '' },
+    });
+    // Park it the way the worker's deferred-mode cut branch does: held with
+    // no QC reason.
+    item.state = 'held';
+    item.error = null;
+    item.clipPath = join(root, 'clip.mp4');
+
+    assert.equal(await q.release(), 1);
+    assert.equal(item.state, 'cut');
+    assert.equal(item.released, true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

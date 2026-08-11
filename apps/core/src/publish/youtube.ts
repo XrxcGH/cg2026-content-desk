@@ -180,9 +180,17 @@ export class YouTubeClient {
           const status = await this.#resume(sessionUrl, size, meta);
           if ('id' in status) { opts.onProgress?.(size, size); return status.id; }
           if (status.sessionUrl !== sessionUrl) { sessionUrl = status.sessionUrl; opts.onSession?.(sessionUrl); }
+          // "Progress isn't a failure" — but only when the committed offset
+          // actually MOVED. A session that answers 308 without advancing
+          // (a proxy swallowing the body, a wedged session) used to refund
+          // the attempt unconditionally and loop forever, re-sending the
+          // whole file remainder flat-out with no backoff.
+          const advanced = status.offset > offset;
           offset = status.offset;
           opts.onProgress?.(offset, size);
-          attempt--;                               // progress isn't a failure
+          if (advanced) { attempt--; continue; }
+          if (attempt === maxAttempts) throw new Error('Upload stalled: the session stopped accepting bytes.');
+          await new Promise(r => setTimeout(r, Math.min(30_000, 2 ** attempt * 1000)));
           continue;
         }
         // 404 means the session expired, so start a fresh one and try again.
@@ -203,13 +211,30 @@ export class YouTubeClient {
     throw new Error('Upload did not complete');
   }
 
-  /** Flip privacy, used to publish only once TBA linking has succeeded. */
+  /**
+   * Flip privacy, used to publish only once TBA linking has succeeded.
+   *
+   * videos.update is a REPLACE of every mutable field in the parts sent:
+   * a body carrying only privacyStatus wiped the selfDeclaredMadeForKids=false
+   * declaration made at upload (re-answering the COPPA question as "unset",
+   * which YouTube may then re-decide), along with embeddable/license. The
+   * fields the upload set are re-sent alongside the flip, same read-modify-
+   * write discipline as setLiveBroadcastTitle below.
+   */
   async setPrivacy(videoId: string, privacyStatus: VideoMeta['privacyStatus']): Promise<void> {
     const token = await this.#accessToken();
     const res = await fetch(`${API_URL}/videos?part=status`, {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: videoId, status: { privacyStatus } }),
+      body: JSON.stringify({
+        id: videoId,
+        status: {
+          privacyStatus,
+          selfDeclaredMadeForKids: false,
+          embeddable: true,
+          license: 'youtube',
+        },
+      }),
     });
     if (!res.ok) throw new Error(`Privacy update failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
   }

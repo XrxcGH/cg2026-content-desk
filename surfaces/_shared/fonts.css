@@ -15,7 +15,10 @@
 @import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..900&family=Chivo:wght@700;900&family=Saira+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap");
 
 /* Self-hosted drop-in. Uncomment once the WOFF2s are in place, and delete the
-   @import above.
+   @import above. This block must cover EVERY face and weight the @import
+   serves: it once omitted Saira Condensed 700 (every .18em-tracked heading —
+   faux-bolded by the browser, visibly wrong on air) and JetBrains Mono
+   entirely (all operator-console readouts falling back to Courier).
 
 @font-face {
   font-family: "Archivo";
@@ -33,6 +36,24 @@
 @font-face {
   font-family: "Saira Condensed";
   src: url("/shared/fonts/SairaCondensed-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: block;
+}
+@font-face {
+  font-family: "Saira Condensed";
+  src: url("/shared/fonts/SairaCondensed-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/shared/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/shared/fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
   font-weight: 600;
   font-display: block;
 }

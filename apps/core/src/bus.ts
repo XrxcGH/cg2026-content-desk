@@ -35,6 +35,15 @@ export class EventBus {
   #ring: DeskEvent[] = [];
   #ringMax = 5000;
   #lastPhase = phaseAt(null);
+  /**
+   * While a replay runs, the 10Hz ticker must tick on the REPLAY's time axis,
+   * not the wall clock. Replayed events are restamped by a constant offset,
+   * but pacing (speed, the 5s gap cap) makes the two axes diverge — left on
+   * Date.now(), advance() crosses phase boundaries on the wall axis while the
+   * replayed events cross them on theirs, double-firing every boundary and
+   * flip-flopping bus.state between the two. Null outside a replay.
+   */
+  #replayClock: { logicalTs: number; wallTs: number; speed: number } | null = null;
 
   get state(): DeskState { return this.#state; }
   get recent(): readonly DeskEvent[] { return this.#ring; }
@@ -52,6 +61,19 @@ export class EventBus {
       console.error('[bus] event log write failed, logging disabled:', err.message);
       this.#log = null;
     });
+  }
+
+  /**
+   * Flush and close the event log. A WriteStream buffers its tail in memory,
+   * and exiting without end() drops the session's last events — exactly the
+   * ones a post-mortem replay would want. Resolves once the tail is on disk
+   * (or immediately if logging was never enabled).
+   */
+  closeLog(): Promise<void> {
+    const log = this.#log;
+    this.#log = null;
+    if (!log) return Promise.resolve();
+    return new Promise(res => log.end(() => res()));
   }
 
   emit<T>(init: EmitInit<T>): DeskEvent<T> {
@@ -90,11 +112,23 @@ export class EventBus {
   }
 
   /**
+   * "Now" on whichever time axis is currently authoritative: the wall clock
+   * normally, the replay's logical clock while a replay runs. Between replayed
+   * events the logical clock advances continuously at the replay speed, so
+   * phase boundaries that fall between two logged events still fire on time.
+   */
+  #now(): number {
+    const rc = this.#replayClock;
+    if (!rc) return Date.now();
+    return rc.logicalTs + (Date.now() - rc.wallTs) * rc.speed;
+  }
+
+  /**
    * Phase boundaries have to fire even when nothing else is happening.
    * Endgame lockdown and the auto-end marker are both time-driven, not
    * event-driven. Called at 10Hz by the server.
    */
-  advance(now = Date.now()): void {
+  advance(now = this.#now()): void {
     const before = this.#state;
     const after = tick(before, now);
     if (after.phase === this.#lastPhase) { this.#state = after; return; }
@@ -138,6 +172,7 @@ export class EventBus {
     let prev: number | null = null;
     let offset: number | null = null;
 
+    try {
     for (const line of lines) {
       let ev: DeskEvent;
       try { ev = JSON.parse(line) as DeskEvent; }
@@ -153,9 +188,15 @@ export class EventBus {
       // from the primary events, so re-emitting the logged copies doubled
       // every automatic marker and mixed the recording's stale pace numbers
       // with fresh ones. Manual markers are primary: nothing regenerates
-      // them, so they must replay.
+      // them, so they must replay. Clock-sourced phase boundaries
+      // (match.auto_end/endgame/shift_change/end) are derived the same way:
+      // advance() regenerates them from the replayed clock state, so replaying
+      // the logged copies double-fired every boundary — duplicate timeline
+      // markers and double-fired cues in the exact rehearsals replay exists
+      // for.
       if (ev.type === 'pace.updated') continue;
       if (ev.type === 'replay.marker' && ev.source !== 'manual') continue;
+      if (ev.source === 'clock') continue;
 
       if (speed > 0 && prev !== null) {
         const wait = (ev.ts - prev) / speed;
@@ -169,10 +210,20 @@ export class EventBus {
       // to its delivery time pushed auto scores into teleop at any pacing
       // other than exact 1x.
       offset ??= Date.now() - ev.ts;
+      const logicalTs = ev.ts + offset;
+      // Hand the ticker the replay's time axis (see #replayClock). speed=0
+      // (max speed) pins the logical clock to the event stream itself.
+      this.#replayClock = { logicalTs, wallTs: Date.now(), speed: speed > 0 ? speed : 1 };
       this.emit({
         type: ev.type, payload: ev.payload, source: ev.source,
-        confidence: ev.confidence, ts: ev.ts + offset,
+        confidence: ev.confidence, ts: logicalTs,
       });
+    }
+    } finally {
+      // Always hand time back to the wall clock, even if the replay threw
+      // mid-stream — a ticker stranded on a dead replay axis would misphase
+      // every live match that follows.
+      this.#replayClock = null;
     }
     console.log('[bus] replay complete');
   }

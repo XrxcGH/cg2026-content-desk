@@ -269,7 +269,11 @@ function paintStream(s) {
   $('streamStart').disabled = !usable;
   $('streamStop').disabled = !usable;
   let line;
-  if (!s) line = 'Stream status is unreachable. Check the link dot above.';
+  // Not "check the link dot": the dot tracks the WebSocket, which reconnects
+  // on its own schedule and is routinely green while this HTTP poll is the
+  // thing failing (a desk restart mid-poll, a blocked fetch). Pointing at a
+  // healthy indicator sent operators hunting in the wrong place.
+  if (!s) line = 'Stream status did not answer. If the desk just restarted, the next poll picks it up on its own.';
   else if (!s.available) line = 'No OBS control: launch the desk with --obs to run the stream from here.';
   else if (!s.connected) line = 'OBS is not connected. Start OBS on this machine; the desk retries on its own.';
   else if (s.streaming === null) line = 'OBS is connected but did not answer the status probe.';

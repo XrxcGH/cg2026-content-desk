@@ -21,7 +21,11 @@ export const REBUILT = {
 export const PHASE_LABEL = {
   pre: 'Pre-match', auto: 'Auto', transition: 'Transition',
   shift1: 'Shift 1', shift2: 'Shift 2', shift3: 'Shift 3', shift4: 'Shift 4',
-  endgame: 'Endgame', post: 'Final',
+  // 'End game', two words — the one spelling, everywhere. Core clock.ts and
+  // the replay console's timeline both use it, and the desk, remote, and
+  // talent consoles render THIS map, so a drift here shows two spellings of
+  // the same phase on adjacent screens at the desk.
+  endgame: 'End game', post: 'Final',
 };
 
 export function phaseAt(c) {

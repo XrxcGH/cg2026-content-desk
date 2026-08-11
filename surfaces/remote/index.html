@@ -237,7 +237,20 @@ desk.on('denied', () => {
   $('gate').setAttribute('data-show', '');
   toast('PIN required', true);
 });
-const unlock = () => desk.authenticate($('pin').value.trim());
+const unlock = () => {
+  const pin = $('pin').value.trim();
+  // Two doors, one key. The WS auth frame unlocks emits (screens, marks,
+  // telestrator), but the Cues section rides HTTP with the session cookie —
+  // and a desk restart rotates the session, killing the old cookie while the
+  // socket happily re-auths. Unlocking must refresh BOTH, or Cues stays a
+  // dead panel of stale arm states with no recovery short of a page reload.
+  desk.authenticate(pin);
+  void fetch('/api/auth', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  }).then(r => { if (r.ok) { sessionAuthed = true; loadCues(); } })
+    .catch(() => { /* the socket-side toast already reports the failure */ });
+};
 $('unlock').onclick = unlock;
 $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
 
@@ -295,7 +308,17 @@ $('teleHide').onclick = tap(() => { desk.emit({ type: 'telestrator.hide' }); toa
 async function loadCues() {
   try {
     const res = await fetch('/api/cues');
-    if (!res.ok) return;   // the PIN gate already covers a signed-out session
+    if (res.status === 401) {
+      // The HTTP session is dead (a desk restart rotates it) even though the
+      // socket may still be authed. Leaving the old buttons up showed stale
+      // arm states that no tap could change; clear them and bring the gate
+      // back so re-entering the PIN can refresh the cookie via unlock().
+      sessionAuthed = false;
+      $('cues').innerHTML = '<p class="hint">Signed out — enter the PIN to reload cues.</p>';
+      $('gate').setAttribute('data-show', '');
+      return;
+    }
+    if (!res.ok) return;
     const { cues = [] } = await res.json();
     $('cues').innerHTML = cues.map(c =>
       `<button class="b" data-cue="${c.id}" data-on="${c.autopilot}">${c.name}` +

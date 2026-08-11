@@ -130,6 +130,7 @@ built without a field. Drop it to run on desk input alone.
 | When do we play? | `/s/next` | Per-team schedule on any phone, drift-adjusted start estimates |
 | Head referee review | `/s/var` | Frame-step the recording. Read-only: no cut, no air, no publish |
 | Pit monitor kiosk | `/s/watch` | Venue pit TVs: a full-screen browser wrapping any of the open screens (`?screen=side`, `?screen=program`, ...) |
+| Phone remote | `/s/remote` | Run the show from a phone: screens, match lifecycle, marks, cue arming |
 
 The index page at `/` lists every surface with a one-line description. Start there.
 

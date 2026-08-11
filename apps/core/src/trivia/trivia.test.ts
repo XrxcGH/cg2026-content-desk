@@ -89,9 +89,9 @@ test('lifecycle: idle -> open -> revealed -> next; reveal required first', () =>
 
 test('standings rank by score, then correct count, then commitment', () => {
   const rows = standings([
-    { id: 'a', name: 'A', score: 900, correct: 1, joinedAt: 5 },
-    { id: 'b', name: 'B', score: 1500, correct: 2, joinedAt: 9 },
-    { id: 'c', name: 'C', score: 900, correct: 1, joinedAt: 1 },
+    { id: 'a', name: 'A', score: 900, correct: 1, answered: 2, joinedAt: 5 },
+    { id: 'b', name: 'B', score: 1500, correct: 2, answered: 2, joinedAt: 9 },
+    { id: 'c', name: 'C', score: 900, correct: 1, answered: 2, joinedAt: 1 },
   ]);
   assert.deepEqual(rows.map(r => r.player.id), ['b', 'c', 'a']);
   assert.deepEqual(rows.map(r => r.rank), [1, 2, 3]);
@@ -374,4 +374,71 @@ test('a long move across the open question keeps the cursor on it', () => {
   assert.deepEqual(store.bank().map(q => q.text), ['D', 'A', 'B', 'C']);
   assert.equal(store.snapshot().question?.text, 'C', 'the room still answers C');
   assert.equal(store.bank().findIndex(q => q.live), 3);
+});
+
+test('open() from revealed is refused: the answer is still on the big screen', () => {
+  const store = new TriviaStore(new EventBus(), BANK);
+  const ana = store.join('Ana').playerId;
+  store.open(20);
+  store.answer(ana, 1);
+  store.reveal();
+  // The host forgot Next. Obeying this used to re-air the just-answered
+  // question and pay every correct answer a second time at the next reveal.
+  assert.throws(() => store.open(20), /Hit Next first/);
+  assert.equal(store.playView(ana).me?.correct, true);
+  store.next();
+  store.open(20);   // now it is the NEXT question
+  assert.equal(store.snapshot().question?.text, 'Capital of fuel?');
+});
+
+test('an idle reorder cannot cross the already-asked line', () => {
+  const opts: [string, string, string, string] = ['w', 'x', 'y', 'z'];
+  const store = new TriviaStore(new EventBus(), [
+    { id: 'a', text: 'A?', options: opts, answer: 0 },
+    { id: 'b', text: 'B?', options: opts, answer: 0 },
+    { id: 'c', text: 'C?', options: opts, answer: 0 },
+    { id: 'd', text: 'D?', options: opts, answer: 0 },
+  ]);
+  store.open(20); store.reveal(); store.next();   // 'a' asked, cursor on 'b'
+
+  // Moving an unasked question above the boundary would park it in the asked
+  // region, never to air; the mirror image re-airs an asked one. Both refuse.
+  assert.throws(() => store.moveQuestion(1, -1), /already-asked line/);
+  assert.throws(() => store.moveQuestion(0, 1), /already-asked line/);
+
+  // Reordering entirely within the un-asked region is fine, and the next
+  // question to air is whatever now sits at the cursor.
+  store.moveQuestion(3, -1);                       // [a, b, d, c]
+  store.moveQuestion(2, -1);                       // [a, d, b, c]
+  store.open(20);
+  assert.equal(store.snapshot().question?.text, 'D?');
+});
+
+test('eviction spares players who answered (even wrongly) over silent joiners', () => {
+  const store = new TriviaStore(new EventBus(), BANK);
+  // The wrong-answerer joins FIRST, so under the old score-based idleness they
+  // were the longest-idle candidate and the first out the door.
+  const wrongAnswerer = store.join('Keeps Trying').playerId;
+  for (let i = 0; i < 499; i++) store.join(`Squatter ${i}`);
+  assert.equal(store.snapshot().players, 500, 'room is at the cap');
+
+  store.open(5);
+  store.answer(wrongAnswerer, 0);   // wrong: scores nothing, but they PLAYED
+  store.reveal();
+  store.next();
+
+  // The 501st join must land by evicting a silent squatter, never the player
+  // who has been answering all game and just happens to be bad at trivia.
+  const fresh = store.join('Late Arrival').playerId;
+  assert.equal(store.snapshot().players, 500);
+  assert.ok(store.playView(wrongAnswerer).me, 'the participant keeps the slot');
+  assert.ok(store.playView(fresh).me, 'the newcomer got in');
+});
+
+test('a join that cannot succeed never costs a real player their slot', () => {
+  const store = new TriviaStore(new EventBus(), BANK);
+  store.join('Ana');
+  // Blank names must be rejected BEFORE any eviction runs.
+  assert.throws(() => store.join('   '), /name is required/);
+  assert.equal(store.snapshot().players, 1, 'Ana was not evicted by a failed join');
 });

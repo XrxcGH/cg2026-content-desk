@@ -464,6 +464,47 @@ test('reports robots that have lost their driver station link', () => {
   assert.deepEqual(status.down, [1868]);
 });
 
+test('a dropped robot is an edge, not a level: one newlyDown per actual drop', () => {
+  const bus = new EventBus();
+  const seen: DeskEvent[] = [];
+  bus.subscribe(ev => seen.push(ev));
+  const adapter = new CheesyAdapter({ bus, host: '127.0.0.1:1', displayId: 'test' });
+
+  const frame = (r1: boolean, r2: boolean) => ({
+    AllianceStations: {
+      R1: { Team: { Id: 846 }, Ds: { RobotLinked: r1 } },
+      R2: { Team: { Id: 1868 }, Ds: { RobotLinked: r2 } },
+    },
+  });
+  const newlyDowns = () => seen.filter(e => e.type === 'arena.status')
+    .map(e => (e.payload as { newlyDown: number[] }).newlyDown);
+
+  // Pre-match link-up: robots connect one by one. None of this is a drop, so
+  // no frame may mint a "lost comms" marker — the old level-based marking
+  // produced one per unlinked robot per frame here.
+  adapter.ingest('arenaStatus', frame(false, false));
+  adapter.ingest('arenaStatus', frame(true, false));
+  adapter.ingest('arenaStatus', frame(true, true));
+  assert.deepEqual(newlyDowns(), [[], [], []], 'link-up is not a drop');
+
+  adapter.ingest('matchTime', { MatchState: MatchState.AutoPeriod });
+  seen.length = 0;
+
+  // Mid-match, 1868 drops and STAYS down. Exactly one edge, then silence —
+  // Cheesy re-sends arenaStatus continuously, and every frame used to repeat
+  // the marker.
+  adapter.ingest('arenaStatus', frame(true, false));
+  adapter.ingest('arenaStatus', frame(true, false));
+  adapter.ingest('arenaStatus', frame(true, false));
+  assert.deepEqual(newlyDowns(), [[1868], [], []], 'one drop, one edge');
+
+  // It relinks, then drops again: that is a second genuine drop.
+  seen.length = 0;
+  adapter.ingest('arenaStatus', frame(true, true));
+  adapter.ingest('arenaStatus', frame(true, false));
+  assert.deepEqual(newlyDowns(), [[], [1868]], 'a relink-then-drop is a new edge');
+});
+
 test('arms once when every fielded robot links, before the countdown', () => {
   const bus = new EventBus();
   const seen: string[] = [];

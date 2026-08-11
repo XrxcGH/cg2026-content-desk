@@ -145,7 +145,16 @@ export function drawCard(ctx, card) {
     ctx.letterSpacing = '0px';
 
     ctx.font = num(900)(150);
-    ctx.fillText(String(data?.score ?? 0), x + blockW / 2, blockY + 218);
+    if (card.estimated) {
+      // Shadow-scored totals are OUTLINED here for the same reason the score
+      // bar outlines them: a guess must never leave the desk looking
+      // official — least of all on a card someone is about to post.
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = p.white;
+      ctx.strokeText(String(data?.score ?? 0), x + blockW / 2, blockY + 218);
+    } else {
+      ctx.fillText(String(data?.score ?? 0), x + blockW / 2, blockY + 218);
+    }
 
     if (isWinner) {
       ctx.fillStyle = p.gold;
@@ -283,6 +292,9 @@ export function cardFromState(state, opts = {}) {
     // Carried onto the card so the printed numeral matches what the match
     // was actually scored against.
     thresholds: state.thresholds,
+    // Shadow-scored (desk-typed) totals render outlined, same contract as the
+    // score bar. A card built from estimated numbers must say so visibly.
+    estimated: state.confidence === 'estimated',
     red: side('red'),
     blue: side('blue'),
     footer: opts.footer ?? 'calgames.org',

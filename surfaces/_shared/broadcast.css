@@ -134,6 +134,13 @@
   background-size: var(--tex-perf-size), cover;
   clip-path: var(--chamfer);
 }
+/* Luma: purple-lo is dark enough to partially key out on the DSK, so the
+   plate's lower half went translucent. Flat purple, same as the bar's luma
+   treatment. */
+:root[data-key="luma"] .robot-art--fallback {
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf);
+}
 .robot-art--fallback::after {
   content: ""; position: absolute; bottom: 0; left: 0; right: 0; height: 6px;
   background: var(--cg-gold);
@@ -194,8 +201,12 @@
   color: var(--cg-white); letter-spacing: .02em;
 }
 /* Four-team playoff alliance: the bar height is fixed, so the fourth line is
-   bought with tighter leading and a step down rather than by overflowing. */
-.bar-teams[data-rows="4"] { font-size: calc(var(--t-label) * .78); line-height: 1.06; }
+   bought with tighter leading — but never below the 28px broadcast floor.
+   The old .78 step-down landed at 21.84px on stream, under the floor the
+   whole system promises; at 1.02 leading, four 28px rows run 114px and clear
+   the 148px stream bar without it. (At venue scale max() resolves to the
+   scaled step-down, which four rows also fit.) */
+.bar-teams[data-rows="4"] { font-size: max(calc(var(--t-label) * .78), 28px); line-height: 1.02; }
 .bar-side--blue .bar-teams { text-align: right; }
 
 /* Fuel/tower readout centered over its RP strip, and the total centered in
@@ -418,6 +429,13 @@
   font-weight: 900; font-size: calc(var(--t-hero) * 1.5); line-height: 1;
   letter-spacing: -.04em; color: var(--cg-white);
 }
+/* Estimated (shadow-scored) totals render outlined here exactly as they do on
+   the score bar. The final screen is the one everyone screenshots; a guess
+   must never look official on it. Stroke scales with the hero size. */
+.final-score[data-est="true"] {
+  color: transparent;
+  -webkit-text-stroke: 5px var(--cg-white);
+}
 /* Where the points came from: fuel/tower by period, plus opponent fouls.
    A recessed plate so the itemization reads as detail under the hero total. */
 .final-break {
@@ -576,8 +594,12 @@
   width: 100%; height: 8px; justify-self: center; background: var(--cg-purple-hi); clip-path: var(--chamfer); --ch: 3px;
 }
 
+/* var(--surface-sunken), not a raw --cg-purple-lo: the semantic role is what
+   luma mode remaps (purple-lo partially keys out on the DSK, so luma swaps
+   sunken surfaces to flat --cg-purple). Hardcoding the raw color bypassed
+   that remap and the pool plate went translucent on the keyer. */
 .sel-pool { display: flex; flex-direction: column; min-height: 0;
-  background: var(--cg-purple-lo); clip-path: var(--chamfer); --ch: 16px; padding: 16px 20px; }
+  background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 16px; padding: 16px 20px; }
 .sel-pool-head {
   font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
   letter-spacing: .18em; text-indent: .18em; text-transform: uppercase;

@@ -158,7 +158,9 @@ Merged from four raw findings; the single most repeated demand across Chief Delp
 
 Merged from four raw findings; the most-discussed AV pitfall in FRC. Official event Twitch VODs are unpublished and never re-posted for DMCA fear ('the entire event is gone forever'); team restreams get struck '80% of the time'; several official FIRST Twitch channels were banned mid-event in September 2025; YouTube Content ID scans live streams in realtime and can flag uploaded match videos that picked up house music on crowd mics. The converged community fix is a dual audio bus: venue/DJ mix never reaches the stream; the stream gets announcer + field sound + a licensed/allowlisted bed (PNW runs Spotify to the venue and licensed Monstercat to the stream off one console; veteran streamers take an FX/aux send of just MC mics and field sound). OBS multi-track audio lets the recording/VOD track omit music entirely.
 
-**Recommendation:** The game-audio-never-on-stream rule and the arcade's licensed-bed approach cover console audio only; docs/06 routes the full venue mixer feed (field sound, announcer, AND music) to program, which is exactly the vector that kills FRC streams and would Content-ID-flag the desk's own YouTube match uploads. Extend the dual-bus policy to the main program: stream bus = announcer + field FX + licensed bed only; venue bus keeps the DJ music. Use OBS multi-track so replay clips and uploads carry a music-free track; document the mixer aux-send wiring in docs/06; add a pre-upload audio check to the publish queue.
+**Recommendation:** Extend the dual-bus policy to the main program: stream bus = announcer + field FX + licensed bed only; venue bus keeps the DJ music. Use OBS multi-track so replay clips and uploads carry a music-free track; add a pre-upload audio check to the publish queue.
+
+**Built since this audit:** docs/06 now specifies exactly this — "Audio: two buses, and music never leaves the room", with the music source physically absent from the STREAM bus and the wiring documented at the mixer. Still open from the recommendation: OBS multi-track on the recordings and a pre-upload audio check in the publish queue.
 
 - <https://www.chiefdelphi.com/t/lets-solve-the-twitch-and-youtube-dmca-issues-from-streams/429168>
 - <https://www.chiefdelphi.com/t/opinions-on-twitch-as-an-frc-streaming-platform/458993>
@@ -346,6 +348,8 @@ Offseason webcasters can't share the field's internet drop and buy their own (hu
 
 **Recommendation:** Define a degraded-uplink runbook: pre-configured low-bitrate OBS profile to switch to, local recording always on so archive and replay survive uplink loss, and a stream-health readout (dropped-frame percentage) on the dark operator console so the desk sees trouble before chat does.
 
+**Built since this audit:** docs/11 now carries that runbook — the low-bitrate fallback profile, the local-recording-never-stops rule, and watch-the-encoder guidance (OBS's own dropped-frame percentage as the early warning). Still open: surfacing that dropped-frame figure on the desk's stream panel rather than in OBS's corner.
+
 - <https://www.chiefdelphi.com/t/event-livestreaming/145356>
 - <https://www.chiefdelphi.com/t/webcasts-2015/142529/42>
 - <https://www.chiefdelphi.com/t/webcast-operators-please-include-the-net/497409>
@@ -364,9 +368,11 @@ Teams watching from their pits resort to USB-tethered phones and LTE routers bec
 
 *occasional*
 
-Team 971's FRC.bet ran a no-money prediction market at Madtown Throwdown with real engagement (8+ page thread, plus debate about gambling framing); FRCCast runs in-season prediction markets. The desk's crowd trivia is the same phones+leaderboard mechanic but doesn't tie gap content to the actual competition.
+Team 971's FRC.bet ran a no-money prediction market at Madtown Throwdown with real engagement (8+ page thread, plus debate about gambling framing); FRCCast runs in-season prediction markets. The desk's crowd trivia is the same phones+leaderboard mechanic.
 
 **Recommendation:** Add a 'pick the winner' question type auto-resolved from the Cheesy bridge's final-score event, reusing phone/leaderboard infrastructure. Avoid money/market framing (community sensitivity); simple pick-em with streak scoring. Could feed a 'crowd pick vs EPA pick' pre-match graphic.
+
+**Built since this audit:** the pick-the-winner round exists — `trivia.pick()` queues a prediction on the loaded match, the host opens it in the pre-match gap, and reveal resolves it against the posted score (docs/09 lists it done). Still open: the 'crowd pick vs EPA pick' pre-match graphic.
 
 - <https://www.chiefdelphi.com/t/prediction-market-app-by-frc971-public-beta-at-madtown/507971>
 - <https://www.chiefdelphi.com/t/frccast-prediction-markets-for-on-season/514709>

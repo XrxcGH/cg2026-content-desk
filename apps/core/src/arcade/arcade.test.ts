@@ -152,3 +152,44 @@ test('a best-of-5 set completes at three wins, not two', () => {
   store.score(1, 1);
   assert.equal(store.snapshot.set?.state, 'complete', 'the default is still best of 3');
 });
+
+test('a NaN score delta is refused rather than poisoning the set', () => {
+  const store = new ArcadeStore(new EventBus());
+  store.startSet({ game: 'smash', round: 'Winners Final',
+    players: [{ id: 'p1', name: 'Ana' }, { id: 'p2', name: 'Ben' }] });
+  assert.throws(() => store.score(0, Number('one')), /must be a number/);
+  // The set is untouched and still scorable.
+  const set = store.score(0, 1);
+  assert.deepEqual(set?.scores, [1, 0]);
+});
+
+test('starting a new set over a live one announces the old set_end first', () => {
+  const bus = new EventBus();
+  const ends: unknown[] = [];
+  bus.subscribe(ev => { if (ev.type === 'arcade.set_end') ends.push(ev); });
+  const store = new ArcadeStore(bus);
+
+  store.startSet({ game: 'smash', round: 'Round 1',
+    players: [{ id: 'p1', name: 'Ana' }, { id: 'p2', name: 'Ben' }] });
+  // Operator abandons it and starts the next: subscribers (the publish
+  // auto-queue cuts each set video off set_end) must hear the first one close.
+  store.startSet({ game: 'smash', round: 'Round 2',
+    players: [{ id: 'p3', name: 'Cy' }, { id: 'p4', name: 'Dee' }] });
+  assert.equal(ends.length, 1, 'the interrupted set announced its end');
+
+  // A completed set does NOT re-announce when the next one starts.
+  store.score(0, 1); store.score(0, 1);            // auto-completes best-of-3
+  assert.equal(ends.length, 2);
+  store.startSet({ game: 'smash', round: 'Round 3',
+    players: [{ id: 'p5', name: 'Eve' }, { id: 'p6', name: 'Fay' }] });
+  assert.equal(ends.length, 2, 'no duplicate set_end for an already-complete set');
+});
+
+test('a duplicated racer id in a finishing order is refused', () => {
+  const store = new ArcadeStore(new EventBus());
+  store.startGrandPrix('Pit Crew Cup', racers as ArcadePlayer[], 4);
+  assert.throws(() => store.recordRace(['a', 'a', 'c', 'd']), /appears twice/);
+  // Nothing was recorded, and a clean order still lands.
+  const after = store.recordRace(['a', 'b', 'c', 'd']);
+  assert.equal(after?.races.length, 1);
+});

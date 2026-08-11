@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { arcadeLabel, description, identify, streamTitle, videoTitle } from './naming.ts';
+import { arcadeLabel, description, identify, isPractice, streamTitle, videoTitle } from './naming.ts';
 
 test('qualification naming matches the official channel', () => {
   for (const input of ['Qualification 1', 'Qual 1', 'Q1', 'qm1', 'qualification #1']) {
@@ -36,6 +36,26 @@ test('practice matches title normally but carry no TBA key', () => {
   // skip the TBA link, not to refuse the video.
   assert.deepEqual(identify('Practice 3'), { name: 'Practice 3', key: null });
   assert.equal(videoTitle(identify('Practice 3').name, 'CalGames'), 'Practice 3 - CalGames');
+});
+
+test('FMS short names: P3 is a practice, never a playoff with a real TBA key', () => {
+  // "P3" used to match the playoff regex's bare `p` alias, titling a
+  // scrimmage "Match 3 (R1)" and linking its video to the real key sf3m1.
+  assert.deepEqual(identify('P3'), { name: 'Practice 3', key: null });
+  assert.deepEqual(identify('p 3'), { name: 'Practice 3', key: null });
+  assert.equal(isPractice('P3'), true);
+  // The playoff short form is M-numbered, and still resolves.
+  assert.deepEqual(identify('M5'), { name: 'Match 5 (R2)', key: 'sf5m1' });
+});
+
+test('titles carry the year exactly once, however the config spells the event', () => {
+  assert.equal(videoTitle('Qualification 1', 'CalGames', 2026),
+    'Qualification 1 - 2026 CalGames');
+  // The obvious config (name already carrying the year) must not double it.
+  assert.equal(videoTitle('Qualification 1', '2026 CalGames', 2026),
+    'Qualification 1 - 2026 CalGames');
+  assert.equal(streamTitle(2026, '2026 CalGames', 2), '2026 CalGames - Day 2');
+  assert.equal(streamTitle(2026, 'CalGames', 1), '2026 CalGames - Day 1');
 });
 
 test('arcade set labels read like a bracket, with the game in parentheses', () => {

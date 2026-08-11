@@ -136,8 +136,12 @@ export function attachMarkers(bus: EventBus): () => void {
       case 'arena.status': {
         // "What happened to 846?" This is the marker nobody thinks to hit
         // manually because it happens while everyone is watching the other end.
-        const p = ev.payload as { down?: number[] } | undefined;
-        for (const team of p?.down ?? []) {
+        // newlyDown, not down: `down` is level state repeated on every frame
+        // (marking it flooded the timeline with duplicates), while the adapter
+        // edge-detects newlyDown to teams that just went from linked to
+        // unlinked mid-match — one marker per actual drop.
+        const p = ev.payload as { newlyDown?: number[] } | undefined;
+        for (const team of p?.newlyDown ?? []) {
           mark({ kind: 'robot_down', label: `${team} lost comms`, priority: 2 }, ev.ts);
         }
         break;

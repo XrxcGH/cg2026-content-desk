@@ -102,12 +102,10 @@ export function startServer(opts: ServerOpts) {
           publish = null, config = null, cheesy = null, cues = null, obs = null,
           arcade = null, trivia = null, lanBase = null } = opts;
 
-  // Last resort. The desk runs unattended for three days, so a throw nobody
-  // anticipated must log and keep the show running, never exit. index.ts
-  // covers unhandled rejections; sync throws in socket callbacks land here.
-  process.on('uncaughtException', err => {
-    console.error('[core] uncaught exception, continuing:', err);
-  });
+  // Crash policy lives in index.ts, in the ONE uncaughtException handler for
+  // the whole process: fatal during boot, log-and-continue once the show is
+  // up. A second handler here could never run — Node calls listeners in
+  // registration order, and index.ts's would already have decided.
 
   /**
    * Write the question bank back to `data/trivia.json`.
@@ -185,13 +183,29 @@ export function startServer(opts: ServerOpts) {
     new Promise((ok, fail) => {
       const chunks: Buffer[] = [];
       let size = 0;
+      let overflowed = false;
       req.on('data', c => {
+        if (overflowed) return;   // draining: count nothing, keep nothing
         size += c.length;
-        if (size > limit) { fail(new Error('Upload too large (32MB max)')); req.destroy(); return; }
+        if (size > limit) {
+          overflowed = true;
+          chunks.length = 0;
+          // Reject with the route's ACTUAL limit — this text reaches the
+          // operator, and telling someone with a 6KB body "32MB max" sends
+          // them debugging the wrong thing. And never destroy the socket
+          // here: that tore down the response too, so the friendly 422 the
+          // route writes next could not reach the client. Draining the rest
+          // lets 'end' fire and the response deliver normally.
+          const shown = limit >= 1024 * 1024
+            ? `${Math.round(limit / (1024 * 1024))}MB`
+            : `${Math.round(limit / 1024)}KB`;
+          fail(new Error(`Body too large (limit ${shown}).`));
+          return;
+        }
         chunks.push(c as Buffer);
       });
-      req.on('end', () => ok(Buffer.concat(chunks)));
-      req.on('error', fail);
+      req.on('end', () => { if (!overflowed) ok(Buffer.concat(chunks)); });
+      req.on('error', err => { if (!overflowed) fail(err); });
     });
 
   /**
@@ -230,8 +244,17 @@ export function startServer(opts: ServerOpts) {
    */
   const REMOTE_PIN = process.env['REMOTE_PIN'] ?? DEFAULT_PIN;
 
-  /** Trivia joins per source address, for the mint-loop guard on /api/trivia/join. */
-  const joinsByAddress = new Map<string, number>();
+  /**
+   * Trivia joins per source address, for the mint-loop guard on
+   * /api/trivia/join. Timestamps rather than a counter: a counter never
+   * decayed, so under venue NAT (many phones, one address) it hardened into a
+   * 50-player-per-address cap for the entire three-day event. A sliding
+   * one-hour window keeps the guard's point — nobody mints 50 players in an
+   * hour by accident — without ever locking out a section of the gym for good.
+   */
+  const JOIN_WINDOW_MS = 60 * 60_000;
+  const JOIN_LIMIT = 50;
+  const joinsByAddress = new Map<string, number[]>();
 
   /**
    * Brute-force damper for the PIN.
@@ -499,11 +522,15 @@ export function startServer(opts: ServerOpts) {
               // many phones onto one address, so single digits would lock out
               // a whole section of the gym.
               const from = req.socket.remoteAddress ?? 'unknown';
-              const joins = (joinsByAddress.get(from) ?? 0) + 1;
-              joinsByAddress.set(from, joins);
-              if (joins > 50) {
-                return json(res, 429, { error: 'Too many joins from this connection. Find a volunteer if this is a mistake.' });
+              const now = Date.now();
+              const recent = (joinsByAddress.get(from) ?? [])
+                .filter(t => now - t < JOIN_WINDOW_MS);
+              if (recent.length >= JOIN_LIMIT) {
+                joinsByAddress.set(from, recent);
+                return json(res, 429, { error: 'Too many joins from this connection. Wait a while, or find a volunteer if this is a mistake.' });
               }
+              recent.push(now);
+              joinsByAddress.set(from, recent);
               return json(res, 200, trivia.join(String(body['name'] ?? ''), Number(body['team']) || undefined));
             }
             case 'answer':
@@ -893,7 +920,11 @@ ${sections}</body></html>`;
   }
 
   // ---- WebSocket fan-out -------------------------------------------------
-  const wss = new WebSocketServer({ server: http, path: '/ws' });
+  // maxPayload: the biggest legitimate inbound frame is a telestrator stroke
+  // batch, a few KB. Without a cap, ws accepts frames up to its 100MiB default
+  // and every one is String()+JSON.parse'd on the show-critical event loop —
+  // from any socket, before the PIN gate is even consulted.
+  const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 256 * 1024 });
   const send = (ws: WebSocket, msg: unknown): void => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
   };

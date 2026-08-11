@@ -256,7 +256,13 @@ export class ClipStore {
       '-t', outLen.toFixed(3),
       ...(filters.length ? ['-vf', filters.join(',')] : []),
       '-c:v', this.#encoder.encoder, ...this.#encoder.args,
-      '-an',
+      // Audio rides along at realtime: match videos and segments upload with
+      // the announcer and the crowd, which is most of why anyone watches them.
+      // Slow-mo drops audio instead — setpts stretches only video, so keeping
+      // the track would desync it, and a half-speed crowd is noise anyway.
+      // A source with no audio stream (test patterns) simply yields no track;
+      // -c:a without a forced -map never fails on silent input.
+      ...(speed === 1 ? ['-c:a', 'aac', '-b:a', '192k'] : ['-an']),
       outFile,
     ], 300_000);
 

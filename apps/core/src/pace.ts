@@ -57,11 +57,22 @@ export function projectNextStart(
   return Math.max(now, lastStartAt + cycleMs);
 }
 
+/**
+ * Beyond this, the "schedule" and the clock are not describing the same day,
+ * and the honest answer is no figure at all. Real FRC events run at most a few
+ * hours behind; the two ways to exceed twelve hours are a replayed log (events
+ * restamped to now, schedule strings still from the recording day — behindMin
+ * would read the replay offset, months of minutes) and a schedule import with
+ * the wrong date. Both must blank the sign, not put nonsense on it.
+ */
+const MAX_CREDIBLE_BEHIND_MIN = 12 * 60;
+
 export function behindMinutes(
   nextStartAt: number | null, nextScheduledAt: number | null,
 ): number | null {
   if (nextStartAt === null || nextScheduledAt === null) return null;
-  return Math.round((nextStartAt - nextScheduledAt) / 60_000);
+  const min = Math.round((nextStartAt - nextScheduledAt) / 60_000);
+  return Math.abs(min) > MAX_CREDIBLE_BEHIND_MIN ? null : min;
 }
 
 /**
@@ -107,10 +118,15 @@ export function attachPace(bus: EventBus): () => void {
   const unsubscribe = bus.subscribe(ev => {
     if (ev.type === 'match.start') {
       // Captured before the queue advances: the head IS the match starting.
+      // Same credibility bound as behindMinutes: a latched figure computed
+      // against a schedule from another day (replay, bad import) is nonsense.
       const head = bus.state.upcoming[0];
       const schedAt = head?.time ? Date.parse(head.time) : NaN;
-      held = head && Number.isFinite(schedAt)
-        ? { behindMin: Math.round((ev.ts - schedAt) / 60_000), head: head.shortName }
+      const latched = Number.isFinite(schedAt)
+        ? Math.round((ev.ts - schedAt) / 60_000)
+        : null;
+      held = head && latched !== null && Math.abs(latched) <= MAX_CREDIBLE_BEHIND_MIN
+        ? { behindMin: latched, head: head.shortName }
         : null;
       starts.push(ev.ts);
       while (starts.length > KEEP + 1) starts.shift();

@@ -166,19 +166,37 @@ export class ObsClient {
   async suppressCheesySources(pattern = /cheesy|audience[ _-]?display/i): Promise<string[]> {
     const { scenes } = await this.request<{ scenes?: { sceneName?: string }[] }>('GetSceneList');
     const disabled: string[] = [];
-    for (const scene of scenes ?? []) {
-      if (!scene?.sceneName) continue;
-      const { sceneItems } = await this.request<{
-        sceneItems?: { sceneItemId?: number; sourceName?: string; sceneItemEnabled?: boolean }[];
-      }>('GetSceneItemList', { sceneName: scene.sceneName });
+
+    type Item = {
+      sceneItemId?: number; sourceName?: string;
+      sceneItemEnabled?: boolean; isGroup?: boolean | null;
+    };
+
+    const sweep = async (containerName: string, isGroup: boolean): Promise<void> => {
+      // In obs-websocket v5, GetSceneItemList returns a group as a SINGLE item
+      // and never its children — those need GetGroupSceneItemList, addressed
+      // by the group's name. Without the recursion, a Cheesy source dragged
+      // into a group (a common way volunteers organize scenes) survived every
+      // sweep, and both scorebugs composited: the exact failure this exists
+      // to prevent.
+      const { sceneItems } = await this.request<{ sceneItems?: Item[] }>(
+        isGroup ? 'GetGroupSceneItemList' : 'GetSceneItemList',
+        { sceneName: containerName });
       for (const item of sceneItems ?? []) {
         if (item?.sceneItemId === undefined || !item.sourceName) continue;
+        if (item.isGroup) await sweep(item.sourceName, true);
         if (!pattern.test(item.sourceName) || item.sceneItemEnabled === false) continue;
+        // SetSceneItemEnabled addresses group children by the GROUP's name.
         await this.request('SetSceneItemEnabled', {
-          sceneName: scene.sceneName, sceneItemId: item.sceneItemId, sceneItemEnabled: false,
+          sceneName: containerName, sceneItemId: item.sceneItemId, sceneItemEnabled: false,
         });
-        disabled.push(`${scene.sceneName} / ${item.sourceName}`);
+        disabled.push(`${containerName} / ${item.sourceName}`);
       }
+    };
+
+    for (const scene of scenes ?? []) {
+      if (!scene?.sceneName) continue;
+      await sweep(scene.sceneName, false);
     }
     return disabled;
   }

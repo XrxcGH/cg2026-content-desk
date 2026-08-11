@@ -251,10 +251,13 @@ export function startFakeArena(opts: FakeArenaOpts) {
 
     let redFuel = 4, blueFuel = 9;
     let redTower = 15, blueTower = 0;
-    // Shift plan: [shift index, hub owner]. 10s of transition, then 4x25s.
+    // Shift plan: [shift index, hub owner]. 10s of transition, then 4x25s,
+    // then a FULL 30s endgame — REBUILT's real length. A 10s endgame here
+    // buzzed at match clock ~120 while every clock-derived surface still
+    // showed 0:20 remaining, which made rehearsals distrust the clock.
     const shiftOwner = ['red', 'blue', 'red', 'blue'] as const;
-    for (let tick = 0; tick < 22; tick++) {
-      const t = T_TELE + 10_000 + tick * 5_000;   // every 5s of the 110s teleop+endgame
+    for (let tick = 0; tick < 26; tick++) {
+      const t = T_TELE + 10_000 + tick * 5_000;   // every 5s of the 130s shifts+endgame
       at(t, () => {
         const elapsed = tick * 5;                  // seconds since shifts began
         const shift = Math.min(3, Math.floor(elapsed / 25));
@@ -287,11 +290,11 @@ export function startFakeArena(opts: FakeArenaOpts) {
       });
     }
 
-    // Buzzer at T_TELE + 120s (10 transition + 4x25 shifts + endgame beats).
-    const T_END = T_TELE + 120_000;
+    // Buzzer at T_TELE + 140s (10 transition + 4x25 shifts + 30s endgame).
+    const T_END = T_TELE + 140_000;
     at(T_END, () => {
       log('match end');
-      send('matchTime', { MatchState: MatchState.PostMatch, MatchTimeSec: 140 });
+      send('matchTime', { MatchState: MatchState.PostMatch, MatchTimeSec: 160 });
       send('realtimeScore', {
         MatchState: MatchState.PostMatch,
         Red: { ScoreSummary: summary(4, redFuel - 4, 15, redTower - 15, 0), ActiveRemainingSec: 0 },

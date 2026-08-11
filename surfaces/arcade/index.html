@@ -38,17 +38,27 @@
 .ar-side--p2 { flex-direction: row-reverse; text-align: right; }
 .ar-side--p1 { background: var(--cg-purple); border-right: var(--rule); }
 .ar-side--p2 { background: var(--cg-green-lo); border-left: var(--rule); }
+/* min-width: 0 lets the text column actually shrink inside the flex row;
+   without it a long name refuses to clamp and pushes the score off the edge. */
+.ar-side > div:first-child { min-width: 0; }
+.ar-side--p2 > div:first-child { min-width: 0; }
 
+/* The GP panel, the up-next chip, and the round tab all hang off --strip-h,
+   so NOTHING in the strip may grow it: a wrapped long name used to add a
+   line, push the strip past its height, and slide it under all three. Names
+   clamp to two lines, the team line to one, and the ellipsis takes the rest. */
 .ar-name {
   font-family: var(--font-display); font-weight: 800; font-size: 28px;
   font-variation-settings: "wdth" var(--wdth-display); line-height: 1.02;
   overflow-wrap: break-word;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .ar-team {
   margin-top: 4px;
   font-family: var(--font-cond); font-weight: 600; font-size: 28px;
   letter-spacing: .1em; text-transform: uppercase; color: var(--cg-gold);
-  overflow-wrap: break-word;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
 .ar-score {
   font-family: var(--font-num); font-variant-numeric: tabular-nums;
@@ -282,7 +292,7 @@ function paint(s) {
     $('ffa').innerHTML = set.players.map((p, i) => `
       <div class="ffa-cell" data-lead="${max > 0 && set.scores[i] === max}">
         <div class="ffa-score num" data-est="${est}">${set.scores[i] ?? 0}</div>
-        <div class="ffa-name">${p.team ? `<b>${p.team}</b>` : ''}${escapeHtml(p.name ?? '-')}</div>
+        <div class="ffa-name">${p.team ? `<b>${escapeHtml(p.team)}</b>` : ''}${escapeHtml(p.name ?? '-')}</div>
       </div>`).join('');
     $('ffaTab').firstElementChild.textContent =
       `${set.round ? set.round + ' · ' : ''}${GAME_LABEL[set.game] ?? 'Arcade'}`;
@@ -299,7 +309,10 @@ function paint(s) {
       <div class="gp-row">
         <span class="gp-pos num">${i + 1}</span>
         <span class="gp-name">${escapeHtml(row.player.name)}${
-          row.player.team ? ` <span style="color:var(--cg-gold)">${row.player.team}</span>` : ''}</span>
+          // team is operator/start.gg-fed text, same trust level as the name
+          // beside it — it goes through the same escape, or it is an on-air
+          // HTML injection point.
+          row.player.team ? ` <span style="color:var(--cg-gold)">${escapeHtml(row.player.team)}</span>` : ''}</span>
         <span class="gp-pts num">${row.points}</span>
       </div>`).join('');
   }
