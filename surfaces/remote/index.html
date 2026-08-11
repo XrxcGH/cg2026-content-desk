@@ -170,6 +170,13 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px; letter-sp
   </section>
 
   <section>
+    <!-- The switcher, when there is one, is standing at a camera rather than
+         sitting at the desk. -->
+    <h2>Cameras</h2>
+    <div class="grid" id="sceneGrid"></div>
+  </section>
+
+  <section>
     <h2>Replay</h2>
     <div class="grid">
       <button class="b b--go b--wide" id="mark" style="min-height:76px">
@@ -263,7 +270,7 @@ const unlock = () => {
   void fetch('/api/auth', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ pin }),
-  }).then(r => { if (r.ok) { sessionAuthed = true; loadCues(); loadAudio(); } })
+  }).then(r => { if (r.ok) { sessionAuthed = true; loadCues(); loadAudio(); loadScenes(); } })
     .catch(() => { /* the socket-side toast already reports the failure */ });
 };
 $('unlock').onclick = unlock;
@@ -318,6 +325,47 @@ $('mark').onclick = tap(() => {
 
 $('teleClear').onclick = tap(() => { desk.emit({ type: 'telestrator.clear' }); toast('Ink cleared'); });
 $('teleHide').onclick = tap(() => { desk.emit({ type: 'telestrator.hide' }); toast('Telestrator hidden'); });
+
+// ---- cameras ---------------------------------------------------------------
+// The same control the desk console has. A dedicated switcher may be standing
+// at a camera rather than sitting down, and at the floor of the crew range the
+// person cutting is the person holding this phone.
+const SCENE_LABEL = {
+  intro: 'Intro', match: 'Field', score: 'Score',
+  replay: 'Replay', desk: 'Desk', arcade: 'Arcade',
+};
+
+async function loadScenes() {
+  try {
+    const res = await fetch('/api/scenes');
+    if (!res.ok) return;
+    const { scenes } = await res.json();
+    if (!scenes) return;
+    $('sceneGrid').replaceChildren(...Object.entries(scenes).map(([key, name]) => {
+      const b = document.createElement('button');
+      b.className = 'b';
+      b.textContent = SCENE_LABEL[key] ?? key;
+      b.dataset.scene = name;
+      b.onclick = tap(async () => {
+        const r = await fetch('/api/scene', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scene: name }),
+        });
+        if (r.ok) toast(b.textContent);
+        else toast((await r.json()).error ?? 'Failed', true);
+      });
+      return b;
+    }));
+    paintScene(desk.state);
+  } catch { /* transient */ }
+}
+
+function paintScene(state) {
+  for (const b of document.querySelectorAll('#sceneGrid .b')) {
+    b.dataset.on = String(b.dataset.scene === (state?.scene ?? null));
+  }
+}
+desk.on('state', paintScene);
 
 // ---- house audio -----------------------------------------------------------
 // Same endpoints the desk console uses. Nothing here makes a sound; the house
@@ -420,9 +468,10 @@ async function loadCues() {
     }
   } catch { /* transient */ }
 }
-desk.on('link', up => { if (up) { loadCues(); loadAudio(); } });
+desk.on('link', up => { if (up) { loadCues(); loadAudio(); loadScenes(); } });
 loadCues();
 loadAudio();
+loadScenes();
 </script>
 </body>
 </html>

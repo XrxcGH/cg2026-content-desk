@@ -382,6 +382,14 @@ export interface DeskState {
   /** Which surface screen is live: overview, match, score, blank... */
   screen: string;
   /**
+   * Which OBS scene (camera) is live, as far as the desk knows.
+   *
+   * Separate from `screen` on purpose: the graphic and the shot are different
+   * layers, and keeping them separate is what lets the graphics stay correct
+   * when a three-person crew is late on a cut.
+   */
+  scene: string | null;
+  /**
    * True once an operator has taken a screen by hand.
    *
    * Match lifecycle events move the screen on their own, which is what makes
@@ -441,6 +449,7 @@ export const initialState = (): DeskState => ({
   score: { red: emptyAllianceScore(), blue: emptyAllianceScore() },
   confidence: 'estimated',
   screen: 'blank',
+  scene: null,
   screenHold: false,
   lowerThird: null,
   panel: null,

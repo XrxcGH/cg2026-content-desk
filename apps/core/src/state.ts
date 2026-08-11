@@ -299,6 +299,9 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
         };
       }
 
+      case 'scene.change':
+        return { ...state, scene: String((ev.payload as { scene?: string }).scene ?? '') || null };
+
       case 'queue.called':
         return { ...state, nowQueuing: String((ev.payload as { label?: string }).label ?? '') || null };
 

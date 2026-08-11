@@ -222,9 +222,12 @@ YouTube URL mid-event. That's the single most likely failure mode at a high scho
   scrambled for during it.
 - Know which circuits the gym's outlets are on. Ask the facilities contact on Friday.
 
-## Crew: three people, and one of them is on camera
+## Crew: plan for three, build for five
 
-This is the constraint that decides more design here than the hardware does.
+This is the constraint that decides more design here than the hardware does. The crew is a
+RANGE, and both ends are real: three is what the event is guaranteed, five or more is what it
+gets on a good day. The software has to be correct at the floor and better at the ceiling,
+which is a stronger requirement than either on its own.
 
 | Role | Responsibility |
 | --- | --- |
@@ -232,17 +235,31 @@ This is the constraint that decides more design here than the hardware does.
 | **On-air talent** | Tests the mics and cameras, then does the analysis and the interviews. On camera during exactly the segments that need the most operating. |
 | **Field tech** | The connections: field bridge, OBS, the scorekeeping system. Also the person who fixes whatever broke. |
 
-Everything beyond those three is upside and must be treated as upside.
+That is the FLOOR. On a good day it looks like this instead:
+
+| Best case | Changes |
+| --- | --- |
+| **Producer / desk manager** | Stops switching. Runs the rundown, replay, publishing and the gap content. |
+| **Switcher** | Takes the camera cut, full time. |
+| **On-air talent, several** | A play-by-play voice and an analyst, plus whoever is doing pit interviews. |
+| **Field tech** | Unchanged, and finally able to stay ahead of problems rather than behind them. |
+
+Everything between those two is a real staffing outcome, so nothing may assume either. The rule
+that falls out of it: **every job is on a surface any console can open, and no job requires a
+person who might not exist.** A dedicated switcher gets the same scene control the desk manager
+has, on their own screen, rather than a separate application nobody has to learn twice.
 
 **What this rules out.** There is no dedicated switcher, no replay operator, no graphics
 operator, no arcade operator and no trivia host. Any feature whose design assumes somebody is
 watching it and pressing things is a feature that will not run, and several ideas have been
 dropped for exactly that reason ([14-gap-research.md](14-gap-research.md), *Not doing*).
 
-**The camera cut belongs to the desk manager**, on the same console as everything else. That is
-the single most consequential thing on this page, because it means the person cutting cameras is
-also the person queueing a replay, posting a card and running trivia, and during a match those
-compete for the same pair of hands. Three consequences the software has to own:
+**At the floor, the camera cut belongs to the desk manager**, on the same console as everything
+else. That is the single most consequential thing on this page, because it means the person
+cutting cameras may also be the person queueing a replay, posting a card and running trivia, and
+during a match those compete for one pair of hands. When a switcher does exist they open the same
+control on their own screen and the desk manager stops thinking about it. Three consequences the
+software has to own either way:
 
 - **The wide-shot lock stops being a nicety.** Autopilot cannot cut away from the field mid-match
   ([cue/engine.ts](../apps/core/src/cue/engine.ts)), which means the one cut that must never be

@@ -240,6 +240,10 @@ export class CueEngine {
    *  engine, and threading it through the constructor would reorder both. */
   attachAudio(audio: HouseAudio | null): void { this.#audio = audio; }
 
+  /** The scene names this show uses, so a console can offer the real ones
+   *  rather than a hardcoded copy that drifts from the OBS collection. */
+  get scenes(): SceneMap { return { ...this.#scenes }; }
+
   get status(): CueStatus[] {
     return this.#cues.map(c => ({
       id: c.id, name: c.name, does: c.does,

@@ -203,3 +203,19 @@ test('the automatic timeout card never overwrites the producer', () => {
   s = reduce(s, ev('match.prestart', T0 + 2000));
   assert.equal(s.status?.kind, 'fault');
 });
+
+test('the live camera is tracked separately from the graphic', () => {
+  // Screens follow the match on their own; the shot does not. Keeping them
+  // separate is what lets the graphics stay right when a three-person crew is
+  // late on a cut.
+  let s = initialState();
+  s = reduce(s, ev('screen.change', T0, { screen: 'match' }));
+  s = reduce(s, ev('scene.change', T0 + 1, { scene: 'CG_REPLAY' }));
+  assert.equal(s.screen, 'match');
+  assert.equal(s.scene, 'CG_REPLAY');
+
+  // An empty scene name clears rather than storing '', so a console can ask
+  // "is anything known" without a falsy-string trap.
+  s = reduce(s, ev('scene.change', T0 + 2, { scene: '' }));
+  assert.equal(s.scene, null);
+});

@@ -525,6 +525,46 @@ export function startServer(opts: ServerOpts) {
         }
       }
 
+      // ---- the camera cut ---------------------------------------------------
+      // At the floor of the crew range the desk manager is also the switcher
+      // (docs/06), so taking a camera has to be one press on a console they are
+      // already looking at rather than a second application to alt-tab into.
+      // When a dedicated switcher exists they open the same control.
+      if (path === '/api/scenes') {
+        return json(res, 200, {
+          scenes: cues ? cues.scenes : null,
+          live: bus.state.scene,
+          obs: obs?.connected ?? false,
+        });
+      }
+
+      if (path === '/api/scene' && req.method === 'POST') {
+        try {
+          const body = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8')) as
+            { scene?: string };
+          const wanted = String(body.scene ?? '').trim();
+          if (!wanted) return json(res, 400, { error: 'Name a scene.' });
+
+          // Only scenes this show declares. A typo must not put OBS on a scene
+          // that does not exist and leave the program on whatever was last up.
+          const known = cues ? Object.values(cues.scenes) : [];
+          if (known.length && !known.includes(wanted)) {
+            return json(res, 422, {
+              error: `"${wanted}" is not one of this show's scenes: ${known.join(', ')}.`,
+            });
+          }
+
+          // Source 'manual' is load-bearing: the cue engine's wide-shot lock
+          // holds automation away from the field mid-match, and an operator
+          // taking a shot by hand is exactly the case it must not block.
+          bus.emit({ type: 'scene.change', source: 'manual', payload: { scene: wanted } });
+          if (obs?.connected) await obs.setScene(wanted);
+          return json(res, 200, { scene: wanted, obs: obs?.connected ?? false });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
       // ---- vitals -----------------------------------------------------------
       // Everything the desk can check about itself, in one answer. A read, so
       // it can be polled by a panel and printed before doors.

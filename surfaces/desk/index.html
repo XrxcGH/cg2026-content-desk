@@ -99,6 +99,10 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
 #audClips .btn { font-size: 13px; padding: 7px 11px; }
 #audClips .btn b { font-family: var(--font-num); color: var(--accent); margin-right: 6px; }
 #audioHint[data-warn] { color: var(--st-bad-text); }
+/* ---- cameras ---- */
+#sceneRow .btn { min-width: 92px; }
+#sceneRow .btn[data-live="true"] { background: var(--accent); color: var(--text-on-accent); }
+#sceneNote[data-warn] { color: var(--st-warn); }
 /* ---- vitals ---- */
 .vdot { display: inline-block; width: 12px; height: 12px; margin-left: 6px;
   clip-path: var(--chamfer); --ch: 4px; background: var(--text-dim); vertical-align: middle; }
@@ -422,6 +426,14 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
         <p class="hint">Renames the live YouTube broadcast for the day, so Sunday's
           stream is not titled Day 1.</p>
         <p class="hint" id="streamMsg" aria-live="polite"></p>
+      </section>
+
+      <section>
+        <h2>Cameras <span class="hint" id="sceneNote">·</span></h2>
+        <div class="row" id="sceneRow"></div>
+        <p class="hint">The shot, not the graphic. Screens follow the match on their own,
+          so a late cut leaves the graphics right. Autopilot never cuts away from the field
+          mid-match; you always can.</p>
       </section>
 
       <section>

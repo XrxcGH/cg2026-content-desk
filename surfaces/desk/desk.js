@@ -762,3 +762,58 @@ $('vitalsCheck').onclick = loadVitals;
 $('vitalsPrint').onclick = () => window.print();
 void loadVitals();
 setInterval(() => { if (!document.hidden) void loadVitals(); }, 30_000);
+
+// ---- cameras ----------------------------------------------------------------
+// At the floor of the crew range the desk manager is also the switcher, so the
+// camera cut lives here rather than in another application. The live scene is
+// read off the desk state, which every console shares, so a dedicated switcher
+// on their own screen and the desk manager see the same thing.
+const SCENE_LABEL = {
+  intro: 'Intro', match: 'Field wide', score: 'Score',
+  replay: 'Replay', desk: 'Desk', arcade: 'Arcade',
+};
+let sceneMap = null;
+
+async function loadScenes() {
+  try {
+    const res = await fetch('/api/scenes');
+    if (!res.ok) return;
+    const { scenes, obs } = await res.json();
+    sceneMap = scenes;
+    $('sceneNote').textContent = obs ? '· OBS connected' : '· OBS not connected';
+    $('sceneNote').toggleAttribute('data-warn', !obs);
+    if (!scenes) { $('sceneRow').textContent = 'Show automation is off.'; return; }
+
+    $('sceneRow').replaceChildren(...Object.entries(scenes).map(([key, name]) => {
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = SCENE_LABEL[key] ?? key;
+      btn.dataset.scene = name;
+      btn.onclick = async () => {
+        try {
+          const r = await fetch('/api/scene', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scene: name }),
+          });
+          const body = await r.json();
+          if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
+        } catch (err) {
+          $('sceneNote').textContent = '· ' + err.message;
+          $('sceneNote').setAttribute('data-warn', '');
+        }
+      };
+      return btn;
+    }));
+    paintScene(desk.state);
+  } catch { /* transient */ }
+}
+
+function paintScene(state) {
+  const live = state?.scene ?? null;
+  for (const btn of document.querySelectorAll('#sceneRow .btn')) {
+    btn.dataset.live = String(btn.dataset.scene === live);
+  }
+}
+
+desk.on('state', paintScene);
+void loadScenes();
