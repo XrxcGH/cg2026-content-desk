@@ -595,6 +595,42 @@ export function startServer(opts: ServerOpts) {
         }
       }
 
+      // ---- the card call ----------------------------------------------------
+      // Puts the card screen up between the buzzer and the score, so the
+      // announcer has something on air while they explain it. The reason is
+      // typed here because no field system supplies one.
+      if (path === '/api/cardcall' && req.method === 'POST') {
+        try {
+          const body = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8')) as
+            { team?: number; color?: string; alliance?: string; reason?: string; clear?: boolean };
+
+          if (body.clear) {
+            bus.emit({ type: 'card.call_clear', source: 'manual', payload: {} });
+            return json(res, 200, { cleared: true });
+          }
+          const team = Number(body.team);
+          if (!Number.isInteger(team) || team <= 0) {
+            return json(res, 400, { error: 'Which team is the card for?' });
+          }
+          if (body.color !== 'yellow' && body.color !== 'red') {
+            return json(res, 400, { error: 'A card is yellow or red.' });
+          }
+          bus.emit({
+            type: 'card.call',
+            source: 'manual',
+            payload: {
+              team,
+              color: body.color,
+              alliance: body.alliance === 'blue' ? 'blue' : 'red',
+              reason: body.reason ?? '',
+            },
+          });
+          return json(res, 200, { on: true });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
       // ---- run of show ------------------------------------------------------
       // Open as a READ: the audience-facing countdown on the venue screens and
       // the phone page is the whole point, and it carries nothing private.

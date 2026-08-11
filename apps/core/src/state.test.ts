@@ -264,3 +264,61 @@ test('accessibility services are listed only when the event actually has them', 
     'an entry with no label is not a service anybody can act on');
   assert.equal(s.accessibility.ask, 'Ask anyone in a purple shirt');
 });
+
+test('cards accumulate per team and reset per match', () => {
+  // A card is a state a team carries: the running total survives the next
+  // match load, the per-match list does not.
+  let s = initialState();
+  s = reduce(s, ev('match.loaded', T0, { id: 'q1', displayName: 'Q1', red: [], blue: [] }));
+  s = reduce(s, ev('card.issued', T0 + 1, { team: 846, card: 'yellow', alliance: 'red' }));
+  assert.equal(s.cards.byTeam[846]?.yellows, 1);
+  assert.equal(s.cards.thisMatch.length, 1);
+
+  s = reduce(s, ev('match.loaded', T0 + 2, { id: 'q2', displayName: 'Q2', red: [], blue: [] }));
+  assert.equal(s.cards.byTeam[846]?.yellows, 1, 'the yellow follows them');
+  assert.deepEqual(s.cards.thisMatch, [], 'this match starts clean');
+});
+
+test('the same card re-sent within a match is not a second card', () => {
+  // The field re-sends its whole card map on every arena update. Counting one
+  // yellow twice would promote it to a red on the graphic.
+  let s = initialState();
+  s = reduce(s, ev('match.loaded', T0, { id: 'q1', displayName: 'Q1', red: [], blue: [] }));
+  for (let i = 0; i < 5; i++) {
+    s = reduce(s, ev('card.issued', T0 + i, { team: 846, card: 'yellow', alliance: 'red' }));
+  }
+  assert.equal(s.cards.byTeam[846]?.yellows, 1);
+});
+
+test('the card call takes the screen, and clearing leaves the screen alone', () => {
+  // Taking the screen is the point: an operator who also has to remember to
+  // change screens will forget during the one match it matters.
+  let s = initialState();
+  s = reduce(s, ev('card.call', T0, {
+    team: 846, color: 'red', alliance: 'red', reason: 'Contact in the protected zone',
+  }));
+  assert.equal(s.screen, 'cardcall');
+  assert.equal(s.cardCall?.color, 'red');
+  assert.equal(s.cardCall?.reason, 'Contact in the protected zone');
+
+  s = reduce(s, ev('card.call_clear', T0 + 1));
+  assert.equal(s.cardCall, null);
+  assert.equal(s.screen, 'cardcall', 'the operator picks what comes next, not this');
+});
+
+test('a card call for nobody, or in no colour, is refused', () => {
+  const base = initialState();
+  assert.equal(reduce(base, ev('card.call', T0, { color: 'red' })).cardCall, null);
+  assert.equal(reduce(base, ev('card.call', T0, { team: 846, color: 'orange' })).cardCall, null);
+});
+
+test('surrogates ride on the loaded match and do not stick', () => {
+  let s = initialState();
+  s = reduce(s, ev('match.loaded', T0, {
+    id: 'q1', displayName: 'Q1', red: [], blue: [], surrogates: [254, 'junk', -1],
+  }));
+  assert.deepEqual(s.surrogates, [254], 'junk is dropped rather than rendered');
+
+  s = reduce(s, ev('match.loaded', T0 + 1, { id: 'q2', displayName: 'Q2', red: [], blue: [] }));
+  assert.deepEqual(s.surrogates, []);
+});

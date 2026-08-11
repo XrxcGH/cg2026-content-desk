@@ -856,3 +856,52 @@ desk.on('state', state => {
     ? `LIVE on every screen since ${new Date(e.raisedAt).toLocaleTimeString()}. Clear it when the room is back to normal.`
     : '';
 });
+
+// ---- the card call ----------------------------------------------------------
+// The screen the announcer talks over between the buzzer and the score. The
+// team list is the six on the field, because a card is always for somebody who
+// just played, and typing a team number under time pressure is how the wrong
+// number ends up 200px tall on a projector.
+function paintCardTeams(state) {
+  const sel = $('ccTeamSel');
+  const roster = [
+    ...(state?.match?.red ?? []).map(t => ({ ...t, alliance: 'red' })),
+    ...(state?.match?.blue ?? []).map(t => ({ ...t, alliance: 'blue' })),
+  ];
+  const key = roster.map(t => t.number).join(',');
+  if (sel.dataset.key === key) return;
+  sel.dataset.key = key;
+  sel.replaceChildren(...roster.map(t => {
+    const o = new Option(`${t.number} ${t.name ?? ''}`.trim(), String(t.number));
+    o.dataset.alliance = t.alliance;
+    return o;
+  }));
+}
+
+$('ccShow').onclick = async () => {
+  const opt = $('ccTeamSel').selectedOptions[0];
+  if (!opt) return;
+  try {
+    const res = await fetch('/api/cardcall', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        team: Number(opt.value),
+        color: $('ccColor').value,
+        alliance: opt.dataset.alliance,
+        reason: $('ccReasonIn').value.trim(),
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+    $('ccReasonIn').value = '';
+  } catch (err) {
+    $('ccReasonIn').value = err.message;
+  }
+};
+
+$('ccClear').onclick = () => fetch('/api/cardcall', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ clear: true }),
+}).catch(() => {});
+
+desk.on('state', paintCardTeams);

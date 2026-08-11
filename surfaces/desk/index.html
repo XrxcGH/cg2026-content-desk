@@ -203,6 +203,22 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
         <p class="hint"><b>Arm</b> flips program to the score bar. Hit it when the field
           goes green, before the announcer starts the countdown. With the Cheesy bridge up,
           it fires on its own the moment every robot links.</p>
+        <label>Card call</label>
+        <p class="hint">Puts the card on screen so the announcer has something on air
+          while they explain it. Do it between the buzzer and the score reveal.</p>
+        <div class="row">
+          <select id="ccColor" style="flex:0 1 130px">
+            <option value="yellow">Yellow</option>
+            <option value="red">Red</option>
+          </select>
+          <select id="ccTeamSel" style="flex:1 1 150px"></select>
+          <input id="ccReasonIn" placeholder="What for, in the GA's words" style="flex:3 1 240px">
+        </div>
+        <div class="row">
+          <button class="btn btn--go" id="ccShow">Put the card up</button>
+          <button class="btn" id="ccClear">Clear</button>
+        </div>
+
         <label for="screenSel">Program screen: manual take</label>
         <div class="row">
           <select id="screenSel" style="flex:1; min-width: 220px">

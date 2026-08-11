@@ -87,6 +87,8 @@ export type DeskEventType =
   // live state
   | 'score.realtime' | 'score.delta' | 'hub.state' | 'arena.status'
   | 'card.issued' | 'foul.called'
+  // The card call screen: what the card was for, and who it went to.
+  | 'card.call' | 'card.call_clear'
   // event flow
   | 'rankings.updated' | 'alliance_selection.update' | 'award.presented'
   | 'break.started' | 'queue.updated'
@@ -319,6 +321,39 @@ export interface Emergency {
   raisedAt: number;
 }
 
+export type CardColor = 'yellow' | 'red';
+
+/**
+ * Cards, as the OVERLAY needs them.
+ *
+ * Deliberately on the state snapshot rather than read from the ledger in
+ * cards.ts: the program overlay is an open surface with no credential, and
+ * /api/discipline is gated. Both derive from the same card.issued events and
+ * dedupe the same way; this carries what a graphic needs, and the ledger
+ * carries the audit trail the announcer reads.
+ */
+export interface CardState {
+  /** Running totals per team, across the whole event. Yellows carry. */
+  byTeam: Record<number, { yellows: number; reds: number }>;
+  /** Issued in the match currently loaded, for the post-match graphic. */
+  thisMatch: { team: number; color: CardColor; alliance: Alliance }[];
+}
+
+/**
+ * The card call: the screen the GA talks over between the buzzer and the score.
+ *
+ * A card gets announced out loud, and until now the audience had nothing to
+ * look at while it happened, so the words landed over an unchanged scorebug.
+ */
+export interface CardCall {
+  team: number;
+  color: CardColor;
+  alliance: Alliance;
+  /** Why. Typed at the desk, because no field system supplies a reason. */
+  reason: string;
+  at: number;
+}
+
 export interface StatusCard {
   kind: 'delay' | 'review' | 'fault' | 'replay' | 'custom';
   message: string;
@@ -449,6 +484,12 @@ export interface DeskState {
   status: StatusCard | null;
   /** Safety message. Latches; outranks everything else on every surface. */
   emergency: Emergency | null;
+  /** Cards, for the icons on the bar and the post-match graphic. */
+  cards: CardState;
+  /** The card call currently on air, or null. */
+  cardCall: CardCall | null;
+  /** Teams playing this match as a surrogate: it does not count for them. */
+  surrogates: number[];
   /** Accessibility services this event actually offers. Empty means none listed. */
   accessibility: { services: { label: string; detail: string }[]; ask: string };
   /** Alliance selection, mirrored from the field. Null until it starts. */
@@ -490,6 +531,9 @@ export const initialState = (): DeskState => ({
   announcement: null,
   status: null,
   emergency: null,
+  cards: { byTeam: {}, thisMatch: [] },
+  cardCall: null,
+  surrogates: [],
   accessibility: { services: [], ask: '' },
   selection: null,
   thresholds: defaultThresholds(),

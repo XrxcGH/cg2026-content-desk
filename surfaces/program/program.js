@@ -25,7 +25,8 @@ fitStage($('stage'));
 
 // ---- screens --------------------------------------------------------------
 const SCREENS = [
-  'overview', 'match', 'score', 'analysis', 'arcade', 'selection', 'explain', 'blank',
+  'overview', 'match', 'score', 'analysis', 'arcade', 'selection', 'explain',
+  'cardcall', 'blank',
 ];
 let currentScreen = null;
 
@@ -325,14 +326,38 @@ function paintScore(state) {
   }
 }
 
-function paintTeams(match) {
+/**
+ * A team's number on the bar, with what it is carrying.
+ *
+ * The mark is a shape as well as a colour: a red card and a yellow card are
+ * two states of the same thing, and on a stream that has been recompressed
+ * twice, colour alone is not a reliable difference. Red gets a filled block,
+ * yellow an outlined one, and both carry a title for anyone reading the DOM.
+ *
+ * A surrogate gets an "S", because the alternative is the audience watching a
+ * team lose a match that was never theirs and then finding the ranking table
+ * disagrees.
+ */
+function teamMark(team, state) {
+  const c = state?.cards?.byTeam?.[team];
+  const marks = [];
+  if (c?.reds) marks.push('<i class="cmark cmark--red" title="Red card"></i>');
+  else if (c?.yellows) marks.push('<i class="cmark cmark--yellow" title="Carrying a yellow card"></i>');
+  if ((state?.surrogates ?? []).includes(team)) {
+    marks.push('<i class="cmark cmark--sur" title="Surrogate: this match does not count for them">S</i>');
+  }
+  return marks.join('');
+}
+
+function paintTeams(match, state) {
   if (!match) return;
   // A fourth team adds a fourth line inside a fixed-height bar, so the stack
   // tightens rather than growing past it. Three lines keep the full size.
   const n = Math.max((match.red ?? []).length, (match.blue ?? []).length);
   for (const id of ['redTeams', 'blueTeams']) $(id).dataset.rows = String(n);
-  $('redTeams').innerHTML = (match.red ?? []).map(t => t.number).join('<br>');
-  $('blueTeams').innerHTML = (match.blue ?? []).map(t => t.number).join('<br>');
+  const line = t => `<span class="bar-team">${t.number}${teamMark(t.number, state)}</span>`;
+  $('redTeams').innerHTML = (match.red ?? []).map(line).join('<br>');
+  $('blueTeams').innerHTML = (match.blue ?? []).map(line).join('<br>');
 }
 
 // Where the points came from: fuel and tower by period, plus the points the
@@ -368,6 +393,7 @@ function paintFinal(state) {
   $('finalBlueTeams').textContent = allianceRoster(state, 'blue').map(t => t.number).join(' · ');
   paintRp($('finalRedRp'), state.score.red.rp);
   paintRp($('finalBlueRp'), state.score.blue.rp);
+  paintFinalCards(state);
 
   $('finalRedSide').toggleAttribute('data-won', r > b);
   $('finalBlueSide').toggleAttribute('data-won', b > r);
@@ -491,12 +517,19 @@ startTicker(() => {
 
 // ---- wiring ---------------------------------------------------------------
 let lastMatchId = null;
+let lastMatchLoaded = null;
 
 desk.on('state', state => {
-  if (state.match?.id !== lastMatchId) {
-    lastMatchId = state.match?.id ?? null;
-    buildOverview(state.match);
-    paintTeams(state.match);
+  // Cards land mid-match and change what the team lines say, so the key is
+  // the match AND what everyone on it is carrying.
+  const teamKey = (state.match?.id ?? null) + JSON.stringify(state.cards?.byTeam ?? {})
+    + JSON.stringify(state.surrogates ?? []);
+  if (teamKey !== lastMatchId) {
+    const freshMatch = (state.match?.id ?? null) !== lastMatchLoaded;
+    lastMatchId = teamKey;
+    lastMatchLoaded = state.match?.id ?? null;
+    if (freshMatch) buildOverview(state.match);
+    paintTeams(state.match, state);
   }
   paintRpStrips(state.thresholds);
   paintScore(state);
@@ -510,6 +543,7 @@ desk.on('state', state => {
   paintPanel(CLEAN ? null : state.panel);
   paintStatus(CLEAN ? null : state.status);
   paintEmergency(state.emergency);
+  paintCardCall(state.cardCall);
   showScreen(CLEAN ? 'match' : state.screen);
 });
 
@@ -603,6 +637,56 @@ function paintEmergency(e) {
     msg.dataset.fit = step;
   }
 }
+/**
+ * The card call. Team, colour, and the reason the announcer is saying.
+ *
+ * The team NAME comes off the loaded match rather than a lookup: the card is
+ * always for somebody who is on the field right now, and a second source of
+ * team names is a second thing that can disagree with the bar.
+ */
+/**
+ * Cards issued in the match just finished, on the final screen.
+ *
+ * The final screen is the one people photograph, and a red card is the reason
+ * a number on it looks wrong. Saying so here means the picture explains itself
+ * later, when nobody remembers what the announcer said.
+ */
+function paintFinalCards(state) {
+  const el = $('finalCards');
+  const list = state.cards?.thisMatch ?? [];
+  el.hidden = list.length === 0;
+  if (!list.length) return;
+  el.replaceChildren(...list.map(c => {
+    const chip = document.createElement('span');
+    chip.className = `fc-chip fc-chip--${c.color}`;
+    chip.textContent = `${c.color === 'red' ? 'Red card' : 'Yellow card'} · ${c.team}`;
+    return chip;
+  }));
+}
+
+function paintCardCall(call) {
+  if (!call) return;
+  const plate = $('ccPlate');
+  plate.dataset.color = call.color;
+  $('ccChip').textContent = call.color === 'red' ? 'Red card' : 'Yellow card';
+  $('ccTeam').textContent = String(call.team);
+  // The team NAME comes off the loaded match rather than a lookup: the card is
+  // always for somebody on the field right now, and a second source of team
+  // names is a second thing that can disagree with the score bar.
+  const roster = [...(desk.state?.match?.red ?? []), ...(desk.state?.match?.blue ?? [])];
+  $('ccName').textContent = roster.find(t => t.number === call.team)?.name ?? '';
+  $('ccReason').textContent = call.reason ?? '';
+
+  // Whoever typed the reason was typing during a match, so the type fits
+  // itself rather than trusting them to be brief.
+  const r = $('ccReason');
+  r.removeAttribute('data-fit');
+  for (const step of ['1', '2']) {
+    if (r.scrollHeight <= r.clientHeight) break;
+    r.dataset.fit = step;
+  }
+}
+
 // Media can land after the overview was built. Rebuild so a photo uploaded
 // on Sunday morning appears without anyone reloading the Browser Source.
 desk.on('ready', () => { buildOverview(desk.state?.match); });

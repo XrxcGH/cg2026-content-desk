@@ -9,7 +9,8 @@
 import { clockDisplay, clockFrom, hubActiveAt, isLockdown, phaseAt } from './clock.ts';
 import {
   emptyAllianceScore, REBUILT,
-  type Alliance, type AllianceScore, type DeskEvent, type DeskState, type PanelState,
+  type Alliance, type AllianceScore, type CardCall, type DeskEvent, type DeskState,
+  type PanelState,
   type RpThresholds,
 } from './types.ts';
 
@@ -102,6 +103,15 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
           hubAuthoritative: null,
           score: { red: emptyAllianceScore(), blue: emptyAllianceScore() },
           confidence: ev.confidence,
+          // Per-match card state resets; the running per-team totals do not,
+          // because a yellow from match 12 is still live in match 40.
+          cards: { ...state.cards, thisMatch: [] },
+          cardCall: null,
+          surrogates: (() => {
+            const raw = (p as unknown as { surrogates?: unknown }).surrogates;
+            return (Array.isArray(raw) ? raw : [])
+              .map(Number).filter(n => Number.isInteger(n) && n > 0);
+          })(),
           screen: auto(state, 'overview'),
         };
       }
@@ -315,6 +325,62 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
           },
         };
       }
+
+      /**
+       * A card is a state a team carries, so it accumulates here.
+       *
+       * Deduped by team and colour WITHIN the loaded match: the field re-sends
+       * its whole card map on every arena update, and counting one yellow
+       * twice would silently promote it to a red on the graphic.
+       */
+      case 'card.issued': {
+        const p = ev.payload as { team?: unknown; card?: unknown; alliance?: unknown };
+        const team = Number(p.team);
+        if (!Number.isInteger(team) || team <= 0) return state;
+        if (p.card !== 'yellow' && p.card !== 'red') return state;
+        const color = p.card;
+        if (state.cards.thisMatch.some(c => c.team === team && c.color === color)) return state;
+
+        const prior = state.cards.byTeam[team] ?? { yellows: 0, reds: 0 };
+        return {
+          ...state,
+          cards: {
+            byTeam: {
+              ...state.cards.byTeam,
+              [team]: {
+                yellows: prior.yellows + (color === 'yellow' ? 1 : 0),
+                reds: prior.reds + (color === 'red' ? 1 : 0),
+              },
+            },
+            thisMatch: [...state.cards.thisMatch,
+              { team, color, alliance: p.alliance === 'blue' ? 'blue' : 'red' }],
+          },
+        };
+      }
+
+      case 'card.call': {
+        const p = ev.payload as Partial<CardCall>;
+        const team = Number(p.team);
+        if (!Number.isInteger(team) || team <= 0) return state;
+        if (p.color !== 'yellow' && p.color !== 'red') return state;
+        return {
+          ...state,
+          cardCall: {
+            team,
+            color: p.color,
+            alliance: p.alliance === 'blue' ? 'blue' : 'red',
+            reason: String(p.reason ?? '').trim().slice(0, 160),
+            at: ev.ts,
+          },
+          // Takes the screen itself. The whole point is that it is up while the
+          // announcer explains it, and an operator who has to also remember to
+          // change screens will forget during the one match it matters.
+          screen: auto(state, 'cardcall'),
+        };
+      }
+
+      case 'card.call_clear':
+        return { ...state, cardCall: null };
 
       case 'event.accessibility': {
         const p = ev.payload as {

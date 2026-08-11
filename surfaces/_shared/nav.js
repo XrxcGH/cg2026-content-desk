@@ -32,6 +32,7 @@ const SCREENS = [
   { id: 'selection', label: 'Selection' },
   { id: 'explain', label: 'Explainer' },
   { id: 'analysis', label: 'Analysis' },
+  { id: 'cardcall', label: 'Card call' },
   { id: 'arcade', label: 'Arcade' },
   { id: 'blank', label: 'Blank' },
   // Not a screen: hands control back to the match lifecycle.

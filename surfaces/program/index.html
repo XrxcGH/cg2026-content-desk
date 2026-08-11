@@ -100,6 +100,22 @@
           <div class="final-verdict" id="finalBlueVerdict"></div>
         </div>
       </div>
+      <!-- Cards issued in this match. The final screen is the one people
+           photograph, and a red card is the reason a number on it looks wrong. -->
+      <div class="final-cards" id="finalCards" hidden></div>
+    </div>
+  </section>
+
+  <!-- The card call: what the GA talks over between the buzzer and the score.
+       A card gets announced out loud, and without this the words land over an
+       unchanged scorebug. -->
+  <section class="screen" id="scr-cardcall">
+    <div class="cc" id="ccPlate">
+      <div class="cc-chip" id="ccChip">Yellow card</div>
+      <div class="cc-team num" id="ccTeam">0</div>
+      <div class="cc-name" id="ccName"></div>
+      <div class="cc-reason" id="ccReason"></div>
+      <div class="cc-tick"></div>
     </div>
   </section>
 

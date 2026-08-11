@@ -824,3 +824,91 @@
 }
 /* No animation at all: a pulsing safety message is harder to read, and this
    is the one graphic whose only job is to be read. */
+
+/* ==========================================================================
+   Cards.
+
+   Two jobs. The MARK is the small thing beside a team number on the score bar,
+   and it has to survive a stream that has been recompressed twice: red is a
+   filled block, yellow an outlined one, so the difference is a shape and not
+   only a colour. The CALL is the full screen the announcer talks over between
+   the buzzer and the score reveal.
+
+   Neither uses alliance red for the red card. Red means red alliance on this
+   broadcast all weekend, and a red card belongs to one team on one alliance,
+   which is exactly the moment that association would mislead. Cards get their
+   own vocabulary: white outline for yellow, a hard white-on-black block for
+   red, with the word always present.
+   ========================================================================== */
+.bar-team { display: inline-flex; align-items: center; gap: 8px; }
+.cmark {
+  display: inline-block; width: .52em; height: .68em;
+  font-style: normal; font-size: .8em; line-height: .68em; text-align: center;
+  vertical-align: middle;
+}
+/* Outlined: a yellow card is a warning, not a result. */
+.cmark--yellow { background: var(--cg-gold); }
+/* Filled and larger: a red is heavier than a yellow at a glance. */
+.cmark--red { background: var(--cg-white); width: .56em; height: .74em; }
+.cmark--sur {
+  width: auto; padding: 0 .28em; background: var(--cg-white-dim);
+  color: var(--cg-black); font-family: var(--font-cond); font-weight: 700;
+}
+
+.cc {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; padding: 0 140px; text-align: center;
+  background-color: var(--cg-purple-void);
+  background-image: var(--tex-perf), var(--atmo);
+  background-size: var(--tex-perf-size), cover;
+}
+:root[data-key="luma"] .cc {
+  background-color: var(--cg-purple);
+  background-image: var(--tex-perf);
+}
+.cc-chip {
+  font-family: var(--font-cond); font-weight: 700; font-size: 46px;
+  letter-spacing: .2em; text-indent: .2em; text-transform: uppercase;
+  padding: 12px 44px; clip-path: var(--chamfer); --ch: 16px;
+}
+.cc[data-color="yellow"] .cc-chip { background: var(--cg-gold); color: var(--cg-black); }
+.cc[data-color="red"] .cc-chip { background: var(--cg-white); color: var(--cg-black); }
+.cc-team {
+  font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-weight: 900; font-size: 200px; line-height: 1; color: var(--cg-white);
+  letter-spacing: -.03em;
+}
+.cc-name {
+  font-family: var(--font-cond); font-weight: 600; font-size: 44px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--cg-gold);
+}
+/* The reason is the sentence the announcer is saying. It fits itself, because
+   whoever typed it was typing during a match. */
+.cc-reason {
+  font-family: var(--font-display); font-weight: 800;
+  font-variation-settings: "wdth" var(--wdth-display);
+  font-size: 52px; line-height: 1.2; color: var(--cg-white); max-width: 24em;
+}
+.cc-reason[data-fit="1"] { font-size: 42px; }
+.cc-reason[data-fit="2"] { font-size: 34px; }
+.cc-tick { width: 420px; height: 4px; background: var(--tick); }
+
+/* Cards on the final screen. Centred across BOTH plates, because a card
+   belongs to the match rather than to one side of it, and pinned under the
+   header rather than dropped into the grid: .final is a positioned box, not a
+   grid, so a grid-column here did nothing and the chip landed on the match
+   name. */
+.final-cards {
+  position: absolute; top: 186px; left: 0; right: 0;
+  display: flex; justify-content: center; gap: 16px;
+}
+.final-cards[hidden] { display: none; }
+.fc-chip {
+  font-family: var(--font-cond); font-weight: 700; font-size: var(--t-label);
+  letter-spacing: .12em; text-transform: uppercase;
+  padding: 8px 22px; clip-path: var(--chamfer); --ch: 10px;
+  color: var(--cg-black);
+}
+.fc-chip--yellow { background: var(--cg-gold); }
+.fc-chip--red { background: var(--cg-white); }
