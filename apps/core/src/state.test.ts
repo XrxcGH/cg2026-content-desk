@@ -219,3 +219,27 @@ test('the live camera is tracked separately from the graphic', () => {
   s = reduce(s, ev('scene.change', T0 + 2, { scene: '' }));
   assert.equal(s.scene, null);
 });
+
+test('a safety message latches until it is explicitly cleared', () => {
+  // The whole difference between this and a status card: nothing retires it.
+  // Not a new match, not a score, not the next screen change.
+  let s = initialState();
+  s = reduce(s, ev('emergency.raise', T0, {
+    kind: 'evacuate', message: 'Leave by the north doors', detail: 'Muster on the field',
+  }));
+  assert.equal(s.emergency?.kind, 'evacuate');
+  assert.equal(s.emergency?.message, 'Leave by the north doors');
+
+  s = reduce(s, ev('match.loaded', T0 + 1, { id: 'q1', displayName: 'Q1', red: [], blue: [] }));
+  s = reduce(s, ev('match.start', T0 + 2));
+  s = reduce(s, ev('match.score_posted', T0 + 3, {}));
+  assert.ok(s.emergency, 'a whole match cycle must not clear a safety message');
+
+  s = reduce(s, ev('emergency.clear', T0 + 4));
+  assert.equal(s.emergency, null);
+});
+
+test('a safety message with no words is refused rather than shown blank', () => {
+  const s = reduce(initialState(), ev('emergency.raise', T0, { message: '   ' }));
+  assert.equal(s.emergency, null, 'a blank plate over the match would be worse than nothing');
+});

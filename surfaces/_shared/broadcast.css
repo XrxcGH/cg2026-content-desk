@@ -787,3 +787,40 @@
 .ov-side--blue .robot-id { grid-column: 1; grid-row: 1; align-items: flex-end; }
 .ov-side--blue .robot-num,
 .ov-side--blue .robot-name { text-align: right; }
+
+/* ==========================================================================
+   Safety message. The only graphic in this system that covers the frame and
+   outranks the match, because the one time it is used is the one time nobody
+   should be reading a scorebug.
+
+   Deliberately NOT in alliance red: red means red alliance everywhere else on
+   this broadcast, all weekend, and borrowing it here would be the one moment
+   that association actively misleads. Gold on near-black is the loudest thing
+   the palette has that is not already spoken for.
+   ========================================================================== */
+.emerg {
+  position: absolute; inset: 0; z-index: 90;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 24px; padding: 0 120px; text-align: center;
+  background: var(--cg-purple-void);
+}
+.emerg[hidden] { display: none; }
+.emerg-kind {
+  font-family: var(--font-cond); font-weight: 700; font-size: 44px;
+  letter-spacing: .22em; text-indent: .22em; text-transform: uppercase;
+  color: var(--cg-black); background: var(--cg-gold);
+  padding: 10px 40px; clip-path: var(--chamfer); --ch: 16px;
+}
+.emerg-msg {
+  font-family: var(--font-display); font-weight: 800;
+  font-variation-settings: "wdth" var(--wdth-display);
+  font-size: 96px; line-height: 1.1; color: var(--cg-white);
+}
+.emerg-msg[data-fit="1"] { font-size: 76px; }
+.emerg-msg[data-fit="2"] { font-size: 58px; }
+.emerg-detail {
+  font-family: var(--font-cond); font-weight: 600; font-size: 42px;
+  letter-spacing: .06em; color: var(--cg-gold);
+}
+/* No animation at all: a pulsing safety message is harder to read, and this
+   is the one graphic whose only job is to be read. */

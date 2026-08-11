@@ -817,3 +817,42 @@ function paintScene(state) {
 
 desk.on('state', paintScene);
 void loadScenes();
+
+// ---- safety message ---------------------------------------------------------
+// Every screen at once, latched until cleared. Deliberately separate from the
+// status card: that explains a delay and retires itself, this does neither.
+async function emergency(body) {
+  try {
+    const res = await fetch('/api/emergency', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+  } catch (err) {
+    $('emergState').textContent = err.message;
+  }
+}
+
+$('emergRaise').onclick = () => {
+  const message = $('emergMsgIn').value.trim();
+  if (!message) { $('emergState').textContent = 'Type what the room needs to do.'; return; }
+  void emergency({
+    kind: $('emergKindSel').value,
+    message,
+    detail: $('emergDetailIn').value.trim(),
+  });
+};
+$('emergClear').onclick = () => void emergency({ clear: true });
+
+desk.on('state', state => {
+  const e = state?.emergency ?? null;
+  // The console itself changes appearance while one is live, because the
+  // person who raised it may have walked away and somebody else is now
+  // looking at this screen wondering why the overlay is covered.
+  $('emergSection').toggleAttribute('data-live', !!e);
+  $('emergState').toggleAttribute('data-live', !!e);
+  $('emergState').textContent = e
+    ? `LIVE on every screen since ${new Date(e.raisedAt).toLocaleTimeString()}. Clear it when the room is back to normal.`
+    : '';
+});

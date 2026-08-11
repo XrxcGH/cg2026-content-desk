@@ -481,6 +481,7 @@ desk.on('state', state => {
   paintThird(CLEAN ? null : state.lowerThird);
   paintPanel(CLEAN ? null : state.panel);
   paintStatus(CLEAN ? null : state.status);
+  paintEmergency(state.emergency);
   showScreen(CLEAN ? 'match' : state.screen);
 });
 
@@ -543,6 +544,37 @@ function paintPanel(panel) {
   }));
 }
 
+/**
+ * The safety plate.
+ *
+ * Shown even in clean mode. ?mode=clean exists to give a scouting or pit feed
+ * a quieter picture by dropping lower thirds and status cards; a safety
+ * message is the one thing those feeds must never be quieter about.
+ */
+const EMERG_KIND = {
+  evacuate: 'Evacuate',
+  shelter: 'Shelter in place',
+  medical: 'Medical',
+  hold: 'Hold',
+  allclear: 'All clear',
+  custom: 'Announcement',
+};
+
+function paintEmergency(e) {
+  const el = $('emerg');
+  el.hidden = !e;
+  if (!e) return;
+  $('emergKind').textContent = EMERG_KIND[e.kind] ?? EMERG_KIND.custom;
+  $('emergMsg').textContent = e.message;
+  $('emergDetail').textContent = e.detail ?? '';
+  // Whoever raised this was typing in a hurry, so the type fits itself.
+  const msg = $('emergMsg');
+  msg.removeAttribute('data-fit');
+  for (const step of ['1', '2']) {
+    if (msg.scrollHeight <= msg.clientHeight && msg.scrollWidth <= msg.clientWidth) break;
+    msg.dataset.fit = step;
+  }
+}
 // Media can land after the overview was built. Rebuild so a photo uploaded
 // on Sunday morning appears without anyone reloading the Browser Source.
 desk.on('ready', () => { buildOverview(desk.state?.match); });

@@ -525,6 +525,29 @@ export function startServer(opts: ServerOpts) {
         }
       }
 
+      // ---- safety -----------------------------------------------------------
+      // Every screen at once, latched until a human clears it. Deliberately a
+      // separate route from status cards: those explain a delay and retire
+      // themselves, and this must do neither.
+      if (path === '/api/emergency' && req.method === 'POST') {
+        try {
+          const body = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8')) as
+            { message?: string; detail?: string; kind?: string; clear?: boolean };
+          if (body.clear) {
+            bus.emit({ type: 'emergency.clear', source: 'manual', payload: {} });
+            return json(res, 200, { cleared: true });
+          }
+          const message = String(body.message ?? '').trim();
+          if (!message) return json(res, 400, { error: 'A safety message needs words.' });
+          bus.emit({
+            type: 'emergency.raise', source: 'manual',
+            payload: { message, detail: body.detail ?? '', kind: body.kind ?? 'custom' },
+          });
+          return json(res, 200, { raised: true });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
       // ---- the camera cut ---------------------------------------------------
       // At the floor of the crew range the desk manager is also the switcher
       // (docs/06), so taking a camera has to be one press on a console they are

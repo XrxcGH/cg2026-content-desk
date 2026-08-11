@@ -103,6 +103,14 @@
     </div>
   </section>
 
+  <!-- Safety. Sits above every screen because the one time it is used is the
+       one time nobody should be reading a scorebug. -->
+  <div class="emerg" id="emerg" hidden role="alert">
+    <div class="emerg-kind" id="emergKind"></div>
+    <div class="emerg-msg" id="emergMsg"></div>
+    <div class="emerg-detail" id="emergDetail"></div>
+  </div>
+
   <!-- Analysis desk: transparent for the desk camera, strap brands the segment -->
   <section class="screen" id="scr-analysis">
     <!-- The strap names the SEGMENT and shows only when nobody is on the panel:

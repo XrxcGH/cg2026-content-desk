@@ -116,6 +116,8 @@ export type DeskEventType =
   | 'pace.updated'
   // audience-facing status card: delays, score review, arena faults
   | 'status.show' | 'status.hide'
+  // Safety. Latches until explicitly cleared, and outranks every other graphic.
+  | 'emergency.raise' | 'emergency.clear'
   // game configuration pushed from config.json at boot
   | 'game.thresholds';
 
@@ -295,6 +297,24 @@ export interface PaceInfo {
  * Audience-facing status card. Unexplained stoppages read as dead air; a
  * card that says WHY ("score under review") reads as process.
  */
+/**
+ * A safety message, on every screen at once.
+ *
+ * Deliberately NOT a StatusCard. A status card explains a delay, auto-retires,
+ * and shares the screen. This does none of those things: it latches until a
+ * human clears it, it covers the frame, and it outranks the match graphic,
+ * because the one time it is used is the one time nobody should be reading a
+ * scorebug.
+ */
+export interface Emergency {
+  kind: 'evacuate' | 'shelter' | 'medical' | 'hold' | 'allclear' | 'custom';
+  /** The words that go on the wall. Written by whoever raised it. */
+  message: string;
+  /** Where to go, when that is the point of the message. */
+  detail: string;
+  raisedAt: number;
+}
+
 export interface StatusCard {
   kind: 'delay' | 'review' | 'fault' | 'replay' | 'custom';
   message: string;
@@ -423,6 +443,8 @@ export interface DeskState {
   announcement: { text: string; postedAt: number; from: string } | null;
   /** Live status card, or null. Operator-fired from the desk console. */
   status: StatusCard | null;
+  /** Safety message. Latches; outranks everything else on every surface. */
+  emergency: Emergency | null;
   /** Alliance selection, mirrored from the field. Null until it starts. */
   selection: AllianceSelection | null;
   /** What each bonus RP costs. From config, not a constant. */
@@ -461,6 +483,7 @@ export const initialState = (): DeskState => ({
   nowQueuing: null,
   announcement: null,
   status: null,
+  emergency: null,
   selection: null,
   thresholds: defaultThresholds(),
   lockdown: false,

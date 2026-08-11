@@ -299,6 +299,26 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
         };
       }
 
+      // Latches. Nothing retires this but an explicit clear, which is the
+      // whole difference between a safety message and a status card.
+      case 'emergency.raise': {
+        const p = ev.payload as Partial<import('./types.ts').Emergency>;
+        const message = String(p.message ?? '').trim();
+        if (!message) return state;
+        return {
+          ...state,
+          emergency: {
+            kind: (p.kind ?? 'custom') as import('./types.ts').Emergency['kind'],
+            message: message.slice(0, 200),
+            detail: String(p.detail ?? '').trim().slice(0, 200),
+            raisedAt: ev.ts,
+          },
+        };
+      }
+
+      case 'emergency.clear':
+        return { ...state, emergency: null };
+
       case 'scene.change':
         return { ...state, scene: String((ev.payload as { scene?: string }).scene ?? '') || null };
 

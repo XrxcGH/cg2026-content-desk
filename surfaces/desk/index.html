@@ -99,6 +99,9 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
 #audClips .btn { font-size: 13px; padding: 7px 11px; }
 #audClips .btn b { font-family: var(--font-num); color: var(--accent); margin-right: 6px; }
 #audioHint[data-warn] { color: var(--st-bad-text); }
+.btn--danger { background: var(--st-bad); color: #fff; }
+#emergSection[data-live] { outline: 3px solid var(--st-bad); outline-offset: -3px; }
+#emergState[data-live] { color: var(--st-bad-text); font-weight: 700; }
 /* ---- cameras ---- */
 #sceneRow .btn { min-width: 92px; }
 #sceneRow .btn[data-live="true"] { background: var(--accent); color: var(--text-on-accent); }
@@ -426,6 +429,29 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
         <p class="hint">Renames the live YouTube broadcast for the day, so Sunday's
           stream is not titled Day 1.</p>
         <p class="hint" id="streamMsg" aria-live="polite"></p>
+      </section>
+
+      <section id="emergSection">
+        <h2>Safety message</h2>
+        <p class="hint">Goes on every screen at once and stays there until you clear it.
+          It covers the match graphic. Use it for the room, not for a delay.</p>
+        <div class="row">
+          <select id="emergKindSel" style="flex:1 1 150px">
+            <option value="hold">Hold</option>
+            <option value="medical">Medical</option>
+            <option value="evacuate">Evacuate</option>
+            <option value="shelter">Shelter in place</option>
+            <option value="allclear">All clear</option>
+            <option value="custom">Announcement</option>
+          </select>
+          <input id="emergMsgIn" placeholder="What the room needs to do" style="flex:3 1 240px">
+        </div>
+        <div class="row">
+          <input id="emergDetailIn" placeholder="Where to go (optional)" style="flex:3 1 240px">
+          <button class="btn btn--danger" id="emergRaise">Put on every screen</button>
+          <button class="btn" id="emergClear">Clear</button>
+        </div>
+        <p class="hint" id="emergState"></p>
       </section>
 
       <section>
