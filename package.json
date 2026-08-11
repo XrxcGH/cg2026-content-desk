@@ -1,12 +1,31 @@
 {
   "name": "cg2026-content-desk",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
   "description": "In-house analysis and broadcast content desk for CalGames 2026.",
+  "license": "Apache-2.0",
+  "author": "Western Region Robotics Forum (WRRF) and contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XrxcGH/cg2026-content-desk.git"
+  },
+  "homepage": "https://github.com/XrxcGH/cg2026-content-desk#readme",
+  "bugs": {
+    "url": "https://github.com/XrxcGH/cg2026-content-desk/issues"
+  },
+  "keywords": [
+    "frc",
+    "first-robotics",
+    "broadcast",
+    "overlay",
+    "obs",
+    "cheesy-arena",
+    "scoreboard",
+    "esports"
+  ],
   "engines": {
     "node": ">=22.6"
   },
+  "type": "module",
   "scripts": {
     "dev": "node --experimental-strip-types --watch apps/core/src/index.ts",
     "start": "node --experimental-strip-types apps/core/src/index.ts",

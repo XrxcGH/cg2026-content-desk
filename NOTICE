@@ -1,0 +1,43 @@
+CalGames Content Desk
+Copyright 2026 Western Region Robotics Forum (WRRF) and contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+--------------------------------------------------------------------------
+Trademarks and brand assets
+--------------------------------------------------------------------------
+
+The Apache License covers the CODE. It does not grant rights to the names,
+logos, colors-as-identity, or other brand assets of the Western Region
+Robotics Forum, CalGames, or FIRST. See TRADEMARKS.md before you ship a
+fork with this project's branding on it.
+
+--------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------
+
+This project depends on:
+
+  ws (https://github.com/websockets/ws) - MIT License
+  sharp (https://github.com/lovell/sharp), optional - Apache License 2.0
+  TypeScript, @types/node, @types/ws (build/dev only) - Apache-2.0 / MIT
+
+At run time it can talk to, but does not include or redistribute:
+
+  Cheesy Arena (https://github.com/Team254/cheesy-arena), Team 254
+  OBS Studio and obs-websocket
+  The Blue Alliance, FIRST Nexus, Statbotics, start.gg, YouTube, Spotify
+
+The bundled launcher downloads an official Node.js runtime at first run,
+verified against a pinned SHA-256; it is not redistributed in this repository.
+Node.js is MIT licensed.

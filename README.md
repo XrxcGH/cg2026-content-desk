@@ -9,6 +9,15 @@ photos, live data-driven graphics, and something worth watching in the gaps. Tha
 side-tournament Smash Bros. and Mario Kart on the same overlay system, plus crowd trivia the
 whole gym plays from their phones. All CalGames-branded, all runnable by volunteers.
 
+**Running your own event?** Fork it. The code is Apache 2.0 and the whole thing is built so the
+parts you would need to change are the parts that are easy to change: the palette is one token
+file, the event is one config file, and a different field system is one adapter behind a seam that
+already exists. It is deliberately *not* white-labelled, so a fresh clone is CalGames-branded
+until you re-theme it; that was a design choice in favour of the graphics actually looking like
+something. Start with [CONTRIBUTING.md](CONTRIBUTING.md), and read
+[TRADEMARKS.md](TRADEMARKS.md) first: the code is yours to change, the CalGames and WRRF names
+are not.
+
 ## Run it in two minutes
 
 You do not need a terminal, and you do not need to install anything. You need one file,
