@@ -265,7 +265,7 @@ export class CueEngine {
     const cue = this.#cues.find(c => c.id === id);
     if (!cue) return false;
     await this.#run(cue, {
-      id: 'manual', ts: Date.now(), matchClock: this.#bus.state.matchClock,
+      id: 'manual', seq: 0, ts: Date.now(), matchClock: this.#bus.state.matchClock,
       source: 'manual', confidence: 'authoritative', type: 'graphic.show', payload: {},
     });
     return true;

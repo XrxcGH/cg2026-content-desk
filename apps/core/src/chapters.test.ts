@@ -7,7 +7,7 @@ import { eventId, type DeskEvent } from './types.ts';
 const T0 = Date.UTC(2026, 9, 17, 16, 0, 0);
 
 const ev = (type: string, atMs: number, payload: unknown = {}): DeskEvent => ({
-  id: eventId(),
+  id: eventId(), seq: 0,
   ts: T0 + atMs,
   matchClock: null,
   source: 'cheesy',

@@ -6,7 +6,7 @@ import { initialState, type DeskEvent, type DeskState } from './types.ts';
 const T0 = 1_700_000_000_000;
 
 const ev = (type: DeskEvent['type'], ts: number, payload: unknown = {}): DeskEvent => ({
-  id: `t${ts}`, ts, matchClock: null, source: 'manual', confidence: 'authoritative',
+  id: `t${ts}`, seq: 0, ts, matchClock: null, source: 'manual', confidence: 'authoritative',
   type, payload,
 });
 

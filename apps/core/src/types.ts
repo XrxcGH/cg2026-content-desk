@@ -33,8 +33,39 @@ export type Confidence = 'authoritative' | 'derived' | 'estimated';
 
 export type Alliance = 'red' | 'blue';
 
+/**
+ * The envelope's own version.
+ *
+ * Recorded logs are replayed months later and are the project's regression
+ * fixtures, so the shape they were written in has to be knowable from the file
+ * rather than guessed from the date on it. Bump this only when the ENVELOPE
+ * changes; adding a new `type` or changing a payload does not.
+ *
+ *   1  id, ts, matchClock, source, confidence, type, payload
+ *   2  adds schemaVersion and seq
+ *
+ * A log with no `schemaVersion` field is version 1 by definition, which is
+ * what makes this addable without invalidating anything already recorded.
+ */
+export const EVENT_SCHEMA_VERSION = 2;
+
 export interface DeskEvent<T = unknown> {
   id: string;
+  /**
+   * Envelope version. Absent on anything logged before this existed; readers
+   * treat a missing value as 1.
+   */
+  schemaVersion?: number;
+  /**
+   * Monotonic per-process counter, from 1.
+   *
+   * `id` is sortable and `ts` is orderable, but neither answers "did I miss
+   * anything": a client reconnecting after a network blip can ask for events
+   * after N and know whether the answer is complete. The 5,000-event ring in
+   * bus.ts can already serve that; this is the number it needs. Resets when
+   * the desk restarts, which is why it is a gap detector and not an identity.
+   */
+  seq: number;
   /** Wall clock, epoch ms, from the desk's clock. */
   ts: number;
   /** Signed seconds relative to match start. Null outside a match. */

@@ -81,7 +81,7 @@ test('the book survives a restart, most-recently-used first', async () => {
 // ---------------------------------------------------------------------------
 
 const ev = (type: string, payload: unknown): DeskEvent => ({
-  id: 'x', ts: Date.now(), matchClock: null,
+  id: 'x', seq: 0, ts: Date.now(), matchClock: null,
   source: 'manual', confidence: 'authoritative',
   type: type as DeskEvent['type'], payload,
 });

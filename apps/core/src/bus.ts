@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 import { phaseAt } from './clock.ts';
 import { reduce, tick } from './state.ts';
 import {
-  eventId, initialState,
+  eventId, initialState, EVENT_SCHEMA_VERSION,
   type Confidence, type DeskEvent, type DeskEventType, type DeskState, type Source,
 } from './types.ts';
 
@@ -34,6 +34,12 @@ export class EventBus {
   /** Recent history, for late-joining surfaces and the replay timeline. */
   #ring: DeskEvent[] = [];
   #ringMax = 5000;
+  /**
+   * Per-process event counter. Lets a client that reconnected ask "what did I
+   * miss after N" and get a complete answer out of the ring above, rather than
+   * guessing from timestamps.
+   */
+  #seq = 0;
   #lastPhase = phaseAt(null);
   /**
    * While a replay runs, the 10Hz ticker must tick on the REPLAY's time axis,
@@ -80,6 +86,8 @@ export class EventBus {
     const ts = init.ts ?? Date.now();
     const ev: DeskEvent<T> = {
       id: eventId(),
+      schemaVersion: EVENT_SCHEMA_VERSION,
+      seq: ++this.#seq,
       ts,
       matchClock: this.#state.matchClock,
       source: init.source ?? 'manual',
