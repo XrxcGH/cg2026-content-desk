@@ -138,3 +138,15 @@ test('the arcade overlay can bootstrap itself without a PIN', () => {
   // set in progress: the state snapshot carries no arcade fields.
   assert.equal(needsAuth({ method: 'GET', path: '/api/arcade' }), false);
 });
+
+test('a team can read its own matches; the coverage report stays gated', () => {
+  // The split exists because the allowlist matches paths and not query
+  // strings: /api/coverage?team=846 would have opened the whole operational
+  // report, gap advice included, to anyone on the venue wifi.
+  assert.equal(needsAuth({ method: 'GET', path: '/api/coverage/team/846' }), false);
+  assert.equal(needsAuth({ method: 'GET', path: '/api/coverage' }), true);
+  // The prefix must not become a wildcard for everything under /api/coverage.
+  assert.equal(needsAuth({ method: 'GET', path: '/api/coverage/report' }), true);
+  // And it stays a READ: a POST to the same path is still closed.
+  assert.equal(needsAuth({ method: 'POST', path: '/api/coverage/team/846' }), true);
+});

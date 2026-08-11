@@ -54,6 +54,18 @@ const OPEN_GET = new Set([
 ]);
 
 /**
+ * Open reads whose path carries a parameter, so a Set lookup cannot express
+ * them. Kept as an explicit list of prefixes for the same reason as everything
+ * else here: anything not named is closed.
+ */
+const OPEN_GET_PREFIXES = [
+  // One team's own matches and video links, for the phone page. The full
+  // coverage report at /api/coverage stays gated: it carries the operational
+  // gap list, which is the desk's business.
+  '/api/coverage/team/',
+];
+
+/**
  * Writes the audience must be able to make.
  *
  * Joining and answering are the game. They are rate-limited by the store
@@ -109,6 +121,7 @@ export function needsAuth({ method, path }: AccessQuery): boolean {
   // `-X OPTIONS /api/trivia/bank` handed out unrevealed answers. A verb is not
   // a permission.
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    if (OPEN_GET_PREFIXES.some(p => path.startsWith(p))) return false;
     return !OPEN_GET.has(path);
   }
   return !OPEN_POST.has(path);

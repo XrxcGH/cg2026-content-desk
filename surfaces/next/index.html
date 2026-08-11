@@ -78,6 +78,14 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
 .m-teams .r { background: var(--alliance-red); }
 .m-teams .b { background: var(--alliance-blue); }
 .m-teams .mine { outline: 2px solid var(--cg-gold); outline-offset: -2px; font-weight: 900; }
+.playedhead { font-family: var(--font-cond); font-weight: 700; font-size: 15px;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--cg-white-dim);
+  margin: 22px 0 8px; }
+.played-row { display: flex; align-items: baseline; gap: 12px; }
+.played-score { font-family: var(--font-num); font-weight: 900; }
+.played-link { margin-left: auto; color: var(--cg-gold); font-weight: 700;
+  text-decoration: none; }
+.played-pending { margin-left: auto; color: var(--cg-white-dim); font-size: 13px; }
 .m-side { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
   letter-spacing: .1em; text-transform: uppercase; color: var(--cg-white-dim); }
 .hintline { text-align: center; font-family: var(--font-cond); font-size: 13px;
@@ -106,6 +114,12 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
 
   <div class="rankline" id="rank" hidden aria-live="polite"></div>
   <div id="list"></div>
+  <!-- The most-asked question after an event, answered during it: where is the
+       video of the match we just played. -->
+  <div id="played" hidden>
+    <h2 class="playedhead">Your matches so far</h2>
+    <div id="playedList"></div>
+  </div>
   <p class="hintline" id="note">Times marked ~ are estimates from how fast matches are
     actually cycling, not the printed schedule.</p>
 
@@ -117,6 +131,58 @@ const $ = id => document.getElementById(id);
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 const setHTML = (el, html) => { if (el.innerHTML !== html) el.innerHTML = html; };
 let team = Number(localStorage.getItem('next.team')) || null;
+
+/**
+ * What this team has already played, and the video if there is one.
+ *
+ * Read from the coverage ledger rather than the publish queue: the queue knows
+ * what it was asked to make, and a team asking "where is our match" needs the
+ * answer even when the answer is "it has not been cut yet".
+ */
+async function loadPlayed() {
+  const box = $('played');
+  if (!team) { box.hidden = true; return; }
+  try {
+    const res = await fetch(`/api/coverage/team/${team}`);
+    if (!res.ok) { box.hidden = true; return; }
+    const { rows } = await res.json();
+    const done = (rows ?? []).filter(r => r.playedAt);
+    box.hidden = done.length === 0;
+    $('playedList').replaceChildren(...done.map(r => {
+      const el = document.createElement('div');
+      el.className = 'card played-row';
+      const name = document.createElement('b');
+      name.textContent = r.name;
+      el.append(name);
+      if (r.score) {
+        const sc = document.createElement('span');
+        sc.className = 'played-score';
+        const mine = r.red.includes(team) ? 'red' : 'blue';
+        const won = mine === 'red' ? r.score.red > r.score.blue : r.score.blue > r.score.red;
+        sc.textContent = `${r.score.red} - ${r.score.blue}${won ? '  W' : ''}`;
+        el.append(sc);
+      }
+      const vid = r.publish?.videoId;
+      if (vid) {
+        const a = document.createElement('a');
+        a.className = 'played-link';
+        a.href = `https://youtu.be/${vid}`;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = 'Watch';
+        el.append(a);
+      } else {
+        const pending = document.createElement('span');
+        pending.className = 'played-pending';
+        // Honest rather than encouraging: a team refreshing a page that says
+        // "coming soon" all weekend trusts the next thing it says less.
+        pending.textContent = 'video not posted yet';
+        el.append(pending);
+      }
+      return el;
+    }));
+  } catch { box.hidden = true; }
+}
 if (team) $('team').value = team;
 
 $('follow').addEventListener('submit', e => {
@@ -125,6 +191,7 @@ $('follow').addEventListener('submit', e => {
   if (team) localStorage.setItem('next.team', String(team));
   else localStorage.removeItem('next.team');
   poll();
+  void loadPlayed();
 });
 
 const clock = ts => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });

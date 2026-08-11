@@ -29,6 +29,7 @@ import type { ArcadeBox, ArcadeStore } from './arcade/store.ts';
 import type { HouseAudio, HouseSource } from './audio/store.ts';
 import type { ClipLibrary } from './audio/library.ts';
 import type { ProfileBook, ProfileInput } from './profiles.ts';
+import type { CoverageLedger } from './coverage.ts';
 
 /** How many people the panel graphic can render and still be readable. */
 const PANEL_MAX = 6;
@@ -105,6 +106,8 @@ export interface ServerOpts {
   audioClips?: ClipLibrary | null;
   /** Saved on-camera profiles, so the panel is a checklist not a form. */
   profiles?: ProfileBook | null;
+  /** Every match played, and what happened to its video. */
+  coverage?: CoverageLedger | null;
   /** LAN-reachable base URL, e.g. "http://10.0.100.23:8720", for QR codes. */
   lanBase?: string | null;
 }
@@ -113,7 +116,7 @@ export function startServer(opts: ServerOpts) {
   const { bus, media, root, port, host, recorder = null, clips = null,
           publish = null, config = null, cheesy = null, cues = null, obs = null,
           arcade = null, trivia = null, audio = null, audioClips = null,
-          profiles = null, lanBase = null } = opts;
+          profiles = null, coverage = null, lanBase = null } = opts;
 
   // Crash policy lives in index.ts, in the ONE uncaughtException handler for
   // the whole process: fatal during boot, log-and-continue once the show is
@@ -517,6 +520,31 @@ export function startServer(opts: ServerOpts) {
         } catch (err) {
           return json(res, 422, { error: (err as Error).message });
         }
+      }
+
+      // ---- coverage ---------------------------------------------------------
+      // "Did every match that was played end up as a video." Deliberately a
+      // read: nothing here changes anything, it only notices.
+      if (path === '/api/coverage') {
+        if (!coverage) return json(res, 503, { error: 'Coverage is not available.' });
+        return json(res, 200, coverage.report());
+      }
+
+      // One team's own matches, open to the audience: this is the answer to
+      // "where is the video of the match we just played", which is the most
+      // asked question after an event and a fair one to ask during it.
+      //
+      // A separate PATH rather than a query on the route above, because the
+      // access allowlist matches paths and not query strings: opening
+      // /api/coverage?team= would have opened the whole operational report,
+      // gap advice included, to anyone on the venue wifi.
+      if (path.startsWith('/api/coverage/team/')) {
+        if (!coverage) return json(res, 503, { error: 'Coverage is not available.' });
+        const team = Number(path.slice('/api/coverage/team/'.length));
+        if (!Number.isInteger(team) || team <= 0) {
+          return json(res, 400, { error: 'Team must be a number.' });
+        }
+        return json(res, 200, { team, rows: coverage.forTeam(team) });
       }
 
       // ---- who is on camera ------------------------------------------------

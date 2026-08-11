@@ -687,3 +687,41 @@ function paintAudio(s) {
 
 desk.on('audio.updated', ev => paintAudio(ev.payload));
 fetch('/api/audio').then(r => r.ok ? r.json() : null).then(s => s && paintAudio(s)).catch(() => {});
+
+// ---- coverage ---------------------------------------------------------------
+// The one question nothing else in the pipeline answers: is the set of matches
+// that were PLAYED the same set as the videos that EXIST. Polled slowly, and
+// on demand, because it is a reconciliation rather than a live reading.
+async function loadCoverage() {
+  try {
+    const res = await fetch('/api/coverage');
+    if (!res.ok) return;
+    const r = await res.json();
+    const sum = $('covSum');
+    sum.textContent = `· ${r.uploaded}/${r.played} matches published`;
+    sum.toggleAttribute('data-bad', r.gaps.length > 0);
+
+    const box = $('covGaps');
+    if (!r.gaps.length) {
+      box.innerHTML = r.played
+        ? '<div class="ok">Every match played has a video. Nothing missing.</div>'
+        : '<div class="hint">No matches played yet.</div>';
+      return;
+    }
+    box.replaceChildren(...r.gaps.map(g => {
+      const row = document.createElement('div');
+      row.className = 'gap';
+      const name = document.createElement('b');
+      name.textContent = g.name;
+      const detail = document.createElement('span');
+      detail.textContent = g.detail;
+      row.append(name, detail);
+      return row;
+    }));
+  } catch { /* transient */ }
+}
+$('covCheck').onclick = loadCoverage;
+void loadCoverage();
+// Slow poll: a reconciliation that changes only when a match ends or an upload
+// finishes does not need to be live, and this walks the whole queue.
+setInterval(() => { if (!document.hidden) void loadCoverage(); }, 60_000);

@@ -34,6 +34,7 @@ import { PublishQueue } from './publish/queue.ts';
 import { chooseEncoder, findFfmpeg } from './ffmpeg.ts';
 import { Recorder, type SourceConfig } from './recorder.ts';
 import { ClipStore } from './clips.ts';
+import { CoverageLedger } from './coverage.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..', '..', '..');
@@ -423,6 +424,12 @@ if (config.startgg.token && config.startgg.eventSlug) {
 const publish = new PublishQueue(ROOT, config, bus, clips);
 await publish.load();
 
+// The coverage ledger: one row per match, joined against the queue, so the
+// question "did every match that was played end up as a video" has an answer
+// on the day rather than in an email three weeks later.
+const coverage = new CoverageLedger(publish);
+coverage.attach(bus);
+
 {
   const missing = publishReadiness(config);
   if (!config.publish.enabled) {
@@ -486,7 +493,7 @@ if (config.publish.autoQueueArcade && !has('demo') && !has('replay')) {
 
 const server = startServer({
   bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
-  arcade, trivia, audio, audioClips, profiles, lanBase,
+  arcade, trivia, audio, audioClips, profiles, coverage, lanBase,
 });
 // From here on, an uncaught throw logs and continues instead of killing every
 // overlay at once — see the handler at the top of this file.

@@ -99,6 +99,13 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
 #audClips .btn { font-size: 13px; padding: 7px 11px; }
 #audClips .btn b { font-family: var(--font-num); color: var(--accent); margin-right: 6px; }
 #audioHint[data-warn] { color: var(--st-bad-text); }
+/* ---- coverage ---- */
+#covGaps .gap { display: grid; grid-template-columns: auto 1fr; gap: 10px;
+  padding: 7px 10px; margin-bottom: 5px; font-size: 13px;
+  background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 7px; }
+#covGaps .gap b { font-family: var(--font-num); color: var(--st-bad-text); }
+#covGaps .ok { color: var(--st-ok); font-size: 13px; }
+#covSum[data-bad] { color: var(--st-bad-text); }
 /* ---- on-camera panel ---- */
 .panel-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 720px) { .panel-cols { grid-template-columns: 1fr; } }
@@ -398,6 +405,17 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
         <p class="hint">Renames the live YouTube broadcast for the day, so Sunday's
           stream is not titled Day 1.</p>
         <p class="hint" id="streamMsg" aria-live="polite"></p>
+      </section>
+
+      <section>
+        <h2>Coverage <span class="hint" id="covSum">·</span></h2>
+        <p class="hint">Every match that reached the buzzer, against every video that
+          exists. The point is the matches nothing was ever queued for: everything else
+          in the pipeline reports success individually.</p>
+        <div id="covGaps"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="covCheck">Check now</button>
+        </div>
       </section>
 
       <section>
