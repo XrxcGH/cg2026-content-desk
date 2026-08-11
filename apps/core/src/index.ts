@@ -35,6 +35,7 @@ import { chooseEncoder, findFfmpeg } from './ffmpeg.ts';
 import { Recorder, type SourceConfig } from './recorder.ts';
 import { ClipStore } from './clips.ts';
 import { CoverageLedger } from './coverage.ts';
+import { CardLedger } from './cards.ts';
 import { Vitals } from './vitals.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -438,6 +439,11 @@ if (config.startgg.token && config.startgg.eventSlug) {
 const publish = new PublishQueue(ROOT, config, bus, clips);
 await publish.load();
 
+// Cards are a STATE a team carries, not a one-shot event: a yellow follows a
+// team all weekend and a second one is a red. Nothing remembered them before.
+const cardLedger = new CardLedger();
+cardLedger.attach(bus);
+
 // The coverage ledger: one row per match, joined against the queue, so the
 // question "did every match that was played end up as a video" has an answer
 // on the day rather than in an email three weeks later.
@@ -515,7 +521,7 @@ if (config.publish.autoQueueArcade && !has('demo') && !has('replay')) {
 
 const server = startServer({
   bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
-  arcade, trivia, audio, audioClips, profiles, coverage, vitals, lanBase,
+  arcade, trivia, audio, audioClips, profiles, coverage, vitals, cardLedger, lanBase,
 });
 // From here on, an uncaught throw logs and continues instead of killing every
 // overlay at once — see the handler at the top of this file.

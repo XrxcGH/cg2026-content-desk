@@ -50,6 +50,15 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
 .tname { font-size: 22px; font-weight: 700; }
 .tmeta { margin-left: auto; font-family: var(--font-cond); font-size: 15px;
   letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); }
+/* Flags read as words, not colour alone: the announcer is reading this out,
+   and a red chip means nothing said aloud. */
+.tflags { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px; }
+.tflag { font-family: var(--font-cond); font-weight: 700; font-size: 13px;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 3px 8px; clip-path: var(--chamfer); --ch: 5px; }
+.flag-red { background: var(--st-bad); color: #fff; }
+.flag-yellow { background: var(--st-warn); color: var(--cg-black); }
+.flag-surrogate { background: var(--surface-sunken); color: var(--text-dim); }
 .tnote { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 8px 10px;
   font-family: var(--font-display); font-size: 15px; min-height: 38px; resize: vertical;
   background: var(--page-bg); color: var(--text); }
@@ -129,8 +138,32 @@ desk.on('link', up => {
 
 const note = team => localStorage.getItem(`talent.note.${team}`) ?? '';
 
+/**
+ * Cards and surrogate status, in the words the announcer would say out loud.
+ *
+ * This is the line they get asked for on air: an alliance scores zero and the
+ * stands want to know why. "I think somebody got a card" is the wrong answer
+ * in front of a gym, and a yellow from match 12 is still live in match 40.
+ */
+let cardLedger = { teams: [], surrogates: [] };
+
+function flagsFor(team) {
+  const out = [];
+  const t = (cardLedger.teams ?? []).find(x => x.team === team);
+  if (t?.reds) out.push({ cls: 'flag-red', text: 'RED CARD' });
+  else if (t?.carrying) out.push({ cls: 'flag-yellow', text: 'carrying a yellow' });
+  // The one nobody ever explains: this match does not count for them, so the
+  // ranking table will disagree with what the room just watched.
+  if ((cardLedger.surrogates ?? []).includes(team)) {
+    out.push({ cls: 'flag-surrogate', text: 'surrogate · does not count' });
+  }
+  return out;
+}
+
 function card(t, rankings) {
   const row = (rankings ?? []).find(r => r.team === t.number);
+  const flags = flagsFor(t.number)
+    .map(f => `<span class="tflag ${f.cls}">${esc(f.text)}</span>`).join('');
   return `
     <div class="tcard">
       <div class="top">
@@ -138,22 +171,53 @@ function card(t, rankings) {
         <span class="tname">${esc(t.name || '-')}</span>
         <span class="tmeta">${row ? `Rank ${row.rank} · ${row.record} · ${row.rankingPoints} RP` : ''}</span>
       </div>
+      ${flags ? `<div class="tflags">${flags}</div>` : ''}
       <textarea class="tnote" data-team="${t.number}" rows="1"
         aria-label="Notes for team ${t.number}"
         placeholder="Pronunciation / one fact (saves on this tablet)">${esc(note(t.number))}</textarea>
     </div>`;
 }
 
+/**
+ * The ledger is polled rather than pushed: a card is issued minutes before it
+ * matters and the announcer needs it on the NEXT match's cards too, so a
+ * refresh on match change plus a slow poll covers both without a new event.
+ */
 let lastMatchId = null;
+async function loadCards() {
+  try {
+    const res = await fetch('/api/discipline');
+    if (!res.ok) return;
+    const next = await res.json();
+    if (!next) return;
+    const changed = JSON.stringify(next.teams) !== JSON.stringify(cardLedger.teams)
+      || JSON.stringify(next.surrogates) !== JSON.stringify(cardLedger.surrogates);
+    cardLedger = next;
+    // Only redraw on a real change: the team cards hold textareas the
+    // announcer is typing pronunciation notes into, and rebuilding them
+    // under a cursor loses the keystroke.
+    if (changed) { lastMatchId = null; if (desk.state) paintTeams(desk.state); }
+  } catch { /* transient */ }
+}
+void loadCards();
+setInterval(() => { if (!document.hidden) void loadCards(); }, 20_000);
+
+function paintTeams(s) {
+  $('matchName').textContent = s.match?.displayName ?? '-';
+  $('redCards').innerHTML = (s.match?.red ?? []).map(t => card(t, s.rankings)).join('') || '<p class="hint">-</p>';
+  $('blueCards').innerHTML = (s.match?.blue ?? []).map(t => card(t, s.rankings)).join('') || '<p class="hint">-</p>';
+  for (const ta of document.querySelectorAll('.tnote')) {
+    ta.oninput = () => localStorage.setItem(`talent.note.${ta.dataset.team}`, ta.value);
+  }
+}
+
 desk.on('state', s => {
   if (s.match?.id !== lastMatchId) {
     lastMatchId = s.match?.id ?? null;
-    $('matchName').textContent = s.match?.displayName ?? '-';
-    $('redCards').innerHTML = (s.match?.red ?? []).map(t => card(t, s.rankings)).join('') || '<p class="hint">-</p>';
-    $('blueCards').innerHTML = (s.match?.blue ?? []).map(t => card(t, s.rankings)).join('') || '<p class="hint">-</p>';
-    for (const ta of document.querySelectorAll('.tnote')) {
-      ta.oninput = () => localStorage.setItem(`talent.note.${ta.dataset.team}`, ta.value);
-    }
+    // A new match is also the moment a card issued in the last one starts
+    // mattering to the next set of teams.
+    void loadCards();
+    paintTeams(s);
   }
 
   // RP progress in words the GA can actually SAY.
