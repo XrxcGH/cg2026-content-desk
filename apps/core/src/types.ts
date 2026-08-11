@@ -12,6 +12,7 @@ export type Source =
   | 'tba'
   | 'statbotics'
   | 'startgg'
+  | 'nexus'     // FRC Nexus: what the queuers are doing, not what the field is
   | 'manual'    // desk console, always authoritative override
   | 'cue'       // show automation
   // The 10Hz ticker's time-driven phase boundaries. Not 'cue': the cue
@@ -89,6 +90,10 @@ export type DeskEventType =
   // event flow
   | 'rankings.updated' | 'alliance_selection.update' | 'award.presented'
   | 'break.started' | 'queue.updated'
+  // Queuers called a match: the four minutes before the field knows anything.
+  | 'queue.called'
+  // Mirrored from the event's own announcement channel.
+  | 'announcement.posted'
   // production
   | 'graphic.show' | 'graphic.hide' | 'lower_third.show' | 'lower_third.hide'
   // Who is on camera for an analysis segment or an interview.
@@ -397,6 +402,17 @@ export interface DeskState {
   upcoming: UpcomingMatch[];
   /** Actual cycle time + behind-schedule estimate. See pace.ts. */
   pace: PaceInfo;
+  /**
+   * Which match the QUEUERS are calling right now, from Nexus.
+   *
+   * Deliberately separate from `match`, which is what the field has loaded.
+   * These are different facts minutes apart, and conflating them is how a
+   * side screen ends up telling six teams to walk to a field that is still
+   * playing the previous match.
+   */
+  nowQueuing: string | null;
+  /** The most recent event announcement, mirrored from Nexus. */
+  announcement: { text: string; postedAt: number; from: string } | null;
   /** Live status card, or null. Operator-fired from the desk console. */
   status: StatusCard | null;
   /** Alliance selection, mirrored from the field. Null until it starts. */
@@ -433,6 +449,8 @@ export const initialState = (): DeskState => ({
   highestPlayedMatch: '',
   upcoming: [],
   pace: { cycleSec: null, nextStartAt: null, behindMin: null, lastStartAt: null },
+  nowQueuing: null,
+  announcement: null,
   status: null,
   selection: null,
   thresholds: defaultThresholds(),

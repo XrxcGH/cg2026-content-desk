@@ -88,6 +88,22 @@ export interface Config {
   // be an explicit act at the point of use rather than something inherited
   // from a file copied between machines. See docs/10-field-bridge.md.
   /**
+   * FRC Nexus: what the QUEUERS are doing.
+   *
+   * The only source that knows a match is being called before the field does,
+   * which is where the four minutes before a match live. Read-only, over the
+   * internet, nothing to do with the field network. Starts when both fields
+   * are set; useful only if the event is actually running its queueing on
+   * Nexus, because otherwise the timings it returns look authoritative and
+   * are not.
+   */
+  nexus: {
+    /** From frc.nexus/api. Sent as the Nexus-Api-Key header. */
+    apiKey: string;
+    /** The Nexus event key, e.g. "2026cacg". Often the same as event.key. */
+    eventKey: string;
+  };
+  /**
    * start.gg side-tournament bracket. Metadata only: round labels and
    * entrants for the arcade console's pre-fill; live scores stay
    * operator-authoritative (docs/05-arcade.md). Starts when both fields are
@@ -165,6 +181,7 @@ export const DEFAULTS: Config = {
     enabled: true,
     spotify: { clientId: '', refreshToken: '', deviceName: '', playlistUri: '' },
   },
+  nexus: { apiKey: '', eventKey: '' },
   startgg: { token: '', eventSlug: '' },
   youtube: { clientId: '', clientSecret: '', refreshToken: '' },
   tba: { authId: '', authSecret: '', readKey: '' },
@@ -227,6 +244,7 @@ export function redacted(cfg: Config): Record<string, unknown> {
     youtube: { clientId: has(cfg.youtube.clientId), clientSecret: has(cfg.youtube.clientSecret), refreshToken: has(cfg.youtube.refreshToken) },
     tba: { authId: has(cfg.tba.authId), authSecret: has(cfg.tba.authSecret), readKey: has(cfg.tba.readKey) },
     startgg: { token: has(cfg.startgg.token), eventSlug: cfg.startgg.eventSlug },
+    nexus: { apiKey: has(cfg.nexus.apiKey), eventKey: cfg.nexus.eventKey },
   };
 }
 

@@ -17,6 +17,7 @@ import { attachMarkers } from './markers.ts';
 import { attachPace } from './pace.ts';
 import { CheesyAdapter } from './ingest/cheesy/adapter.ts';
 import { StartggAdapter } from './ingest/startgg/adapter.ts';
+import { NexusAdapter } from './ingest/nexus/adapter.ts';
 import { CueEngine } from './cue/engine.ts';
 import { ObsClient } from './cue/obs.ts';
 import { ArcadeStore } from './arcade/store.ts';
@@ -392,6 +393,21 @@ if (config.audio.enabled) {
   console.log('[audio] off, set audio.enabled in config.json');
 }
 
+// ---- FRC Nexus: the queue ---------------------------------------------------
+// What the queuers are doing, which the field does not know yet. Read-only and
+// over the internet, so there is no field-safety concern and config alone
+// switches it on.
+let nexus: NexusAdapter | null = null;
+if (config.nexus.apiKey && config.nexus.eventKey) {
+  nexus = new NexusAdapter({
+    bus, apiKey: config.nexus.apiKey, eventKey: config.nexus.eventKey,
+  });
+  nexus.start();
+  console.log(`[nexus] polling queue status for ${config.nexus.eventKey}`);
+} else {
+  console.log('[nexus] off, set nexus.apiKey and nexus.eventKey in config.json');
+}
+
 // ---- start.gg side-tournament bracket --------------------------------------
 // Metadata only: round labels and entrants for the arcade console's pre-fill.
 // The live score stays operator-authoritative (docs/05-arcade.md). Unlike the
@@ -509,6 +525,7 @@ const shutdown = (): void => {
   clearInterval(ticker);
   cheesy?.stop();
   startgg?.stop();
+  nexus?.stop();
   audio?.stop();
   cues.detach();
   obs?.close();

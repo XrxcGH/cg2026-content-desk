@@ -73,6 +73,35 @@ h1, .sub { max-width: calc(100% - var(--qr-zone)); }
   text-align: center; color: var(--cg-white-dim);
 }
 .deck-head[hidden] { display: none; }
+/* Gold plate, because this is the one row on the screen that is an
+   instruction rather than information. */
+.calling {
+  flex: none; display: flex; align-items: baseline; gap: 22px;
+  background: var(--cg-gold); color: var(--cg-black);
+  clip-path: var(--chamfer); --ch: 16px;
+  padding: 12px 26px; margin-bottom: 14px;
+}
+.calling[hidden] { display: none; }
+.calling-label {
+  font-family: var(--font-cond); font-weight: 700; font-size: 34px;
+  letter-spacing: .16em; text-indent: .16em; text-transform: uppercase;
+}
+.calling-match { font-family: var(--font-num); font-weight: 900; font-size: 52px; line-height: 1; }
+.calling-teams {
+  margin-left: auto; font-family: var(--font-num); font-weight: 900; font-size: 44px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Announcements are typed by a human in a hurry and can be any length, so the
+   type fits itself to the room rather than trusting the author. */
+.note-body {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 0 40px;
+  font-family: var(--font-display); font-weight: 800;
+  font-variation-settings: "wdth" var(--wdth-display);
+  font-size: 76px; line-height: 1.15;
+}
+.note-body[data-fit="1"] { font-size: 60px; }
+.note-body[data-fit="2"] { font-size: 46px; }
 /* min-height:0 is load-bearing: a flex item defaults to min-height:auto, which
    pins this to its content height and pushes the last row off the screen
    instead of letting the rows share what the header left. Row gap is 22px,
@@ -214,10 +243,25 @@ h1, .sub { max-width: calc(100% - var(--qr-zone)); }
     <h1>On deck</h1>
     <div class="sub" id="deckSub">&nbsp;</div>
     <div class="tick"></div>
+    <!-- The queuers have called a match: this is a fact from a human minutes
+         before the field knows anything, and it is the single most useful
+         line a team in the pits can read. -->
+    <div class="calling" id="calling" hidden>
+      <span class="calling-label">Now queuing</span>
+      <span class="calling-match" id="callingMatch"></span>
+      <span class="calling-teams" id="callingTeams"></span>
+    </div>
     <div class="deck-head" id="deckHead" hidden>
       <span></span><span>Red alliance</span><span>Blue alliance</span>
     </div>
     <div class="deck" id="deck"></div>
+  </section>
+
+  <section class="panel-screen" id="scr-note">
+    <h1>Announcement</h1>
+    <div class="sub" id="noteSub">&nbsp;</div>
+    <div class="tick"></div>
+    <div class="note-body" id="noteBody"></div>
   </section>
 
   <section class="panel-screen" id="scr-rank">
@@ -254,10 +298,15 @@ let onDeck = true;
 let rankPage = 0;
 let lastState = null;
 
+/** Which panel is up: 'deck', 'rank', or 'note'. */
+let panel = 'deck';
+
 function show(deck) {
   onDeck = deck;
+  panel = deck ? 'deck' : 'rank';
   $('scr-deck').toggleAttribute('data-active', deck);
   $('scr-rank').toggleAttribute('data-active', !deck);
+  $('scr-note').removeAttribute('data-active');
   // The fit passes need layout: inside display:none both scrollWidth and
   // clientWidth read 0, every overflow check passes vacuously, and a panel
   // painted during the other panel's dwell came up unfitted (worse, the
@@ -266,8 +315,32 @@ function show(deck) {
   if (deck) fitDeck(); else fitRank();
 }
 
+/**
+ * An announcement takes its own turn in the rotation while it is fresh.
+ * Twenty minutes is the shelf life: "lunch is at 12:15" is useful for a while
+ * and then becomes furniture, and a stale notice on a screen teaches the room
+ * to stop reading the screen.
+ */
+const NOTE_LIFE_MS = 20 * 60_000;
+const noteLive = () => {
+  const n = lastState?.announcement;
+  return !!n && Date.now() - n.postedAt < NOTE_LIFE_MS;
+};
+
+function showNote() {
+  panel = 'note';
+  onDeck = false;
+  $('scr-deck').removeAttribute('data-active');
+  $('scr-rank').removeAttribute('data-active');
+  $('scr-note').setAttribute('data-active', '');
+  fitNote();
+}
+
 function advance() {
   const pages = Math.max(1, Math.ceil((lastState?.rankings?.length ?? 0) / PAGE_SIZE));
+  // Deck, then the announcement if there is a live one, then rankings.
+  if (panel === 'deck' && noteLive()) { showNote(); return; }
+  if (panel === 'note') { rankPage = 0; renderRank(); show(false); return; }
   if (onDeck) {
     rankPage = 0;
     renderRank();
@@ -291,6 +364,30 @@ function restartRotation() {
 function paint(s) {
   if (!s) return;
   lastState = s;
+
+  // ---- now queuing ----
+  // From Nexus: a human called this match, minutes before the field will know
+  // about it. Absent (desk-only, or an event not queueing on Nexus) the banner
+  // simply is not there, which is why nothing below depends on it.
+  const calling = s.nowQueuing;
+  $('calling').hidden = !calling;
+  if (calling) {
+    $('callingMatch').textContent = calling;
+    const row = (s.upcoming ?? []).find(m => m.name === calling);
+    // Split the alliances: six numbers in a row is a phone number, not two
+    // teams of three, and this plate is read at a glance from the pits.
+    $('callingTeams').textContent = row
+      ? `${(row.red ?? []).join(' ')}  vs  ${(row.blue ?? []).join(' ')}`
+      : '';
+  }
+
+  // ---- announcement ----
+  const note = s.announcement;
+  $('noteBody').textContent = note?.text ?? '';
+  $('noteSub').textContent = note
+    ? `${note.from} · ${new Date(note.postedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : ' ';
+  if (panel === 'note') fitNote();
 
   // ---- on deck ----
   const up = (s.upcoming ?? []).slice(0, 4);
@@ -380,6 +477,19 @@ function renderRank() {
 
 // Rankings fits, split out so show() can re-run them at reveal time: page 1
 // is always rendered during the deck dwell, while this panel is hidden.
+/**
+ * Announcements are typed by a human in a hurry, so the length is unknown.
+ * Step down until it fits rather than trusting the author to be brief.
+ */
+function fitNote() {
+  const el = $('noteBody');
+  el.removeAttribute('data-fit');
+  for (const step of ['1', '2']) {
+    if (el.scrollHeight <= el.clientHeight) break;
+    el.dataset.fit = step;
+  }
+}
+
 function fitRank() {
   fitLine($('rankSub'));
   for (const el of document.querySelectorAll('.rank-team')) {

@@ -287,8 +287,33 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
       }
 
       case 'queue.updated': {
-        const p = ev.payload as { upcoming?: DeskState['upcoming'] };
-        return { ...state, upcoming: p.upcoming ?? state.upcoming };
+        const p = ev.payload as {
+          upcoming?: DeskState['upcoming']; nowQueuing?: string | null;
+        };
+        return {
+          ...state,
+          upcoming: p.upcoming ?? state.upcoming,
+          // undefined means "this source has no opinion" (Cheesy does not),
+          // and must not wipe what Nexus said. Explicit null does clear it.
+          nowQueuing: p.nowQueuing === undefined ? state.nowQueuing : p.nowQueuing,
+        };
+      }
+
+      case 'queue.called':
+        return { ...state, nowQueuing: String((ev.payload as { label?: string }).label ?? '') || null };
+
+      case 'announcement.posted': {
+        const p = ev.payload as { text?: string; postedAt?: number; from?: string };
+        const text = String(p.text ?? '').trim();
+        if (!text) return state;
+        return {
+          ...state,
+          announcement: {
+            text: text.slice(0, 280),
+            postedAt: Number(p.postedAt) || ev.ts,
+            from: String(p.from ?? 'Event'),
+          },
+        };
       }
 
       case 'arena.status':

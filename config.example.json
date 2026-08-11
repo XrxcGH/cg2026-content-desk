@@ -77,6 +77,15 @@
     }
   },
 
+  "nexus": {
+    "//": "FRC Nexus: what the QUEUERS are doing. The only source that knows a match is being called before the field does. Read-only over the internet; nothing to do with the field network.",
+    "//apiKey": "From frc.nexus/api. Sent as the Nexus-Api-Key header.",
+    "//eventKey": "The Nexus event key, usually the same as event.key. Polling starts when both are set.",
+    "//note": "Only useful if the event actually runs its queueing on Nexus. For an event that does not, the timings come back looking authoritative and are not.",
+    "apiKey": "",
+    "eventKey": ""
+  },
+
   "startgg": {
     "//": "Side-tournament bracket from start.gg. Metadata only. Round labels and entrants pre-fill the arcade console; the live score stays operator-authoritative because start.gg lags reality by up to a full round (docs/05-arcade.md).",
     "//token": "Personal access token from start.gg -> Developer Settings. Read scope is enough.",
