@@ -228,7 +228,15 @@ export function roll(el, to, ms = 600) {
 
   const t0 = performance.now();
   const step = now => {
-    const p = Math.min(1, (now - t0) / ms);
+    // Clamped at BOTH ends. The top clamp is obvious; the bottom one is not,
+    // and its absence put wrong numbers on the score bar. `t0` comes from
+    // performance.now() but `now` is the rAF frame timestamp, and the first
+    // frame can be stamped fractionally EARLIER than the call that scheduled
+    // it. That makes p negative, and the ease `1 - (1 - p) ** 3` explodes
+    // downward for negative p: at p = -1 it is -7, so the element renders
+    // seven times the distance below the value in the wrong direction. Caught
+    // as a "-18 FUEL" on a screen bar whose state was +119 the whole time.
+    const p = Math.max(0, Math.min(1, (now - t0) / ms));
     el.textContent = String(Math.round(from + (to - from) * (1 - (1 - p) ** 3)));
     if (p < 1) requestAnimationFrame(step);
   };
