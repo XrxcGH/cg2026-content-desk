@@ -222,20 +222,55 @@ YouTube URL mid-event. That's the single most likely failure mode at a high scho
   scrambled for during it.
 - Know which circuits the gym's outlets are on. Ask the facilities contact on Friday.
 
-## Crew
+## Crew: three people, and one of them is on camera
+
+This is the constraint that decides more design here than the hardware does.
 
 | Role | Responsibility |
 | --- | --- |
-| **Producer / desk** | runs the rundown, calls cuts, owns the desk console. Can run the whole show alone in degraded mode. |
-| **Switcher op** | ATEM, cameras |
-| **Replay op** | markers, clip selection, TAKE |
-| **Analyst** | on camera, drives the telestrator |
-| **Play-by-play** | the other voice |
-| **Arcade op** | brackets, station resets, arcade overlay |
-| **Graphics/data op** | lower thirds, team facts, corrections (merge into producer if short-staffed) |
+| **Desk manager** | Runs everything software: the desk console, screens, replay, publishing, trivia, the arcade, house audio. **Switches the cameras too.** |
+| **On-air talent** | Tests the mics and cameras, then does the analysis and the interviews. On camera during exactly the segments that need the most operating. |
+| **Field tech** | The connections: field bridge, OBS, the scorekeeping system. Also the person who fixes whatever broke. |
 
-Minimum viable crew is **three**: producer, switcher, analyst. Everything else is upside. Design
-every surface so it's operable by someone who has been trained for 20 minutes on Friday night,
+Everything beyond those three is upside and must be treated as upside.
+
+**What this rules out.** There is no dedicated switcher, no replay operator, no graphics
+operator, no arcade operator and no trivia host. Any feature whose design assumes somebody is
+watching it and pressing things is a feature that will not run, and several ideas have been
+dropped for exactly that reason ([14-gap-research.md](14-gap-research.md), *Not doing*).
+
+**The camera cut belongs to the desk manager**, on the same console as everything else. That is
+the single most consequential thing on this page, because it means the person cutting cameras is
+also the person queueing a replay, posting a card and running trivia, and during a match those
+compete for the same pair of hands. Three consequences the software has to own:
+
+- **The wide-shot lock stops being a nicety.** Autopilot cannot cut away from the field mid-match
+  ([cue/engine.ts](../apps/core/src/cue/engine.ts)), which means the one cut that must never be
+  wrong is the one nobody has to make.
+- **Camera cuts live where the show already is.** Scene changes are cues on the desk console and
+  the phone remote, not a second application to alt-tab into. An operator who has to find another
+  window mid-match will not, and the shot will simply be wrong.
+- **A missed cut must be survivable, not fatal.** The program screen switches on match state
+  regardless of which camera is up, so the graphics stay correct even when the shot is stale.
+  That is the whole reason screens and scenes are separate events in this system.
+
+**What this demands instead**, and what the desk is built around:
+
+1. **Automation carries the show, and the desk manager overrides it.** Cues still start
+   disarmed, because trust is earned per cue over a session, but the target is that by Saturday
+   afternoon the match cycle runs itself and the desk manager is watching rather than driving.
+2. **Every routine action is one press.** Not a sequence, not a form. A three-person crew has no
+   spare hands during the four minutes before a playoff match.
+3. **The talent cannot operate anything while on camera.** Anything needed during an interview
+   or an analysis segment is either automatic, or on the desk manager's console, or fired from a
+   phone by whoever is closest.
+4. **The field tech is not watching the broadcast.** They are looking at a field, a switcher and
+   a scoring system in turn, so the desk has to notice its own problems and say so
+   ([the doors check](../apps/core/src/vitals.ts)) rather than waiting to be inspected.
+5. **Degraded mode is the normal mode.** One person leaving to fix something is not an incident;
+   it is Saturday. The desk manager alone must be able to keep a watchable show on air.
+
+Design every surface so it is operable by someone trained for twenty minutes on Friday night,
 because that is who will be operating it.
 
 ## Show flow (per match)

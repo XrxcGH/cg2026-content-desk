@@ -70,7 +70,23 @@ scoring against on Friday rather than assuming.
 
 **Effort.** Zero code. **Serves.** Program.
 
-### B5. One decision: how many people are actually running this?
+### B5. ~~One decision: how many people are actually running this?~~ — ANSWERED
+
+**Answered 2026-08-11: three.** A desk manager (all software, plus the camera cut), an on-air
+talent (mics and cameras first, then analysis and interviews), and a field tech (field bridge,
+OBS, scorekeeping, and fixing whatever broke). Written up as a design constraint in
+[06-hardware-and-network.md](06-hardware-and-network.md#crew-three-people-and-one-of-them-is-on-camera).
+
+The crew-profile feature below is therefore NOT being built: profiles exist to describe a crew
+that varies, and this one does not. What survives is the discipline it was meant to impose, and
+it is now the first question asked of every item in this document: *who operates it, given that
+the desk manager is also cutting cameras and the talent is on camera?* Several items were reshaped
+by that question and a few died of it.
+
+The original write-up follows, because the reasoning still applies to an event adopting this repo
+with a different crew.
+
+
 
 **What.** Name the crew, then ship named crew profiles in config (one person, three, six) that disable, auto-pilot or merge surfaces rather than presenting a dark console for every role nobody filled.
 
