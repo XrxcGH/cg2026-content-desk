@@ -31,6 +31,7 @@ import type { ClipLibrary } from './audio/library.ts';
 import type { ProfileBook, ProfileInput } from './profiles.ts';
 import type { CoverageLedger } from './coverage.ts';
 import type { CardLedger } from './cards.ts';
+import type { Rundown } from './rundown.ts';
 import type { Vitals } from './vitals.ts';
 
 /** How many people the panel graphic can render and still be readable. */
@@ -114,6 +115,8 @@ export interface ServerOpts {
   vitals?: Vitals | null;
   /** Cards carried and surrogates, for the talent view and the graphics. */
   cardLedger?: CardLedger | null;
+  /** The day as a list, with a clock derived from measured pace. */
+  rundown?: Rundown | null;
   /** LAN-reachable base URL, e.g. "http://10.0.100.23:8720", for QR codes. */
   lanBase?: string | null;
 }
@@ -123,7 +126,7 @@ export function startServer(opts: ServerOpts) {
           publish = null, config = null, cheesy = null, cues = null, obs = null,
           arcade = null, trivia = null, audio = null, audioClips = null,
           profiles = null, coverage = null, vitals = null, cardLedger = null,
-          lanBase = null } = opts;
+          rundown = null, lanBase = null } = opts;
 
   // Crash policy lives in index.ts, in the ONE uncaughtException handler for
   // the whole process: fatal during boot, log-and-continue once the show is
@@ -587,6 +590,29 @@ export function startServer(opts: ServerOpts) {
           bus.emit({ type: 'scene.change', source: 'manual', payload: { scene: wanted } });
           if (obs?.connected) await obs.setScene(wanted);
           return json(res, 200, { scene: wanted, obs: obs?.connected ?? false });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
+      // ---- run of show ------------------------------------------------------
+      // Open as a READ: the audience-facing countdown on the venue screens and
+      // the phone page is the whole point, and it carries nothing private.
+      if (path === '/api/rundown' && req.method !== 'POST') {
+        return json(res, 200, rundown?.snapshot ?? null);
+      }
+
+      if (path === '/api/rundown' && req.method === 'POST') {
+        if (!rundown) return json(res, 503, { error: 'No run of show is configured.' });
+        try {
+          const body = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8')) as
+            { action?: string; id?: string };
+          switch (body.action) {
+            case 'start':   return json(res, 200, rundown.start(String(body.id ?? '')));
+            case 'advance': return json(res, 200, rundown.advance());
+            case 'reset':   return json(res, 200, rundown.reset(String(body.id ?? '')));
+            default: return json(res, 404, { error: 'Unknown rundown action.' });
+          }
         } catch (err) {
           return json(res, 422, { error: (err as Error).message });
         }

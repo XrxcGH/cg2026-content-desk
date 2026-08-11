@@ -77,6 +77,14 @@
     }
   },
 
+  "rundown": {
+    "//": "The day as a list. The desk manager advances it; nothing advances itself, because a rundown that advances on its own will do it during the one delay nobody predicted.",
+    "//matches": "A matches block gives a COUNT, not a duration: the length comes from the pace model measuring real cycle time. A printed 7 minutes against a measured 9 is an hour by the end of the day.",
+    "//audience": "What the venue screens call the countdown during this segment, e.g. Matches resume.",
+    "//example": "{ id: quals-am, label: Qualification matches, kind: matches, matches: 24 }",
+    "segments": []
+  },
+
   "accessibility": {
     "//": "What the event actually offers, and where. Shown on the venue screens and the phone page, because the person who needs a quiet room is deciding at 11am in a loud building, from a phone. Leave the list empty if the event offers nothing: showing nothing is honest, and inventing a service is worse than silence.",
     "//example": "{ \"label\": \"Quiet room\", \"detail\": \"Room 114, past the pits on the left\" }",

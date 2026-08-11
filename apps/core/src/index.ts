@@ -36,6 +36,7 @@ import { Recorder, type SourceConfig } from './recorder.ts';
 import { ClipStore } from './clips.ts';
 import { CoverageLedger } from './coverage.ts';
 import { CardLedger } from './cards.ts';
+import { Rundown } from './rundown.ts';
 import { Vitals } from './vitals.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -439,6 +440,16 @@ if (config.startgg.token && config.startgg.eventSlug) {
 const publish = new PublishQueue(ROOT, config, bus, clips);
 await publish.load();
 
+// The day as a list, with a clock derived from measured pace rather than the
+// printed schedule nobody believes by 11am.
+const rundown = new Rundown(bus, config.rundown.segments);
+rundown.attach();
+if (config.rundown.segments.length) {
+  console.log(`[rundown] ${config.rundown.segments.length} segment(s) planned`);
+} else {
+  console.log('[rundown] no run of show planned, set rundown.segments in config.json');
+}
+
 // Cards are a STATE a team carries, not a one-shot event: a yellow follows a
 // team all weekend and a second one is a red. Nothing remembered them before.
 const cardLedger = new CardLedger();
@@ -521,7 +532,8 @@ if (config.publish.autoQueueArcade && !has('demo') && !has('replay')) {
 
 const server = startServer({
   bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
-  arcade, trivia, audio, audioClips, profiles, coverage, vitals, cardLedger, lanBase,
+  arcade, trivia, audio, audioClips, profiles, coverage, vitals, cardLedger,
+  rundown, lanBase,
 });
 // From here on, an uncaught throw logs and continues instead of killing every
 // overlay at once — see the handler at the top of this file.

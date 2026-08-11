@@ -121,7 +121,9 @@ export type DeskEventType =
   // game configuration pushed from config.json at boot
   | 'game.thresholds'
   // What the event offers and where, pushed from config at boot.
-  | 'event.accessibility';
+  | 'event.accessibility'
+  // The day as a list: which segment is live and when the next one starts.
+  | 'rundown.updated';
 
 // ---------------------------------------------------------------------------
 // 2026 REBUILT

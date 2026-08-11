@@ -88,6 +88,21 @@ export interface Config {
   // be an explicit act at the point of use rather than something inherited
   // from a file copied between machines. See docs/10-field-bridge.md.
   /**
+   * The day as a list. Empty is fine and means the desk shows no rundown.
+   *
+   * A matches block gives a COUNT rather than a duration: the length comes
+   * from the pace model measuring real cycle time, because the difference
+   * between a printed seven minutes and a measured nine is an hour by the end
+   * of the day.
+   */
+  rundown: {
+    segments: {
+      id: string; label: string;
+      kind: 'matches' | 'break' | 'ceremony' | 'selection' | 'awards' | 'gap';
+      minutes?: number; matches?: number; audience?: string;
+    }[];
+  };
+  /**
    * What the event offers, and where it is.
    *
    * On the screens rather than in a pre-event email, because the person who
@@ -195,6 +210,7 @@ export const DEFAULTS: Config = {
     enabled: true,
     spotify: { clientId: '', refreshToken: '', deviceName: '', playlistUri: '' },
   },
+  rundown: { segments: [] },
   accessibility: { services: [], ask: '' },
   nexus: { apiKey: '', eventKey: '' },
   startgg: { token: '', eventSlug: '' },

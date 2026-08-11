@@ -51,6 +51,10 @@ const OPEN_GET = new Set([
   // progress: the state snapshot carries no arcade fields. Gating it left the
   // overlay permanently blank after any reload, which is a bad way to find out.
   '/api/arcade',
+  // The audience-facing half of the run of show: what is happening now and
+  // when the next thing starts. The venue screens and the phone page both
+  // render it and neither can type a PIN. Changing it is a POST, and closed.
+  '/api/rundown',
 ]);
 
 /**
