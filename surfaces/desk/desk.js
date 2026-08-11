@@ -588,6 +588,8 @@ $('audPause').onclick = () => audio('pause');
 $('audNext').onclick = () => audio('next');
 $('audPrev').onclick = () => audio('previous');
 $('audConsole').onclick = () => audio('source', { source: 'console', reason: 'Game audio, from the desk' });
+// Proving the music machine answers, before doors rather than during a match.
+$('audWake').onclick = () => audio('wake');
 $('audDuck').onclick = () => audio('duck', { on: !(audioSnap?.music?.ducked) });
 $('audVol').oninput = () => { $('audVolText').textContent = $('audVol').value; };
 $('audVol').onchange = () => audio('volume', { percent: Number($('audVol').value) });
@@ -608,6 +610,8 @@ function paintAudio(s) {
 
   const label = { playlist: 'Playlist', clip: 'Walk-up', console: 'Game audio', silent: 'Silent' };
   $('audioSrc').textContent = label[s.source] ?? s.source;
+  const dev = s.music?.device;
+  $('audioWho').textContent = dev ? `· ${dev}` : '·';
   $('audioSrc').dataset.s = s.source;
   $('audDuck').classList.toggle('btn--go', !!s.music?.ducked);
 
@@ -654,12 +658,16 @@ function paintAudio(s) {
 
   // Two things worth interrupting the operator for, in priority order.
   const players = s.players ?? { alive: 0, armed: 0 };
-  $('audioWho').textContent = players.armed === 1
-    ? '· player ready'
-    : `· ${players.armed} players armed`;
+  if (players.armed !== 1) $('audioWho').textContent = `· ${players.armed} players armed`;
 
   let warn = '';
-  if (players.armed === 0) {
+  if (s.music?.needsRelink) {
+    // Terminal: the saved credential was refused, and no amount of retrying
+    // fixes it. Spotify's refresh tokens expire six months after they were
+    // minted whether or not they get used.
+    warn = `${s.music.service} needs re-linking: run "npm run auth:spotify" on the desk ` +
+      'machine and paste the new token into config.json. Clips still play.';
+  } else if (players.armed === 0) {
     warn = 'No house player is armed. Open /s/house on the music machine and press the ' +
       'button once, or nothing will make a sound.';
   } else if (players.armed > 1) {

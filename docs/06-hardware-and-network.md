@@ -195,19 +195,18 @@ Verified against Spotify's own documentation while this was built:
 | Refresh tokens die **6 months** after authorization, used or not | Mint it close to the event. Put the re-link step on the run sheet |
 | The Web API is a cloud round trip | With the uplink down the desk cannot change the music, but a **downloaded** playlist keeps playing. The desk shows "unreachable" separately from "stopped" for exactly this reason |
 
-**The decision that is not ours.** Spotify's Developer Policy prohibits what a venue PA does with
-it: it says Spotify is for personal use and "can't be broadcast or played publicly from a
-business", forbids systems that "segue, mix, re-mix, or overlap" Spotify content with other audio
-(which is what ducking under a walk-up is), and forbids synchronizing recordings with visual
-media. The dual-bus split protects the VOD from Content ID; it does nothing about this, which is a
-licensing question rather than a technical one. Public performance of recorded music at the event
-is also a PRO (ASCAP/BMI/SESAC) question that belongs to the venue and WRRF, not to this software.
+**Decided: CalGames runs Spotify.** For the record, since it was researched and asked: Spotify's
+Developer Policy is written for commercial premises and speaks against public playback, and public
+performance of recorded music is separately a PRO (ASCAP/BMI/SESAC) question belonging to the
+venue. WRRF's call is that a non-monetized off-season robotics event is not the situation those
+rules are aimed at, and that is the event's decision to make, not the software's. Noted here once
+so nobody re-opens it in September, and so an event adopting this repo can reach its own
+conclusion knowing what the rules say.
 
-The desk is built so the answer is swappable rather than baked in. The music service sits behind
-one small interface, so the compliant options are drop-in: a licensed background-music service, or
-a folder of owned/production-library tracks on the music machine, which also happens to be the
-only option that survives a dead uplink. Raise it with WRRF before the event; do not let a
-software default decide a licensing question.
+The music service still sits behind one small interface (`MusicController` in
+[audio/store.ts](../apps/core/src/audio/store.ts)), because an adopting event may answer
+differently and because a folder of owned tracks is the only option that survives a dead uplink.
+Swapping it is one file.
 
 ## Power: learn from 2025
 

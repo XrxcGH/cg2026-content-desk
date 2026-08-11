@@ -24,6 +24,7 @@ import { HouseAudio } from './audio/store.ts';
 import { ClipLibrary } from './audio/library.ts';
 import { ProfileBook } from './profiles.ts';
 import { createSpotify } from './audio/spotify.ts';
+import { loadRefreshToken, saveRefreshToken } from './audio/token-store.ts';
 import { TriviaStore } from './trivia/store.ts';
 import { DEFAULT_QUESTIONS } from './trivia/questions.ts';
 import { loadConfig, publishReadiness } from './config.ts';
@@ -372,7 +373,11 @@ if (config.audio.enabled) {
   try { await audioClips.scan(); } catch (err) {
     console.warn('[audio] clip scan failed:', (err as Error).message);
   }
-  const music = createSpotify(config.audio.spotify);
+  // A rotation from a previous session beats the cold-start token in config.
+  const refreshToken = await loadRefreshToken(ROOT, config.audio.spotify.refreshToken);
+  const music = createSpotify({ ...config.audio.spotify, refreshToken }, {
+    onTokenRotated: token => { void saveRefreshToken(ROOT, token); },
+  });
   audio = new HouseAudio(bus, {
     controller: music,
     library: audioClips,
@@ -380,7 +385,8 @@ if (config.audio.enabled) {
   });
   audio.start();
   console.log(music
-    ? `[audio] house audio on, ${music.name} configured`
+    ? `[audio] house audio on, ${music.name} configured` +
+      (config.audio.spotify.deviceName ? ` for "${config.audio.spotify.deviceName}"` : '')
     : '[audio] house audio on, clips only (no music service configured)');
 } else {
   console.log('[audio] off, set audio.enabled in config.json');

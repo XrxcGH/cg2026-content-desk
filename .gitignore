@@ -38,3 +38,8 @@ config.json
 # The launcher build caches the Node runtime it embeds. 34MB, and reproducible
 # from the pinned version and checksum in tools/launcher/build.ps1.
 tools/launcher/.cache/
+
+# Rotated Spotify refresh token. A bearer credential for the music account,
+# written by the desk when Spotify hands back a new one.
+data/spotify-token.json
+data/spotify-token.json.tmp

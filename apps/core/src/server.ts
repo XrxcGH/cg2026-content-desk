@@ -636,6 +636,9 @@ export function startServer(opts: ServerOpts) {
               return json(res, 200, await audio.clipEnded(
                 body['token'] === undefined ? undefined : String(body['token'])));
 
+            // Make the music machine's player active, for proving it works
+            // before doors rather than during a match.
+            case 'wake':     return json(res, 200, await audio.wake());
             case 'play':     return json(res, 200, await audio.play());
             case 'pause':    return json(res, 200, await audio.pause());
             case 'next':     return json(res, 200, await audio.skip('next'));

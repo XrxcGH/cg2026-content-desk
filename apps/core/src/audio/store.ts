@@ -61,6 +61,19 @@ export interface MusicController {
   readonly name: string;
   /** False until credentials exist and a token has been minted. */
   readonly linked: boolean;
+  /**
+   * True once the service has refused the saved credential outright, which no
+   * amount of retrying fixes. The desk shows a re-link instruction instead of
+   * an error that looks like a network blip.
+   */
+  readonly needsRelink?: boolean;
+  /** Which output is being driven, once known. */
+  readonly deviceLabel?: string | null;
+  /**
+   * Make the target device active. Optional: a service with no device concept
+   * has nothing to wake.
+   */
+  wake?(): Promise<void>;
   status(): Promise<MusicStatus>;
   play(opts?: { contextUri?: string }): Promise<void>;
   pause(): Promise<void>;
@@ -111,6 +124,8 @@ export interface HouseAudioSnapshot {
     context: { uri: string; name: string } | null;
     playlists: { uri: string; name: string }[];
     error: string | null;
+    /** The credential is dead; only re-authorizing fixes it. */
+    needsRelink: boolean;
   };
   clip: PlayingClip | null;
   clips: Clip[];
@@ -161,6 +176,9 @@ export class HouseAudio {
   #playlists: { uri: string; name: string }[] = [];
   #reachable = false;
   #error: string | null = null;
+  /** Consecutive poll failures, and the backoff they earn. */
+  #failures = 0;
+  #quietUntil = 0;
   #auto: AudioAutomation;
   #poll: NodeJS.Timeout | null = null;
   #seq = 0;
@@ -186,7 +204,11 @@ export class HouseAudio {
         linked: this.#music?.linked ?? false,
         reachable: this.#reachable,
         service: this.#music?.name ?? 'none',
-        device: this.#status.device,
+        // The device the service says is playing, falling back to the one the
+        // controller resolved: before anything has played there is no active
+        // device, and "none" would read as broken when it is merely idle.
+        device: this.#status.device ?? this.#music?.deviceLabel ?? null,
+        needsRelink: this.#music?.needsRelink === true,
         volume: this.#volume,
         ducked: this.#ducked,
         playing: this.#status.playing,
@@ -229,20 +251,54 @@ export class HouseAudio {
     }
   }
 
-  /** Poll now-playing so the desk can show what the room is hearing. */
+  /**
+   * Poll now-playing so the desk can show what the room is hearing.
+   *
+   * Backs off on failure rather than hammering. The venue uplink going down
+   * takes every poll with it, and a fixed 5s poll against a dead network is
+   * both pointless and, once it comes back, a burst against a rate limit
+   * measured over a rolling 30-second window.
+   */
   async refresh(): Promise<void> {
     const music = this.#music;
     if (!music?.linked) return;
+    if (Date.now() < this.#quietUntil) return;
+
     try {
       this.#status = await music.status();
       if (typeof this.#status.volume === 'number') this.#volume = this.#status.volume;
       this.#reachable = true;
       this.#error = null;
+      this.#failures = 0;
     } catch (err) {
       this.#reachable = false;
       this.#error = (err as Error).message;
+      this.#failures++;
+      // 10s, 20s, 40s, then a minute. Fast enough to notice the network
+      // coming back, slow enough not to be the reason it stays down.
+      this.#quietUntil = Date.now() + Math.min(60_000, 5_000 * 2 ** this.#failures);
     }
     this.#publish();
+  }
+
+  /**
+   * Make the music machine's player the active device.
+   *
+   * The commonest day-of failure by a distance: the app is open but nobody has
+   * pressed play since the machine booted, so the service reports no active
+   * device and every transport command fails. The transport calls do this
+   * automatically; this is the operator's version of the same thing, for when
+   * they want to prove it works before doors rather than during a match.
+   */
+  async wake(): Promise<HouseAudioSnapshot> {
+    await this.#tell('wake', async m => {
+      if (!m.wake) throw new Error(`${m.name} has no device to wake.`);
+      await m.wake();
+    });
+    // A wake that worked means the service is answering again.
+    if (this.#reachable) { this.#failures = 0; this.#quietUntil = 0; }
+    await this.refresh();
+    return this.snapshot;
   }
 
   /**
