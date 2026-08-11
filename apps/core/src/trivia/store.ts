@@ -38,6 +38,11 @@ export interface TriviaSnapshot {
   standings: PublicStanding[];
   asked: number;
   joinUrl: string | null;
+  /** Rounds and their progress, so the host can pick one per gap and the
+   *  audience can be told there is more coming after the next match. */
+  sessions: { name: string; size: number; asked: number; done: boolean }[];
+  /** Where the cursor is: "Round 2, question 3 of 6". Null on an empty bank. */
+  session: { name: string; position: number; size: number } | null;
 }
 
 /**
@@ -83,6 +88,8 @@ export class TriviaStore {
   #phase: TriviaPhase = 'idle';
   #index = 0;
   #asked = 0;
+  /** Which questions have been revealed, by id. Drives per-session progress. */
+  #askedIds = new Set<string>();
   #opensAt = 0;
   #closesAt = 0;
   #answers = new Map<string, TriviaAnswer>();
@@ -102,6 +109,66 @@ export class TriviaStore {
   }
 
   #current(): TriviaQuestion | null { return this.#questions[this.#index] ?? null; }
+
+  // ---- sessions -------------------------------------------------------------
+  //
+  // A session is one round the gym plays in one gap between matches. The day is
+  // a series of them and scores carry across, which is the only shape that
+  // survives contact with a real event: a host who opens question one at 10am
+  // gets interrupted by the field two questions in, and without rounds the
+  // game is simply never picked up again.
+  //
+  // Derived from the bank rather than stored separately, so editing questions
+  // on the host console cannot leave a session list pointing at nothing.
+
+  /** Contiguous runs of questions sharing a session name, in playing order. */
+  #sessionRuns(): { name: string; start: number; size: number }[] {
+    const runs: { name: string; start: number; size: number }[] = [];
+    this.#questions.forEach((q, i) => {
+      // A bank with no sessions at all is one long round, which is exactly how
+      // every bank behaved before sessions existed.
+      const name = q.session ?? 'Trivia';
+      const last = runs[runs.length - 1];
+      if (last && last.name === name && last.start + last.size === i) last.size++;
+      else runs.push({ name, start: i, size: 1 });
+    });
+    return runs;
+  }
+
+  /** Rounds with their progress, for the host's picker and the overlay. */
+  get sessions(): { name: string; size: number; asked: number; done: boolean }[] {
+    return this.#sessionRuns().map(run => {
+      const asked = this.#questions
+        .slice(run.start, run.start + run.size)
+        .filter(q => this.#askedIds.has(q.id)).length;
+      return { name: run.name, size: run.size, asked, done: asked >= run.size };
+    });
+  }
+
+  /**
+   * Jump to a round and wait there.
+   *
+   * Lands on the first question of that round nobody has answered yet, so
+   * picking a half-finished round after a match resumes it rather than
+   * replaying it. Refuses while a question is open: the host would be
+   * abandoning a question the whole gym is currently answering.
+   */
+  startSession(name: string): TriviaSnapshot {
+    if (this.#phase === 'open') {
+      throw new Error('A question is open. Reveal it before changing rounds.');
+    }
+    const run = this.#sessionRuns().find(r => r.name === name);
+    if (!run) throw new Error(`There is no round called "${name}".`);
+
+    const slice = this.#questions.slice(run.start, run.start + run.size);
+    const fresh = slice.findIndex(q => !this.#askedIds.has(q.id));
+    this.#index = run.start + (fresh === -1 ? 0 : fresh);
+    this.#phase = 'idle';
+    this.#answers.clear();
+    if (this.#closeTimer) { clearTimeout(this.#closeTimer); this.#closeTimer = null; }
+    this.#publish();
+    return this.snapshot();
+  }
 
   // ---- players --------------------------------------------------------------
 
@@ -371,6 +438,10 @@ export class TriviaStore {
     }
     this.#phase = 'revealed';
     this.#asked++;
+    // By id, not by index: the host can reorder or delete questions mid-show,
+    // and a per-session "3 of 6 done" counted off indices would drift the
+    // moment they did.
+    this.#askedIds.add(q.id);
     if (this.#closeTimer) { clearTimeout(this.#closeTimer); this.#closeTimer = null; }
     this.#publish();
     return this.snapshot();
@@ -408,6 +479,7 @@ export class TriviaStore {
     this.#phase = 'idle';
     this.#index = 0;
     this.#asked = 0;
+    this.#askedIds.clear();
     this.#answers.clear();
     if (this.#closeTimer) { clearTimeout(this.#closeTimer); this.#closeTimer = null; }
     if (hard) this.#players.clear();
@@ -441,7 +513,16 @@ export class TriviaStore {
       standings: publicStandings(this.#players.values()).slice(0, 10),
       asked: this.#asked,
       joinUrl: this.#joinUrl,
+      sessions: this.sessions,
+      session: this.#sessionOf(this.#index),
     };
+  }
+
+  /** Where the cursor sits inside its round, for "question 3 of 6". */
+  #sessionOf(index: number): { name: string; position: number; size: number } | null {
+    const run = this.#sessionRuns().find(r => index >= r.start && index < r.start + r.size);
+    if (!run) return null;
+    return { name: run.name, position: index - run.start + 1, size: run.size };
   }
 
   playView(playerId?: string): PlayView {

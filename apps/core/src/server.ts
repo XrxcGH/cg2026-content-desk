@@ -722,6 +722,9 @@ export function startServer(opts: ServerOpts) {
                 trivia.moveQuestion(Number(body['index']), Number(body['delta']) || 0)));
             case 'reveal': return json(res, 200, trivia.reveal());
             case 'next':   return json(res, 200, trivia.next());
+            // Pick the round to play in this gap. Resumes a half-finished one
+            // rather than replaying it.
+            case 'session': return json(res, 200, trivia.startSession(String(body['name'] ?? '')));
             case 'reset':  return json(res, 200, trivia.reset(body['hard'] === true));
             default: return json(res, 404, { error: `Unknown trivia action "${action}"` });
           }

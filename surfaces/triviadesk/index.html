@@ -88,6 +88,14 @@ input:focus { outline: none; border-color: var(--accent); }
   </header>
 
   <section>
+    <h2>Rounds</h2>
+    <p class="hint">Play one round in one gap between matches, then stop. Scores carry all
+      day, so the gym picks up where it left off after the next match. A part-played round
+      resumes rather than restarting.</p>
+    <div class="row" id="sessionRow"></div>
+  </section>
+
+  <section>
     <h2>Now · <span id="progress" aria-live="polite">-</span></h2>
     <div class="qbox">
       <div class="cat" id="cat">&nbsp;</div>
@@ -181,6 +189,37 @@ async function post(action, body) {
 }
 
 let lastLiveKey = '';
+/**
+ * The round picker. One button per round, showing how much of it is left, so
+ * the host's decision in a gap is "which of these fits in the next four
+ * minutes" rather than a scroll through thirty-six questions.
+ */
+function paintSessions(s) {
+  const row = $('sessionRow');
+  const sessions = s.sessions ?? [];
+  if (!sessions.length) { row.textContent = ''; return; }
+
+  row.replaceChildren(...sessions.map(sess => {
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    const left = sess.size - sess.asked;
+    btn.textContent = sess.done
+      ? `${sess.name} · done`
+      : `${sess.name} · ${left} left`;
+    btn.disabled = sess.done;
+    // The round the cursor is in is the one being played: mark it, so a host
+    // coming back after a match can see where they were without counting.
+    if (s.session && s.session.name === sess.name) btn.classList.add('btn--go');
+    btn.onclick = async () => {
+      try {
+        await post('session', { name: sess.name });
+        say(`${sess.name}. Open the first question when the overlay is up.`);
+      } catch (err) { say(err.message, true); }
+    };
+    return btn;
+  }));
+}
+
 function paint(s) {
   if (!s) return;
   $('dot').dataset.up = 'true';
@@ -196,9 +235,15 @@ function paint(s) {
     void loadBank();
   }
   $('who').textContent = `${s.players} player${s.players === 1 ? '' : 's'}`;
+  // Position within the ROUND, not the whole bank: the host is running a
+  // four-minute round, and "question 19 of 36" tells them nothing about
+  // whether they have time to open another one before the field is ready.
   $('progress').textContent = s.questionIndex >= s.questionCount
     ? `bank done · ${s.asked} asked`
-    : `question ${s.questionIndex + 1} of ${s.questionCount} · ${s.phase}`;
+    : s.session
+      ? `${s.session.name} · question ${s.session.position} of ${s.session.size} · ${s.phase}`
+      : `question ${s.questionIndex + 1} of ${s.questionCount} · ${s.phase}`;
+  paintSessions(s);
 
   const q = s.question;
   // The escaped nbsp holds the line box like the markup's &nbsp; does. A

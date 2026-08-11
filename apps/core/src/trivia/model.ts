@@ -24,6 +24,19 @@ export interface TriviaQuestion {
   answer: 0 | 1 | 2 | 3;
   category?: string;
   /**
+   * Which round this belongs to.
+   *
+   * The gym plays one session in one gap between matches, and the day is a
+   * series of them: scores carry, the leaderboard keeps building, and nobody
+   * has to finish a thirty-question game in a four-minute window. Questions
+   * sharing a session name must be contiguous in the bank; the store derives
+   * the round list from that order.
+   *
+   * Optional, and a bank with none is simply one long session, which is what
+   * every bank was before this existed.
+   */
+  session?: string;
+  /**
    * A prediction rather than a fact. The audience picks before the match, and
    * the answer is whatever actually happens, so it cannot be leaked early:
    * at the moment the question opens, nobody knows it, including the server.

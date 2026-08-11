@@ -4,6 +4,7 @@ import { EventBus } from '../bus.ts';
 import { TriviaStore } from './store.ts';
 import { award, standings, BASE_POINTS, PICK_BLUE, PICK_TIE, SPEED_POINTS } from './model.ts';
 import type { TriviaQuestion } from './model.ts';
+import { DEFAULT_QUESTIONS, SESSIONS } from './questions.ts';
 
 const BANK: TriviaQuestion[] = [
   { id: 'q1', text: '2 + 2?', options: ['3', '4', '5', '22'], answer: 1 },
@@ -441,4 +442,87 @@ test('a join that cannot succeed never costs a real player their slot', () => {
   // Blank names must be rejected BEFORE any eviction runs.
   assert.throws(() => store.join('   '), /name is required/);
   assert.equal(store.snapshot().players, 1, 'Ana was not evicted by a failed join');
+});
+
+// ---------------------------------------------------------------------------
+// Sessions: one round per gap between matches, scores carrying across the day
+// ---------------------------------------------------------------------------
+
+test('the shipped bank is playable with nobody preparing anything', () => {
+  assert.ok(DEFAULT_QUESTIONS.length >= 30,
+    `the bank must carry a full day of trivia, found ${DEFAULT_QUESTIONS.length}`);
+  assert.ok(SESSIONS.length >= 5, 'a day has more gaps than one round');
+
+  for (const q of DEFAULT_QUESTIONS) {
+    assert.equal(q.options.length, 4, `${q.id} must have exactly four options`);
+    assert.ok(q.answer >= 0 && q.answer <= 3, `${q.id} has an answer outside its options`);
+    assert.ok(q.session, `${q.id} belongs to no round`);
+    // A duplicated option makes two plates correct and the reveal a lie.
+    assert.equal(new Set(q.options).size, 4, `${q.id} repeats an option`);
+  }
+  assert.equal(new Set(DEFAULT_QUESTIONS.map(q => q.id)).size, DEFAULT_QUESTIONS.length,
+    'two questions share an id');
+});
+
+test('rounds are contiguous, so the run order matches the printed order', () => {
+  const seen = new Set();
+  let last = null;
+  for (const q of DEFAULT_QUESTIONS) {
+    if (q.session === last) continue;
+    assert.ok(!seen.has(q.session), `round "${q.session}" is split into two runs`);
+    seen.add(q.session);
+    last = q.session ?? null;
+  }
+});
+
+test('a round resumes where it was left rather than replaying', () => {
+  const store = new TriviaStore(new EventBus());
+  const first = SESSIONS[0]!;
+  store.startSession(first!);
+  store.open(20);
+  store.reveal();
+  store.next();
+
+  // Wander off to another round the way a host does when the field calls.
+  store.startSession(SESSIONS[1]!);
+  store.open(20);
+  store.reveal();
+  store.next();
+
+  // Coming back must land on question two of the first round, not question one.
+  const snap = store.startSession(first!);
+  assert.equal(snap.session?.name, first);
+  assert.equal(snap.session?.position, 2, 'the answered question must not be asked again');
+  assert.equal(snap.sessions.find(s => s.name === first)?.asked, 1);
+});
+
+test('scores carry across rounds: the leaderboard is the whole day', () => {
+  const store = new TriviaStore(new EventBus());
+  const { playerId } = store.join('Ana', 846);
+  store.startSession(SESSIONS[0]!);
+  store.open(20);
+  assert.ok(store.snapshot().question);
+  // Answer correctly by reading the bank, since the snapshot hides the answer.
+  const idx = store.snapshot().questionIndex;
+  store.answer(playerId, DEFAULT_QUESTIONS[idx]!.answer);
+  store.reveal();
+  const afterRound1 = store.snapshot().standings[0]!.score;
+  assert.ok(afterRound1 > 0, 'a correct answer must score');
+  store.next();
+
+  store.startSession(SESSIONS[1]!);
+  assert.equal(store.snapshot().standings[0]!.score, afterRound1,
+    'changing rounds must not reset the day');
+});
+
+test('a round cannot be changed out from under an open question', () => {
+  const store = new TriviaStore(new EventBus());
+  store.startSession(SESSIONS[0]!);
+  store.open(20);
+  assert.throws(() => store.startSession(SESSIONS[1]!), /Reveal it before changing rounds/);
+});
+
+test('an unknown round is refused rather than silently doing nothing', () => {
+  const store = new TriviaStore(new EventBus());
+  assert.throws(() => store.startSession('Round 9 · Nope'), /no round called/);
 });
