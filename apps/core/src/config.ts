@@ -88,6 +88,20 @@ export interface Config {
   // be an explicit act at the point of use rather than something inherited
   // from a file copied between machines. See docs/10-field-bridge.md.
   /**
+   * What the event offers, and where it is.
+   *
+   * On the screens rather than in a pre-event email, because the person who
+   * needs a quiet room is deciding at 11am on the day, in a loud building,
+   * from a phone. Empty by default: an event that lists nothing shows nothing,
+   * which is honest. Never invent a service the event does not have.
+   */
+  accessibility: {
+    /** Each is one line the audience can act on. */
+    services: { label: string; detail: string }[];
+    /** Who to ask. A name and a place beats a policy statement. */
+    ask: string;
+  };
+  /**
    * FRC Nexus: what the QUEUERS are doing.
    *
    * The only source that knows a match is being called before the field does,
@@ -181,6 +195,7 @@ export const DEFAULTS: Config = {
     enabled: true,
     spotify: { clientId: '', refreshToken: '', deviceName: '', playlistUri: '' },
   },
+  accessibility: { services: [], ask: '' },
   nexus: { apiKey: '', eventKey: '' },
   startgg: { token: '', eventSlug: '' },
   youtube: { clientId: '', clientSecret: '', refreshToken: '' },

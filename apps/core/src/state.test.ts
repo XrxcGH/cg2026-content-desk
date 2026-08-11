@@ -243,3 +243,24 @@ test('a safety message with no words is refused rather than shown blank', () => 
   const s = reduce(initialState(), ev('emergency.raise', T0, { message: '   ' }));
   assert.equal(s.emergency, null, 'a blank plate over the match would be worse than nothing');
 });
+
+test('accessibility services are listed only when the event actually has them', () => {
+  // An event that lists nothing shows nothing. Inventing a service is worse
+  // than silence: somebody walks across a building looking for a room that
+  // does not exist.
+  let s = initialState();
+  assert.deepEqual(s.accessibility.services, []);
+
+  s = reduce(s, ev('event.accessibility', T0, {
+    services: [
+      { label: 'Quiet room', detail: 'Room 114, past the pits' },
+      { label: '', detail: 'orphaned detail' },
+      { label: 'ASL interpretation', detail: 'Awards ceremony' },
+    ],
+    ask: 'Ask anyone in a purple shirt',
+  }));
+  assert.deepEqual(s.accessibility.services.map(x => x.label),
+    ['Quiet room', 'ASL interpretation'],
+    'an entry with no label is not a service anybody can act on');
+  assert.equal(s.accessibility.ask, 'Ask anyone in a purple shirt');
+});

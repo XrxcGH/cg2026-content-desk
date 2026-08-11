@@ -119,7 +119,9 @@ export type DeskEventType =
   // Safety. Latches until explicitly cleared, and outranks every other graphic.
   | 'emergency.raise' | 'emergency.clear'
   // game configuration pushed from config.json at boot
-  | 'game.thresholds';
+  | 'game.thresholds'
+  // What the event offers and where, pushed from config at boot.
+  | 'event.accessibility';
 
 // ---------------------------------------------------------------------------
 // 2026 REBUILT
@@ -445,6 +447,8 @@ export interface DeskState {
   status: StatusCard | null;
   /** Safety message. Latches; outranks everything else on every surface. */
   emergency: Emergency | null;
+  /** Accessibility services this event actually offers. Empty means none listed. */
+  accessibility: { services: { label: string; detail: string }[]; ask: string };
   /** Alliance selection, mirrored from the field. Null until it starts. */
   selection: AllianceSelection | null;
   /** What each bonus RP costs. From config, not a constant. */
@@ -484,6 +488,7 @@ export const initialState = (): DeskState => ({
   announcement: null,
   status: null,
   emergency: null,
+  accessibility: { services: [], ask: '' },
   selection: null,
   thresholds: defaultThresholds(),
   lockdown: false,

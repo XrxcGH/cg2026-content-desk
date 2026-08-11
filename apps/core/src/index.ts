@@ -395,6 +395,19 @@ if (config.audio.enabled) {
   console.log('[audio] off, set audio.enabled in config.json');
 }
 
+// What the event offers and where. On the bus like the thresholds, so a
+// replayed log carries what was on the screens that day.
+bus.emit({
+  type: 'event.accessibility',
+  source: 'manual',
+  payload: config.accessibility,
+});
+if (config.accessibility.services.length) {
+  console.log(`[event] ${config.accessibility.services.length} accessibility service(s) listed`);
+} else {
+  console.log('[event] no accessibility services listed, set accessibility.services in config.json');
+}
+
 // ---- FRC Nexus: the queue ---------------------------------------------------
 // What the queuers are doing, which the field does not know yet. Read-only and
 // over the internet, so there is no field-safety concern and config alone

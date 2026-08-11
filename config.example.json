@@ -77,6 +77,14 @@
     }
   },
 
+  "accessibility": {
+    "//": "What the event actually offers, and where. Shown on the venue screens and the phone page, because the person who needs a quiet room is deciding at 11am in a loud building, from a phone. Leave the list empty if the event offers nothing: showing nothing is honest, and inventing a service is worse than silence.",
+    "//example": "{ \"label\": \"Quiet room\", \"detail\": \"Room 114, past the pits on the left\" }",
+    "//ask": "Who to find. A name and a place beats a policy statement.",
+    "services": [],
+    "ask": ""
+  },
+
   "nexus": {
     "//": "FRC Nexus: what the QUEUERS are doing. The only source that knows a match is being called before the field does. Read-only over the internet; nothing to do with the field network.",
     "//apiKey": "From frc.nexus/api. Sent as the Nexus-Api-Key header.",

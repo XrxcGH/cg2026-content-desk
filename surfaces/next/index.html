@@ -86,6 +86,10 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
 .played-link { margin-left: auto; color: var(--cg-gold); font-weight: 700;
   text-decoration: none; }
 .played-pending { margin-left: auto; color: var(--cg-white-dim); font-size: 13px; }
+.access-row { display: flex; gap: 10px; align-items: baseline; }
+.access-row b { white-space: nowrap; }
+.access-row span { color: var(--cg-white-dim); }
+.access-ask { color: var(--cg-gold); margin-top: 8px; font-size: 14px; }
 .m-side { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
   letter-spacing: .1em; text-transform: uppercase; color: var(--cg-white-dim); }
 .hintline { text-align: center; font-family: var(--font-cond); font-size: 13px;
@@ -120,6 +124,13 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
     <h2 class="playedhead">Your matches so far</h2>
     <div id="playedList"></div>
   </div>
+  <!-- Findable rather than announced: the person who needs this is deciding
+       now, in a loud building, on the phone already in their hand. -->
+  <div id="access" hidden>
+    <h2 class="playedhead">Around the building</h2>
+    <div id="accessList"></div>
+  </div>
+
   <p class="hintline" id="note">Times marked ~ are estimates from how fast matches are
     actually cycling, not the printed schedule.</p>
 
@@ -196,6 +207,33 @@ $('follow').addEventListener('submit', e => {
 
 const clock = ts => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
+function paintAccess(a) {
+  const box = document.getElementById('access');
+  const list = a?.services ?? [];
+  box.hidden = list.length === 0;
+  if (!list.length) return;
+  const rows = list.map(sv => {
+    const row = document.createElement('div');
+    row.className = 'card access-row';
+    const label = document.createElement('b');
+    label.textContent = sv.label;
+    row.append(label);
+    if (sv.detail) {
+      const d = document.createElement('span');
+      d.textContent = sv.detail;
+      row.append(d);
+    }
+    return row;
+  });
+  if (a.ask) {
+    const ask = document.createElement('div');
+    ask.className = 'access-ask';
+    ask.textContent = a.ask;
+    rows.push(ask);
+  }
+  document.getElementById('accessList').replaceChildren(...rows);
+}
+
 function paint(s) {
   const behind = s.pace?.behindMin;
   const behindText = behind == null || Math.abs(behind) < 2 ? ''
@@ -206,6 +244,7 @@ function paint(s) {
       ? `Now playing · ${s.match.displayName}${behindText}`
       : 'Waiting for the field');
 
+  paintAccess(s.accessibility);
   const row = (s.rankings ?? []).find(r => r.team === team);
   $('rank').hidden = !row;
   if (row) setHTML($('rank'),

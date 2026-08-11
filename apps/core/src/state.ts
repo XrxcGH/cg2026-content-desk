@@ -316,6 +316,22 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
         };
       }
 
+      case 'event.accessibility': {
+        const p = ev.payload as {
+          services?: { label?: string; detail?: string }[]; ask?: string;
+        };
+        return {
+          ...state,
+          accessibility: {
+            // Anything without a label is not a service anybody can act on.
+            services: (p.services ?? [])
+              .map(x => ({ label: String(x?.label ?? '').trim(), detail: String(x?.detail ?? '').trim() }))
+              .filter(x => x.label),
+            ask: String(p.ask ?? '').trim(),
+          },
+        };
+      }
+
       case 'emergency.clear':
         return { ...state, emergency: null };
 

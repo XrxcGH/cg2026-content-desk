@@ -112,13 +112,41 @@ const EXPLAINER_MS = 12_000;
 let explainerAt = 0;
 let explainerTimer = null;
 
+function explainerCards() {
+  const extra = accessCard(desk.state);
+  return extra ? [...EXPLAINERS, extra] : EXPLAINERS;
+}
+
 function paintExplainer() {
-  const card = EXPLAINERS[explainerAt % EXPLAINERS.length];
+  const cards = explainerCards();
+  const card = cards[explainerAt % cards.length];
   $('expChip').textContent = card.chip;
   $('expTitle').textContent = card.title;
   $('expBody').innerHTML = card.body;
-  $('expDots').innerHTML = EXPLAINERS
-    .map((_, i) => `<span${i === explainerAt % EXPLAINERS.length ? ' data-on' : ''}></span>`).join('');
+  $('expDots').innerHTML = cards
+    .map((_, i) => `<span${i === explainerAt % cards.length ? ' data-on' : ''}></span>`).join('');
+}
+
+/**
+ * The accessibility card, built from what the event actually listed.
+ *
+ * Appended to the loop rather than given its own screen, because a screen
+ * somebody has to choose is a screen nobody chooses, and this needs to come
+ * round on its own in front of people who did not know to look. Absent when
+ * the event listed nothing: inventing a service is worse than silence.
+ */
+function accessCard(state) {
+  const a = state?.accessibility;
+  if (!a?.services?.length) return null;
+  return {
+    chip: 'Here to help',
+    title: 'Around the building',
+    body: a.services
+      .slice(0, 4)
+      .map(sv => '<b>' + escapeHtml(sv.label) + '</b>' + (sv.detail ? ' &middot; ' + escapeHtml(sv.detail) : ''))
+      .join('<br>')
+      + (a.ask ? '<br>' + escapeHtml(a.ask) : ''),
+  };
 }
 
 function runExplainer(on) {
