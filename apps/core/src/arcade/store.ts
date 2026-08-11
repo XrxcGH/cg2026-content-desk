@@ -15,6 +15,33 @@ import {
   type GrandPrix, type Standing,
 } from './model.ts';
 
+/**
+ * Which boxes the operator is allowing on screen.
+ *
+ * Separate from whether a box has anything to say. A box shows when it has
+ * content AND is switched on here, so switching one off is a deliberate "get
+ * out of the way" during a game moment worth actually watching, and switching
+ * it back on does not require re-entering anything.
+ *
+ * Server-side rather than in the overlay because the overlay is a Browser
+ * Source nobody can click, and because a reload must not resurrect a box the
+ * operator hid thirty seconds ago.
+ */
+export interface ArcadeBoxes {
+  /** The versus strip: two players, scores, round. */
+  card: boolean;
+  /** The 3-4 player free-for-all strip and its round tab. */
+  ffa: boolean;
+  /** The grand prix standings panel on the right. */
+  gp: boolean;
+  /** The "up next" chip on the left. */
+  upNext: boolean;
+}
+
+export type ArcadeBox = keyof ArcadeBoxes;
+
+const ALL_ON = (): ArcadeBoxes => ({ card: true, ffa: true, gp: true, upNext: true });
+
 export interface ArcadeSnapshot {
   set: ArcadeSet | null;
   gp: GrandPrix | null;
@@ -23,6 +50,7 @@ export interface ArcadeSnapshot {
   upNext: string;
   /** Bracket metadata from start.gg: round labels and entrants, never scores. */
   bracket: BracketSet[];
+  boxes: ArcadeBoxes;
 }
 
 export class ArcadeStore {
@@ -31,6 +59,7 @@ export class ArcadeStore {
   #gp: GrandPrix | null = null;
   #upNext = '';
   #bracket: BracketSet[] = [];
+  #boxes: ArcadeBoxes = ALL_ON();
 
   constructor(bus: EventBus) { this.#bus = bus; }
 
@@ -41,7 +70,30 @@ export class ArcadeStore {
       standings: this.#gp ? standings(this.#gp) : [],
       upNext: this.#upNext,
       bracket: this.#bracket,
+      boxes: { ...this.#boxes },
     };
+  }
+
+  /**
+   * Show or hide one box. Returns the boxes so the console can paint from the
+   * answer rather than assuming its click landed.
+   */
+  setBox(name: ArcadeBox, on: boolean): ArcadeBoxes {
+    if (!(name in this.#boxes)) {
+      throw new Error(`There is no "${name}" box. Try: ${Object.keys(this.#boxes).join(', ')}.`);
+    }
+    this.#boxes[name] = on;
+    this.#publish('arcade.bracket_updated');
+    return { ...this.#boxes };
+  }
+
+  /** Panic button: put everything back. Hiding four boxes one at a time
+   *  during a break and then hunting for the one still off is not a thing
+   *  anybody should have to do mid-show. */
+  showAllBoxes(): ArcadeBoxes {
+    this.#boxes = ALL_ON();
+    this.#publish('arcade.bracket_updated');
+    return { ...this.#boxes };
   }
 
   /**
@@ -184,6 +236,9 @@ export class ArcadeStore {
     this.#set = null;
     this.#gp = null;
     this.#upNext = '';
+    // Boxes come back on too: "clear" means the segment is over, and leaving a
+    // box switched off would silently swallow the next segment's graphic.
+    this.#boxes = ALL_ON();
     this.#publish('arcade.bracket_updated');
   }
 }

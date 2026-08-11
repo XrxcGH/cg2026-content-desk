@@ -479,6 +479,7 @@ desk.on('state', state => {
   }
   if (state.selection) paintSelection(state.selection);
   paintThird(CLEAN ? null : state.lowerThird);
+  paintPanel(CLEAN ? null : state.panel);
   paintStatus(CLEAN ? null : state.status);
   showScreen(CLEAN ? 'match' : state.screen);
 });
@@ -490,6 +491,57 @@ desk.on('state', state => {
 desk.on('lower_third.show', () => {
   if (!CLEAN && desk.state?.lowerThird) showThird(desk.state.lowerThird);
 });
+
+/**
+ * Who is on camera, in screen order.
+ *
+ * Keyed like the lower third: rebuilding on every state frame would restart
+ * the entrance animation ten times a second. Only a real change to the people
+ * or their order redraws, so adding a fourth guest animates just that card in
+ * and leaves the other three alone.
+ */
+let panelKey = '';
+function paintPanel(panel) {
+  const el = $('anPanel');
+  const strap = $('anStrap');
+  const people = panel?.people ?? [];
+  const key = JSON.stringify(people);
+  if (key === panelKey) return;
+  panelKey = key;
+
+  // The segment title still belongs on air with nobody named, which is the
+  // case for a bumper or a wide of an empty desk.
+  $('anTitle').textContent = panel?.title || 'Analysis desk';
+  strap.hidden = people.length > 0;
+  el.hidden = people.length === 0;
+  el.dataset.n = String(people.length);
+
+  el.replaceChildren(...people.map(p => {
+    const card = document.createElement('div');
+    card.className = 'an-card';
+
+    const name = document.createElement('div');
+    name.className = 'an-name';
+    name.textContent = p.name;
+    card.append(name);
+
+    // The role line is skipped entirely when there is nothing to say, rather
+    // than reserving an empty row: a ragged band of different heights is worse
+    // than a shorter one.
+    if (p.role || p.team) {
+      const role = document.createElement('div');
+      role.className = 'an-role';
+      role.textContent = p.role ?? '';
+      if (p.team) {
+        const team = document.createElement('b');
+        team.textContent = String(p.team);
+        role.append(team);
+      }
+      card.append(role);
+    }
+    return card;
+  }));
+}
 
 // Media can land after the overview was built. Rebuild so a photo uploaded
 // on Sunday morning appears without anyone reloading the Browser Source.

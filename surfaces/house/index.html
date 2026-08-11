@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en" data-surface="console">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>House audio · CalGames 2026</title>
+<link rel="stylesheet" href="/theme/tokens.css">
+<link rel="stylesheet" href="/shared/fonts.css">
+<style>
+body { font-size: var(--font-ui-body); }
+.wrap { max-width: 900px; margin: 0 auto; padding: 18px 22px 60px; }
+header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+h1 { font-size: 24px; font-variation-settings: "wdth" 118; margin: 0; }
+.spacer { margin-left: auto; }
+.dot { width: 10px; height: 10px; clip-path: var(--chamfer); --ch: 3px;
+  background: var(--st-bad); display: inline-block; }
+.dot[data-up="true"] { background: var(--st-ok); }
+
+section { background: var(--surface-raised); padding: 16px 18px; margin-bottom: 14px;
+  clip-path: var(--chamfer); --ch: 14px; }
+h2 { font-family: var(--font-cond); font-weight: 700; font-size: 14px;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 12px; }
+.hint { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+
+/* The bus label is the most important text on this page: it is the one thing
+   that tells whoever walks up to this machine what it is allowed to be wired
+   to. Gold plate, not a footnote. */
+.bus { display: flex; align-items: center; gap: 14px;
+  background: var(--cg-gold); color: var(--cg-black);
+  clip-path: var(--chamfer); --ch: 14px; padding: 14px 18px; margin-bottom: 14px; }
+.bus b { font-family: var(--font-cond); font-weight: 700; font-size: 20px;
+  letter-spacing: .1em; text-indent: .1em; text-transform: uppercase; }
+.bus span { font-size: 14px; line-height: 1.5; }
+
+/* Refusal state. Deliberately unmissable and deliberately not dismissible. */
+#refuse { display: none; position: fixed; inset: 0; z-index: 99;
+  background: var(--cg-purple-void); padding: 8vh 6vw; }
+#refuse[data-on] { display: block; }
+#refuse h2 { color: #FF6B6B; font-size: 30px; letter-spacing: .04em; margin-bottom: 18px; }
+#refuse p { font-size: 18px; line-height: 1.7; max-width: 46em; margin-bottom: 14px; }
+
+#arm { display: block; width: 100%; padding: 26px; font-size: 22px;
+  background: var(--accent); color: var(--text-on-accent); }
+#armed { display: none; }
+[data-armed="true"] #arm { display: none; }
+[data-armed="true"] #armed { display: block; }
+
+.now { display: grid; grid-template-columns: 78px 1fr; gap: 16px; align-items: center; }
+.now img { width: 78px; height: 78px; object-fit: cover; clip-path: var(--chamfer); --ch: 8px;
+  background: var(--surface-sunken); }
+.now .t { font-size: 21px; font-weight: 700; }
+.now .a { color: var(--text-dim); font-size: 15px; }
+.bar { height: 6px; background: var(--surface-sunken); margin-top: 10px; }
+.bar i { display: block; height: 100%; background: var(--accent); width: 0; }
+
+.src { font-family: var(--font-cond); font-weight: 700; font-size: 15px;
+  letter-spacing: .14em; text-indent: .14em; text-transform: uppercase; }
+.src[data-s="clip"] { color: var(--cg-gold); }
+.src[data-s="console"], .src[data-s="silent"] { color: var(--text-dim); }
+.warn { color: #FF6B6B; font-size: 15px; line-height: 1.6; margin-top: 10px; }
+.mono { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<!-- The interlock. See the script: this page refuses to exist inside OBS. -->
+<div id="refuse">
+  <h2>Not on this machine</h2>
+  <p>This page is the <b>house audio player</b>. Everything it plays goes to the room, and
+     nothing it plays may ever reach the stream.</p>
+  <p id="refuseWhy"></p>
+  <p>Open it on the music machine instead, in an ordinary browser window. Nothing will play
+     here.</p>
+</div>
+
+<div class="wrap">
+  <header>
+    <h1>House audio</h1>
+    <span class="hint">the room, not the stream</span>
+    <span class="spacer"></span>
+    <span class="dot" id="link"></span>
+  </header>
+
+  <div class="bus">
+    <b>House bus</b>
+    <span>This machine's audio output belongs to the PA and nothing else. If it is patched to
+      the stream aux, or captured by OBS, licensed music ends up on the VOD.</span>
+  </div>
+
+  <section>
+    <h2>Output</h2>
+    <button class="btn" id="arm">Turn this machine on as the house player</button>
+    <div id="armed">
+      <div class="row"><span class="src" id="srcLabel">Silent</span></div>
+      <div class="now">
+        <img id="art" alt="">
+        <div>
+          <div class="t" id="title">Nothing playing</div>
+          <div class="a" id="artist"></div>
+          <div class="bar"><i id="prog"></i></div>
+        </div>
+      </div>
+      <div class="warn" id="warn" hidden></div>
+    </div>
+    <p class="hint" id="armHint">A browser will not play a sound until someone has clicked the
+      page once. Click the button, leave this window open, and the desk can drive it from
+      anywhere.</p>
+  </section>
+
+  <section>
+    <h2>Loaded clips</h2>
+    <div id="clips" class="hint">None yet.</div>
+    <p class="hint">Walk-ups live in <span class="mono">media/audio/walkups</span>, named for the
+      team: <span class="mono">254.mp3</span>, or <span class="mono">254 - Song.mp3</span> to show
+      the title. Drop files in and they appear here.</p>
+  </section>
+</div>
+
+<script type="module">
+import { connect } from '/shared/desk-client.js';
+
+// ---------------------------------------------------------------------------
+// The interlock.
+//
+// The whole two-bus guarantee rests on the music never being routed anywhere
+// OBS can hear it. The one way software could break that is if a well-meaning
+// volunteer added THIS page to OBS as a Browser Source, because a browser
+// source's audio goes to the stream by default. So the page checks whether it
+// is inside OBS and refuses to play anything if it is: OBS injects an
+// `obsstudio` object into every page it renders, which is a reliable tell.
+//
+// It refuses rather than muting, because a silent-but-present player would
+// still show up on the desk as an armed player and hide the real problem.
+// ---------------------------------------------------------------------------
+const inOBS = typeof window.obsstudio === 'object' && window.obsstudio !== null;
+if (inOBS) {
+  const v = window.obsstudio?.pluginVersion;
+  document.getElementById('refuseWhy').textContent =
+    'This is running inside OBS' + (v ? ' (browser source plugin ' + v + ')' : '') +
+    ', where its audio would go straight to the stream.';
+  document.getElementById('refuse').setAttribute('data-on', '');
+}
+
+const $ = id => document.getElementById(id);
+const desk = connect('house');
+
+// One id per page load, so two players on two machines are two rows on the desk
+// rather than one that flickers.
+const playerId = 'hp' + Math.random().toString(36).slice(2, 10);
+let armed = false;
+let lastToken = null;
+let snap = null;
+
+const audio = new Audio();
+audio.preload = 'auto';
+
+$('arm').addEventListener('click', async () => {
+  if (inOBS) return;
+  try {
+    // Unlock playback with a real gesture. A muted zero-length play is enough
+    // for the browser to consider the page allowed to make noise later.
+    audio.muted = true;
+    await audio.play().catch(() => {});
+    audio.pause();
+    audio.currentTime = 0;
+    audio.muted = false;
+  } catch { /* the gesture itself is what counts */ }
+  armed = true;
+  document.body.dataset.armed = 'true';
+  $('armHint').textContent = 'Armed. Leave this window open and this machine awake.';
+  beat();
+});
+
+audio.addEventListener('ended', () => {
+  if (!lastToken) return;
+  const done = lastToken;
+  lastToken = null;
+  post('/api/audio/clip-ended', { token: done });
+});
+
+async function post(path, body) {
+  try {
+    await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    });
+  } catch { /* the desk will re-publish; a dropped beat is not worth a dialog */ }
+}
+
+/** Tell the desk this machine exists and whether it can actually make a sound. */
+function beat() { post('/api/audio/player', { id: playerId, armed }); }
+setInterval(beat, 8000);
+beat();
+
+desk.on('link', up => $('link').dataset.up = String(up));
+desk.on('audio.updated', ev => paint(ev.payload));
+
+// The snapshot also rides in on first connect via the REST read, because a
+// surface that has just been opened should not have to wait for the next
+// change to know what the room is hearing.
+fetch('/api/audio').then(r => r.ok ? r.json() : null).then(s => s && paint(s)).catch(() => {});
+
+function paint(s) {
+  snap = s;
+  const src = s.source;
+  $('srcLabel').textContent = {
+    playlist: 'Playlist', clip: 'Walk-up', console: 'Game audio', silent: 'Silent',
+  }[src] ?? src;
+  $('srcLabel').dataset.s = src;
+
+  // A clip is a one-shot, so it plays on a token this page has not seen yet.
+  // Without that, reloading the page mid-introduction would replay whoever was
+  // announced a minute ago.
+  const clip = s.clip;
+  if (clip && clip.token !== lastToken && armed && !inOBS) {
+    const age = Date.now() - clip.startedAt;
+    if (age < 15000) {
+      lastToken = clip.token;
+      audio.src = clip.src;
+      audio.currentTime = 0;
+      audio.play().catch(err => {
+        $('warn').hidden = false;
+        $('warn').textContent = 'That clip would not play: ' + err.message;
+      });
+    } else {
+      lastToken = clip.token;   // old news; adopt it so it never fires late
+    }
+  }
+  if (!clip && lastToken) { lastToken = null; audio.pause(); }
+
+  const now = s.music?.now;
+  $('title').textContent = clip ? clip.label : (now?.title ?? 'Nothing playing');
+  $('artist').textContent = clip
+    ? (clip.team !== null ? 'Walk-up for ' + clip.team : 'Stinger')
+    : (now?.artist ?? '');
+  const art = now?.art;
+  $('art').src = art || '';
+  $('art').style.visibility = art ? 'visible' : 'hidden';
+
+  const pct = now && now.durationMs
+    ? Math.min(100, ((now.progressMs + (Date.now() - now.sampledAt)) / now.durationMs) * 100)
+    : 0;
+  $('prog').style.width = pct + '%';
+
+  const warn = [];
+  if (s.players?.armed > 1) {
+    warn.push('Two house players are armed. If one of them is the machine OBS captures, ' +
+      'the music is going to the stream. Close the other one.');
+  }
+  if (s.music?.configured && !s.music.reachable && s.music.linked) {
+    warn.push('The music service is not answering. Clips still play from this machine.');
+  }
+  if (warn.length) { $('warn').hidden = false; $('warn').textContent = warn.join(' '); }
+  else if (!$('warn').textContent.startsWith('That clip')) $('warn').hidden = true;
+
+  const clips = s.clips ?? [];
+  $('clips').textContent = clips.length
+    ? clips.map(c => (c.team !== null ? c.team + ' ' + c.label : c.label)).join('  ·  ')
+    : 'None yet.';
+}
+</script>
+</body>
+</html>

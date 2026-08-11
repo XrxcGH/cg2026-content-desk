@@ -193,3 +193,31 @@ test('a duplicated racer id in a finishing order is refused', () => {
   const after = store.recordRace(['a', 'b', 'c', 'd']);
   assert.equal(after?.races.length, 1);
 });
+
+test('boxes hide one at a time and come back together', () => {
+  const store = new ArcadeStore(new EventBus());
+  assert.deepEqual(store.snapshot.boxes, { card: true, ffa: true, gp: true, upNext: true });
+
+  store.setBox('gp', false);
+  assert.equal(store.snapshot.boxes.gp, false);
+  assert.equal(store.snapshot.boxes.card, true, 'hiding one box must not touch the others');
+
+  store.setBox('upNext', false);
+  store.showAllBoxes();
+  assert.deepEqual(store.snapshot.boxes, { card: true, ffa: true, gp: true, upNext: true });
+});
+
+test('clearing the segment puts every box back', () => {
+  const store = new ArcadeStore(new EventBus());
+  store.setBox('card', false);
+  store.setBox('gp', false);
+  // Otherwise the next segment's graphic is swallowed by a switch somebody
+  // flicked twenty minutes earlier, with nothing on screen to explain it.
+  store.clear();
+  assert.deepEqual(store.snapshot.boxes, { card: true, ffa: true, gp: true, upNext: true });
+});
+
+test('an unknown box is refused rather than silently ignored', () => {
+  const store = new ArcadeStore(new EventBus());
+  assert.throws(() => store.setBox('scoreboard' as never, false), /no "scoreboard" box/);
+});

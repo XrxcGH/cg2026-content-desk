@@ -9,7 +9,8 @@
 import { clockDisplay, clockFrom, hubActiveAt, isLockdown, phaseAt } from './clock.ts';
 import {
   emptyAllianceScore, REBUILT,
-  type Alliance, type AllianceScore, type DeskEvent, type DeskState, type RpThresholds,
+  type Alliance, type AllianceScore, type DeskEvent, type DeskState, type PanelState,
+  type RpThresholds,
 } from './types.ts';
 
 /** Sums, totals, and bonus RPs are always derived, never trusted from the
@@ -220,6 +221,30 @@ export function reduce(state: DeskState, ev: DeskEvent): DeskState {
 
       case 'lower_third.hide':
         return { ...state, lowerThird: null };
+
+      // Who is on camera. The payload is the whole panel, so adding a fourth
+      // guest mid-segment is one event and not a diff nobody can reason about.
+      // An empty list is a hide: the desk clearing the last name means the
+      // segment is over, and it should not leave an empty plate on air.
+      case 'panel.show': {
+        const p = ev.payload as Partial<PanelState> | null;
+        const people = (p?.people ?? []).filter(x => !!x && !!String(x.name ?? '').trim());
+        if (!people.length) return { ...state, panel: null };
+        return {
+          ...state,
+          panel: {
+            title: String(p?.title ?? '').trim() || 'Analysis desk',
+            people: people.map(x => ({
+              name: String(x.name).trim(),
+              role: String(x.role ?? '').trim(),
+              team: Number.isInteger(Number(x.team)) && Number(x.team) > 0 ? Number(x.team) : null,
+            })),
+          },
+        };
+      }
+
+      case 'panel.hide':
+        return { ...state, panel: null };
 
       // Strokes themselves never come through here. They're relayed off-bus
       // at pointer rate (see server.ts). What lands on the bus is the durable

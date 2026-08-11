@@ -60,6 +60,23 @@
     "sources": []
   },
 
+  "audio": {
+    "//": "House audio: the room's PA, and only the room's PA. Nothing here can reach the stream. The two-bus rule in docs/06 is a cable, not a setting, and this is a control surface for the machine that already had the music on it.",
+    "//enabled": "Walk-up clips and stingers work with this on and nothing else configured: they play off this disk, with no internet and no account.",
+    "//spotify": "Optional background playlist. Requires a Spotify PREMIUM account (remote control does not work on free), and read the licensing note in docs/06 before using it at a public event.",
+    "//clientId": "From developer.spotify.com/dashboard. Not a secret: PKCE needs none.",
+    "//refreshToken": "Run: npm run auth:spotify. Expires six months after it is minted, used or not.",
+    "//deviceName": "The name the music machine's Spotify shows under Connect. Blank drives whatever device is already active.",
+    "//playlistUri": "spotify:playlist:... for the event playlist.",
+    "enabled": true,
+    "spotify": {
+      "clientId": "",
+      "refreshToken": "",
+      "deviceName": "",
+      "playlistUri": ""
+    }
+  },
+
   "startgg": {
     "//": "Side-tournament bracket from start.gg. Metadata only. Round labels and entrants pre-fill the arcade console; the live score stays operator-authoritative because start.gg lags reality by up to a full round (docs/05-arcade.md).",
     "//token": "Personal access token from start.gg -> Developer Settings. Read scope is enough.",

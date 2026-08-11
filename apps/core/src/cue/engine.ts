@@ -16,6 +16,7 @@
 import type { EventBus } from '../bus.ts';
 import type { DeskEvent, DeskState } from '../types.ts';
 import type { ObsClient } from './obs.ts';
+import type { HouseAudio } from '../audio/store.ts';
 
 export interface CueContext {
   bus: EventBus;
@@ -23,6 +24,11 @@ export interface CueContext {
   event: DeskEvent;
   state: DeskState;
   scene: (name: keyof typeof DEFAULT_SCENES) => Promise<void>;
+  /**
+   * The room's PA. Null when house audio is off, and a cue that touches it must
+   * tolerate that: the music is a nice-to-have and the show is not.
+   */
+  audio: HouseAudio | null;
 }
 
 export interface Cue {
@@ -112,6 +118,47 @@ export function defaultCues(): Cue[] {
         ctx.bus.emit({ type: 'graphic.show', source: 'cue', payload: { graphic: 'endgame' } });
       },
     },
+    // ---- house audio ----------------------------------------------------
+    // These drive the room's PA and nothing else. They are ordinary cues, so
+    // they start disarmed and the operator can take any of them back instantly
+    // from the desk or a phone. The music is never worth fighting over.
+    {
+      id: 'music-down',
+      name: 'Music down',
+      does: 'Drop the event playlist when the field goes ready, so the announcer has the room for the countdown.',
+      // Same trigger as the Armed cue: every robot linked, BEFORE the
+      // announcer starts counting. Music running under "3, 2, 1" is the
+      // complaint; by match.start it is already too late to fix it.
+      when: (ev, _state) => ev.type === 'match.armed',
+      run: async ctx => {
+        if (!ctx.audio?.automation.pauseForMatch) return;
+        await ctx.audio.setSource('silent', 'Field is ready');
+      },
+    },
+    {
+      id: 'music-up',
+      name: 'Music up',
+      does: 'Bring the playlist back once the score is posted and the result has landed.',
+      // Not at the buzzer: the celebration and the score reveal are the loudest
+      // thirty seconds of the match and the last thing they need is a pop song
+      // underneath them.
+      when: ev => ev.type === 'match.score_posted',
+      run: async ctx => {
+        if (!ctx.audio?.automation.resumeAfterScore) return;
+        await ctx.audio.setSource('playlist', 'Score posted');
+      },
+    },
+    {
+      id: 'music-yield',
+      name: 'Give the room to the game',
+      does: 'Go quiet when the arcade takes the program, so the console audio is not fighting the playlist.',
+      when: ev => ev.type === 'screen.change'
+        && (ev.payload as { screen?: string }).screen === 'arcade',
+      run: async ctx => {
+        if (!ctx.audio?.automation.yieldToConsole) return;
+        await ctx.audio.setSource('console', 'Arcade is on the program');
+      },
+    },
     {
       id: 'hold-celebration',
       name: 'Hold on the buzzer',
@@ -168,6 +215,7 @@ export function defaultCues(): Cue[] {
 export class CueEngine {
   #bus: EventBus;
   #obs: ObsClient | null;
+  #audio: HouseAudio | null = null;
   #scenes: SceneMap;
   #cues: Cue[];
   #autopilot = new Map<string, boolean>();
@@ -187,6 +235,10 @@ export class CueEngine {
     // be right.
     for (const cue of this.#cues) this.#autopilot.set(cue.id, opts.autopilot ?? false);
   }
+
+  /** Set after construction: house audio is built later in boot than the cue
+   *  engine, and threading it through the constructor would reorder both. */
+  attachAudio(audio: HouseAudio | null): void { this.#audio = audio; }
 
   get status(): CueStatus[] {
     return this.#cues.map(c => ({
@@ -246,6 +298,7 @@ export class CueEngine {
     const ctx: CueContext = {
       bus: this.#bus,
       obs: this.#obs,
+      audio: this.#audio,
       event,
       state: this.#bus.state,
       scene: async name => {

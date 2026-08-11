@@ -155,6 +155,20 @@ input.wide { flex: 1; min-width: 180px; }
   </section>
 
   <section>
+    <h2>What's on screen</h2>
+    <p class="hint">Each box comes off on its own, so the game gets the screen back
+      without losing the scores that are on it. They slide off the edge they live on
+      and slide back the same way. A box with nothing to show stays off regardless.</p>
+    <div class="row" id="boxRow">
+      <button class="btn box" data-box="card">Versus strip</button>
+      <button class="btn box" data-box="ffa">Free-for-all strip</button>
+      <button class="btn box" data-box="gp">Grand prix panel</button>
+      <button class="btn box" data-box="upNext">Up next chip</button>
+      <button class="btn" id="boxAll">Show all</button>
+    </div>
+  </section>
+
+  <section>
     <h2>Up next</h2>
     <div class="row">
       <input id="upNext" class="wide" placeholder="Grand Final · 1678 vs 254"
@@ -223,6 +237,7 @@ let snap = null;
 function paint(s) {
   if (!s) return;
   snap = s;
+  paintBoxes(s.boxes);
 
   const set = s.set;
   $('setRound').textContent = set
@@ -278,6 +293,35 @@ function paint(s) {
 // Bracket metadata from start.gg. Load pre-fills the set form, but the operator
 // still starts the set and types every score, which is the whole point.
 let hadBracketSets = false;
+/**
+ * The box toggles. Each button IS the state, not a command: it reads "on" or
+ * "off" so an operator glancing at the console can see what the audience is
+ * looking at without switching to the overlay.
+ */
+function paintBoxes(boxes) {
+  const b = boxes ?? { card: true, ffa: true, gp: true, upNext: true };
+  for (const btn of document.querySelectorAll('#boxRow .box')) {
+    const on = b[btn.dataset.box] !== false;
+    btn.dataset.on = String(on);
+    btn.setAttribute('aria-pressed', String(on));
+    btn.classList.toggle('btn--go', on);
+  }
+}
+
+for (const btn of document.querySelectorAll('#boxRow .box')) {
+  btn.onclick = async () => {
+    try {
+      // Read the wanted state off the button's own painted state, so two
+      // consoles cannot fight over a stale local copy.
+      await post('box', { box: btn.dataset.box, on: btn.dataset.on !== 'true' });
+    } catch (err) { say(err.message, true); }
+  };
+}
+$('boxAll').onclick = async () => {
+  try { await post('boxes'); say('All boxes back on screen.'); }
+  catch (err) { say(err.message, true); }
+};
+
 function paintBracket(sets) {
   const open = sets.filter(b => b.state !== 'complete').slice(0, 10);
   if (!open.length) {

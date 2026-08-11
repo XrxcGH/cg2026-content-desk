@@ -143,6 +143,72 @@ Rules that make it hold up all weekend:
 clean mic bus (no music bleed) auto-captioning is respectable, it's an accessibility win the
 community has explicitly asked for, and it makes the archived VOD searchable.
 
+### The desk drives the house bus: `/s/house`
+
+The rules above were a wiring diagram with no control surface. The playlist lived on a laptop
+nobody at the desk could reach, so "pause the music, the announcer is talking" was a shout across
+the gym, and playoff walk-ups meant somebody hunched over that laptop hunting for a track.
+
+**The music machine opens `/s/house` and leaves it open.** That page is the only thing in the
+system that makes a sound, and it runs on the machine already patched to the HOUSE bus, so the
+guarantee above is unchanged: the audio still originates where it always did, and the desk only
+sends it instructions. From the desk console or a phone the manager gets play, pause, skip,
+volume, duck, a playlist picker, and one button per walk-up.
+
+| Thing | Where it plays | Needs internet |
+| --- | --- | --- |
+| Walk-up clips and stingers | files on the music machine, played by `/s/house` | no |
+| Background playlist | the Spotify desktop app on that machine, driven over Spotify Connect | yes, to *change* it |
+
+Walk-ups are files rather than streamed tracks on purpose. An alliance introduction needs a
+specific twelve seconds to start on the beat the announcer hands over, and a streaming service
+starts when it feels like starting. Drop files into `media/audio/walkups` named for the team
+(`254.mp3`, or `254 - Song.mp3` to show the title on the desk) and a button appears.
+
+**Three interlocks**, because the one way software could break the two-bus rule is by playing
+music somewhere OBS can hear it:
+
+1. `/s/house` **refuses to play inside OBS.** OBS injects an `obsstudio` object into every page
+   it renders and appends `OBS/<version>` to the user agent; the page checks both and shows a
+   refusal instead of playing. This closes the "somebody pasted the music URL into a Browser
+   Source" case.
+2. The desk **counts armed house players** and says so when there are two, because the second one
+   is usually on a machine that should not be making noise.
+3. The page **says what bus it is on**, in gold, at the top.
+
+The interlocks are worth having and they are not the real guarantee. A browser source defaults to
+`reroute_audio = false`, which means the page's audio goes to the machine's default output and
+OBS's first-run **Desktop Audio** capture puts it on the stream — and that happens identically if
+the music plays in Chrome, or in Spotify's own app, on that machine. **So the hard requirement is
+unchanged and is physical: the music machine is not the OBS machine.** No amount of software
+checks substitutes for that.
+
+### Spotify: what it costs, and one thing to decide
+
+Verified against Spotify's own documentation while this was built:
+
+| Constraint | What it means here |
+| --- | --- |
+| Every playback-control endpoint requires **Premium** | The house music account must be Premium. A free account cannot be driven at all |
+| Development-mode apps allow **5 authorized users**, and extended quota now needs 250k MAUs | One shared house account, forever. Not a Spotify login per volunteer |
+| Redirect URIs must be `http://127.0.0.1:PORT`; `localhost` is rejected by name | `npm run auth:spotify` has to be run in a browser **on that machine**. A volunteer cannot re-link from a phone |
+| Refresh tokens die **6 months** after authorization, used or not | Mint it close to the event. Put the re-link step on the run sheet |
+| The Web API is a cloud round trip | With the uplink down the desk cannot change the music, but a **downloaded** playlist keeps playing. The desk shows "unreachable" separately from "stopped" for exactly this reason |
+
+**The decision that is not ours.** Spotify's Developer Policy prohibits what a venue PA does with
+it: it says Spotify is for personal use and "can't be broadcast or played publicly from a
+business", forbids systems that "segue, mix, re-mix, or overlap" Spotify content with other audio
+(which is what ducking under a walk-up is), and forbids synchronizing recordings with visual
+media. The dual-bus split protects the VOD from Content ID; it does nothing about this, which is a
+licensing question rather than a technical one. Public performance of recorded music at the event
+is also a PRO (ASCAP/BMI/SESAC) question that belongs to the venue and WRRF, not to this software.
+
+The desk is built so the answer is swappable rather than baked in. The music service sits behind
+one small interface, so the compliant options are drop-in: a licensed background-music service, or
+a folder of owned/production-library tracks on the music machine, which also happens to be the
+only option that survives a dead uplink. Raise it with WRRF before the event; do not let a
+software default decide a licensing question.
+
 ## Power: learn from 2025
 
 The CalGames 2025 Sunday stream died to a **venue power outage** and had to restart on a new

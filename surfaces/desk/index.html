@@ -85,6 +85,29 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
 .hint b { color: var(--text); font-weight: 600; }
 /* A failed stream action must read at a glance: same console red as /signin. */
 #streamMsg[data-err] { color: var(--st-bad-text); }
+/* ---- on-camera panel ---- */
+.panel-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .panel-cols { grid-template-columns: 1fr; } }
+.pbook, .ponair { background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 10px;
+  padding: 8px; min-height: 96px; max-height: 260px; overflow-y: auto; }
+.pbook label { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px;
+  align-items: center; padding: 7px 8px; margin: 0; cursor: pointer;
+  font-family: var(--font-display); font-size: 14px; font-weight: 400;
+  letter-spacing: 0; text-transform: none; color: var(--text); }
+.pbook label:hover { background: var(--btn-hover); }
+.pbook input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+.pbook .who b { font-weight: 700; }
+.pbook .who span { color: var(--text-dim); }
+.pbook .kill { font-size: 12px; padding: 3px 7px; }
+/* The on-air rows carry their screen position as a number, because "second
+   from the left" is how the director will say it over the radio. */
+.ponair .seat { display: grid; grid-template-columns: 26px 1fr auto auto auto;
+  gap: 6px; align-items: center; padding: 6px 6px; margin-bottom: 5px;
+  background: var(--surface-raised); clip-path: var(--chamfer); --ch: 7px; font-size: 14px; }
+.ponair .n { font-family: var(--font-num); font-weight: 900; color: var(--cg-gold);
+  text-align: center; }
+.ponair .seat button { font-size: 13px; padding: 4px 9px; min-width: 32px; }
+.ponair .empty { color: var(--text-dim); font-size: 13px; padding: 8px; }
 /* Visually hidden but announced: gives screen readers the alliance word that
    sighted operators get for free from position and the alliance color. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -204,6 +227,37 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
           <button class="btn" id="thirdShow" aria-label="Show lower third (keyboard shortcut T)">Show<kbd aria-hidden="true">T</kbd></button>
           <button class="btn" id="thirdPin">Show pinned</button>
           <button class="btn" id="thirdHide" aria-label="Hide lower third (keyboard shortcut Y)">Hide<kbd aria-hidden="true">Y</kbd></button>
+        </div>
+      </section>
+
+      <section>
+        <h2>On camera</h2>
+        <label for="panelTitle">Segment</label>
+        <input id="panelTitle" placeholder="Analysis desk">
+        <div class="panel-cols">
+          <div>
+            <label>Saved profiles</label>
+            <div id="profileList" class="pbook"></div>
+            <div class="row" style="margin-top:8px">
+              <input id="pName" placeholder="Name" style="flex:2 1 120px">
+              <input id="pRole" placeholder="Role" style="flex:2 1 120px">
+              <input id="pTeam" placeholder="Team" inputmode="numeric" style="flex:0 1 78px">
+              <button class="btn" id="pAdd">Add</button>
+            </div>
+          </div>
+          <div>
+            <!-- Screen left to screen right, said in the words a viewer would
+                 use. "Camera left" is the other convention and means the
+                 opposite, which is exactly the mistake this list exists to
+                 stop. -->
+            <label>On air, in screen order (left is the audience's left)</label>
+            <div id="panelOnAir" class="ponair"></div>
+            <p class="hint" id="panelHint">Tick a name to put them on. Six maximum.</p>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn btn--go" id="panelShow">Put on air</button>
+          <button class="btn" id="panelHide">Clear</button>
         </div>
       </section>
 

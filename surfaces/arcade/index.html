@@ -101,7 +101,50 @@
   content: ""; position: absolute; top: 0; left: 0; right: 0; height: 6px;
   background: var(--cg-gold);
 }
-.gp[hidden] { display: none; }
+/* --------------------------------------------------------------------------
+   Boxes come and go individually.
+
+   Every box on this overlay is anchored to an edge, so each one LEAVES by its
+   own edge rather than fading in place: a panel that slides off the right has
+   obviously gone somewhere, while a panel that fades reads for a moment like a
+   rendering fault. The two inset boxes fade slightly on the way out as well,
+   because their travel is short enough that a pure slide looks abrupt.
+
+   These are transitions on transform and opacity only, so they run on the
+   compositor and cost nothing on the machine that is also encoding the stream.
+   The [hidden] attribute is deliberately NOT used for these: display:none
+   cannot animate, so the operator's hide would snap.
+   -------------------------------------------------------------------------- */
+.ar-card, .ffa, .ffa-tab, .gp, #upNext {
+  transition: transform var(--dur-in) var(--ease-enter),
+              opacity var(--dur-in) var(--ease-enter),
+              visibility 0s;
+}
+.ar-card[data-off], .ffa[data-off], .ffa-tab[data-off], .gp[data-off], #upNext[data-off] {
+  /* Leaving is quicker than arriving: getting out of the way should feel
+     immediate, arriving should not startle. */
+  transition: transform var(--dur-out) var(--ease-exit),
+              opacity var(--dur-out) var(--ease-exit),
+              visibility 0s var(--dur-out);
+  visibility: hidden;
+}
+/* The two full-width strips live on the top edge: straight up and out. */
+.ar-card[data-off], .ffa[data-off] { transform: translateY(-100%); }
+/* The round tab hangs BELOW its strip, so it has to clear the strip's height
+   as well as its own or it would still be on screen after the strip has gone.
+   Its resting transform is the centering one, which must be preserved. */
+.ffa-tab { transform: translateX(-50%); }
+.ffa-tab[data-off] { transform: translate(-50%, calc(-100% - var(--strip-h))); }
+/* Inset from the right edge, so it must travel its own width plus the inset. */
+.gp[data-off] { transform: translateX(calc(100% + 24px)); opacity: .4; }
+/* Inset from the left. */
+#upNext[data-off] { transform: translateX(calc(-100% - 24px)); opacity: .4; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* docs/08: every transition collapses to a state change. The box still
+     leaves, it just stops travelling to get there. */
+  .ar-card, .ffa, .ffa-tab, .gp, #upNext { transition: none; }
+}
 .gp h2 {
   margin: 0 0 8px; font-family: var(--font-cond); font-weight: 700;
   font-size: 28px; letter-spacing: .16em; text-transform: uppercase; color: var(--cg-gold);
@@ -120,9 +163,10 @@
 
 #upNext {
   position: absolute; left: 24px; top: calc(var(--strip-h) + 20px);
-  display: none;
+  /* Always laid out, never display:none: it has to be able to slide away, and
+     an element that is display:none has nowhere to slide from. */
+  display: inline-flex;
 }
-#upNext[data-show] { display: inline-flex; }
 
 /* ---- free-for-all: 3-4 players (split-screen Kart, Pac-Man party, Tetris).
        One cell per player across the bar; the round rides in a tab above,
@@ -198,18 +242,18 @@
 <body>
 <div id="stageWrap"><div id="stage">
 
-  <div class="gp" id="gp" hidden>
+  <div class="gp" id="gp" data-off>
     <h2 id="gpName">Grand Prix</h2>
     <div id="gpRows"></div>
   </div>
 
-  <span class="chip chip--accent" id="upNext"></span>
+  <span class="chip chip--accent" id="upNext" data-off></span>
 
   <!-- 3-4 player free-for-all -->
-  <div class="ffa-tab" id="ffaTab" hidden><span></span></div>
-  <div class="ffa" id="ffa" hidden></div>
+  <div class="ffa-tab" id="ffaTab" data-off><span></span></div>
+  <div class="ffa" id="ffa" data-off></div>
 
-  <div class="ar-card" id="card" hidden>
+  <div class="ar-card" id="card" data-off>
     <div class="ar-side ar-side--p1">
       <div>
         <div class="ar-name" id="p1Name">-</div>
@@ -265,9 +309,14 @@ function paint(s) {
   // ---- live set: versus card for 2, free-for-all strip for 3-4 ----
   const set = s.set;
   const ffa = !!set && set.players.length > 2;
-  $('card').hidden = !set || ffa;
-  $('ffa').hidden = !ffa;
-  $('ffaTab').hidden = !ffa;
+  // A box is on screen when it has something to say AND the operator has left
+  // it switched on. Two independent reasons to be off, one attribute: the
+  // graphic does not care which one it was, and both animate the same way.
+  const boxes = s.boxes ?? { card: true, ffa: true, gp: true, upNext: true };
+  const box = (id, wanted) => $(id).toggleAttribute('data-off', !wanted);
+  box('card', !!set && !ffa && boxes.card);
+  box('ffa', ffa && boxes.ffa);
+  box('ffaTab', ffa && boxes.ffa);
 
   if (set && !ffa) {
     const est = set.scoreConfidence === 'estimated';
@@ -301,7 +350,7 @@ function paint(s) {
 
   // ---- grand prix standings ----
   const gp = s.gp;
-  $('gp').hidden = !gp;
+  box('gp', !!gp && boxes.gp);
   if (gp) {
     $('gpName').textContent = `${gp.name} · race ${Math.min(gp.races.length + 1, gp.raceCount)} of ${gp.raceCount}`;
     // Eight rows is as far as the panel can hang at broadcast type before it
@@ -318,7 +367,9 @@ function paint(s) {
       </div>`).join('');
   }
 
-  $('upNext').toggleAttribute('data-show', !!s.upNext);
+  box('upNext', !!s.upNext && boxes.upNext);
+  // Only rewrite the text while it is on screen: replacing it during the slide
+  // out would show the next segment's name flashing past on the way off.
   if (s.upNext) $('upNext').textContent = `Up next · ${s.upNext}`;
 }
 

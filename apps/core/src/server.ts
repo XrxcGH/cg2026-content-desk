@@ -25,7 +25,13 @@ import type { CheesyAdapter } from './ingest/cheesy/adapter.ts';
 import { ALLOWED_PATHS, ALLOWED_SOCKETS } from './ingest/cheesy/client.ts';
 import type { CueEngine } from './cue/engine.ts';
 import type { ObsClient } from './cue/obs.ts';
-import type { ArcadeStore } from './arcade/store.ts';
+import type { ArcadeBox, ArcadeStore } from './arcade/store.ts';
+import type { HouseAudio, HouseSource } from './audio/store.ts';
+import type { ClipLibrary } from './audio/library.ts';
+import type { ProfileBook, ProfileInput } from './profiles.ts';
+
+/** How many people the panel graphic can render and still be readable. */
+const PANEL_MAX = 6;
 import type { TriviaStore } from './trivia/store.ts';
 import type { DeskEvent, DeskEventType } from './types.ts';
 
@@ -51,6 +57,7 @@ export const SURFACES = [
   { id: 'draw',    group: 'Run the show', name: 'Telestrator pad', note: 'For the analyst\'s tablet. Draw on the frame the audience is seeing.' },
   { id: 'arcadedesk', group: 'Run the show', name: 'Arcade console', note: 'Score the game sets by hand. 2 players versus, 3-4 free-for-all.' },
   { id: 'triviadesk', group: 'Run the show', name: 'Trivia host', note: 'Open a question, reveal the answer, next. That\'s the whole job.' },
+  { id: 'house',   group: 'Run the show', name: 'House audio player', note: 'Open this ON THE MUSIC MACHINE, the one wired to the PA and to nothing else. It plays the walk-ups and stingers the desk fires. Never add it to OBS: it refuses to play there, because its audio belongs to the room and never to the stream.' },
   { id: 'var',     group: 'Run the show', name: 'Head referee review', note: 'Frame-step the recording. Read-only: no cut, no air, no publish, no route to the field.' },
   { id: 'media',   group: 'Before the event', name: 'Team media', note: 'Upload robot photos for the pre-match overview. Missing photos fall back gracefully.' },
   { id: 'cards',   group: 'Before the event', name: 'Post-match cards', note: 'Square result graphics for social. They build themselves when a score posts.' },
@@ -93,6 +100,11 @@ export interface ServerOpts {
   obs?: ObsClient | null;
   arcade?: ArcadeStore | null;
   trivia?: TriviaStore | null;
+  /** Absent unless the house audio player is configured. */
+  audio?: HouseAudio | null;
+  audioClips?: ClipLibrary | null;
+  /** Saved on-camera profiles, so the panel is a checklist not a form. */
+  profiles?: ProfileBook | null;
   /** LAN-reachable base URL, e.g. "http://10.0.100.23:8720", for QR codes. */
   lanBase?: string | null;
 }
@@ -100,7 +112,8 @@ export interface ServerOpts {
 export function startServer(opts: ServerOpts) {
   const { bus, media, root, port, host, recorder = null, clips = null,
           publish = null, config = null, cheesy = null, cues = null, obs = null,
-          arcade = null, trivia = null, lanBase = null } = opts;
+          arcade = null, trivia = null, audio = null, audioClips = null,
+          profiles = null, lanBase = null } = opts;
 
   // Crash policy lives in index.ts, in the ONE uncaughtException handler for
   // the whole process: fatal during boot, log-and-continue once the show is
@@ -491,10 +504,157 @@ export function startServer(opts: ServerOpts) {
             case 'race': arcade.recordRace((body['order'] ?? []) as string[]); break;
             case 'undo': arcade.undoRace(); break;
             case 'upnext': arcade.setUpNext(String(body['text'] ?? '')); break;
+            // Show or hide one box, so the game gets the screen back without
+            // losing the scores that are still on it.
+            case 'box':
+              arcade.setBox(String(body['box'] ?? '') as ArcadeBox, body['on'] !== false);
+              break;
+            case 'boxes': arcade.showAllBoxes(); break;
             case 'clear': arcade.clear(); break;
             default: return json(res, 404, { error: `Unknown arcade action "${action}"` });
           }
           return json(res, 200, arcade.snapshot);
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
+      // ---- who is on camera ------------------------------------------------
+      // Method-guarded: an unguarded path match here would swallow the POST
+      // below and answer an upsert with the unchanged list.
+      if (path === '/api/profiles' && req.method !== 'POST') {
+        return json(res, 200, profiles?.list ?? []);
+      }
+
+      if (path === '/api/profiles' && req.method === 'POST') {
+        if (!profiles) return json(res, 503, { error: 'Profiles are not available.' });
+        try {
+          const body = JSON.parse((await readBody(req, 8 * 1024)).toString('utf8')) as
+            Record<string, unknown>;
+          return json(res, 200, await profiles.upsert(body as unknown as ProfileInput));
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
+      if (path === '/api/profiles/delete' && req.method === 'POST') {
+        if (!profiles) return json(res, 503, { error: 'Profiles are not available.' });
+        try {
+          const body = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8')) as
+            { id?: string };
+          return json(res, 200, { removed: await profiles.remove(String(body.id ?? '')) });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
+      /**
+       * Put a panel on air. The desk sends whoever is checked; the book
+       * resolves them, remembers anyone new, and the resolved list goes on the
+       * bus. Resolving here rather than at the desk means every surface and the
+       * event log see the same names, and a second console cannot disagree.
+       */
+      if (path === '/api/panel' && req.method === 'POST') {
+        if (!profiles) return json(res, 503, { error: 'Profiles are not available.' });
+        try {
+          const body = JSON.parse((await readBody(req, 16 * 1024)).toString('utf8')) as
+            { title?: string; people?: ProfileInput[] };
+          const wanted = Array.isArray(body.people) ? body.people : [];
+          // Six is what the graphic can render legibly across a 1920 frame
+          // (docs/08). Refusing is better than rendering a seventh nobody in
+          // the room can read.
+          if (wanted.length > PANEL_MAX) {
+            return json(res, 422, {
+              error: `The panel holds ${PANEL_MAX} people. Take one off first.`,
+            });
+          }
+          const people = await profiles.resolve(wanted);
+          if (!people.length) {
+            bus.emit({ type: 'panel.hide', source: 'manual', payload: {} });
+          } else {
+            bus.emit({
+              type: 'panel.show',
+              source: 'manual',
+              payload: {
+                title: String(body.title ?? '').trim(),
+                people: people.map(p => ({ name: p.name, role: p.role, team: p.team })),
+              },
+            });
+          }
+          return json(res, 200, { on: people.length, people });
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
+      // ---- house audio -----------------------------------------------------
+      // Everything here drives the room's PA and has no route to the stream:
+      // the only thing that makes a sound is the house player page, running on
+      // the machine wired to the house bus. See docs/06.
+      if (path === '/api/audio') return json(res, 200, audio?.snapshot ?? null);
+
+      // Upload a walk-up or a stinger: POST /api/audio/clips/walkup/254 - Song
+      // with the file as the raw body, the same shape the robot-photo upload
+      // uses. Must sit above the JSON action handler below, which would
+      // otherwise try to parse an MP3 as JSON.
+      if (path.startsWith('/api/audio/clips/') && req.method === 'POST') {
+        if (!audioClips) return json(res, 503, { error: 'House audio is not configured.' });
+        const rest = path.slice('/api/audio/clips/'.length);
+        const slash = rest.indexOf('/');
+        const kind = slash < 0 ? rest : rest.slice(0, slash);
+        if (kind !== 'walkup' && kind !== 'stinger') {
+          return json(res, 400, { error: 'A clip is a "walkup" or a "stinger".' });
+        }
+        let name: string;
+        try { name = decodeURIComponent(slash < 0 ? '' : rest.slice(slash + 1)); }
+        catch { return json(res, 400, { error: 'Bad percent-encoding in the clip name.' }); }
+        if (!name) return json(res, 400, { error: 'Name the clip after the team, like "254.mp3".' });
+        try {
+          const clip = await audioClips.ingest(kind, name, await readBody(req, 12 * 1024 * 1024));
+          audio?.clipsChanged();
+          return json(res, 200, clip);
+        } catch (err) {
+          return json(res, 422, { error: (err as Error).message });
+        }
+      }
+
+      if (path.startsWith('/api/audio/') && req.method === 'POST') {
+        if (!audio) return json(res, 503, { error: 'House audio is not configured.' });
+        const action = path.slice('/api/audio/'.length);
+        try {
+          const raw = await readBody(req, 32 * 1024);
+          const body = raw.length ? JSON.parse(raw.toString('utf8')) as Record<string, unknown> : {};
+
+          switch (action) {
+            // The house player checking in. Not an operator action: it is how
+            // the desk knows there is something out there that will actually
+            // make a noise when somebody presses a walk-up button.
+            case 'player':
+              audio.notePlayer(String(body['id'] ?? 'unknown'), body['armed'] === true);
+              return json(res, 200, { ok: true });
+            case 'clip-ended':
+              return json(res, 200, await audio.clipEnded(
+                body['token'] === undefined ? undefined : String(body['token'])));
+
+            case 'play':     return json(res, 200, await audio.play());
+            case 'pause':    return json(res, 200, await audio.pause());
+            case 'next':     return json(res, 200, await audio.skip('next'));
+            case 'previous': return json(res, 200, await audio.skip('previous'));
+            case 'duck':     return json(res, 200, await audio.duck(body['on'] !== false));
+            case 'volume':   return json(res, 200, await audio.setVolume(Number(body['percent'])));
+            case 'playlist': return json(res, 200, await audio.playPlaylist(String(body['uri'] ?? '')));
+            case 'source':
+              return json(res, 200, await audio.setSource(
+                String(body['source'] ?? 'silent') as HouseSource,
+                String(body['reason'] ?? 'Taken at the desk')));
+            case 'clip':
+              return json(res, 200, await audio.playClip(
+                body['team'] !== undefined ? Number(body['team']) : String(body['id'] ?? '')));
+            case 'automation':
+              audio.setAutomation(body as Record<string, boolean>);
+              return json(res, 200, audio.snapshot);
+            default: return json(res, 404, { error: `Unknown audio action "${action}"` });
+          }
         } catch (err) {
           return json(res, 422, { error: (err as Error).message });
         }

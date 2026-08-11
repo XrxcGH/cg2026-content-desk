@@ -60,6 +60,12 @@ export type DeskEventType =
   | 'break.started' | 'queue.updated'
   // production
   | 'graphic.show' | 'graphic.hide' | 'lower_third.show' | 'lower_third.hide'
+  // Who is on camera for an analysis segment or an interview.
+  | 'panel.show' | 'panel.hide'
+  // House audio: one event type, the payload is the whole snapshot. The music
+  // machine's player page is a subscriber like any other surface, which is what
+  // keeps this on the HOUSE bus and only the HOUSE bus (docs/06).
+  | 'audio.updated'
   // `screen.change` is our overlay switching pages; `scene.change` is the
   // switcher cutting cameras. Different layers, deliberately different events.
   | 'screen.change' | 'scene.change' | 'sound.play'
@@ -184,6 +190,36 @@ export const defaultThresholds = (): RpThresholds => ({
   superchargedFuel: REBUILT.RP_SUPERCHARGED_FUEL,
   traversalTower: REBUILT.RP_TRAVERSAL_TOWER,
 });
+
+/**
+ * One person on camera during an analysis segment or an interview.
+ *
+ * Kept to three fields on purpose. The desk manager is typing these while a
+ * guest is already sitting down, so anything that takes longer than a name and
+ * a role will not get filled in.
+ */
+export interface PanelPerson {
+  name: string;
+  /** "Analyst", "Play-by-play", "Drive coach", "Pit reporter". */
+  role: string;
+  /** Shown as a gold numeral when the guest belongs to a team. */
+  team?: number | null;
+}
+
+/**
+ * Who is on camera right now.
+ *
+ * The analysis screen used to carry a single fixed strap, which was true
+ * exactly when one person was talking. A strategy segment before a playoff
+ * match is three or four people, and an interview is at least two, so the
+ * screen takes a LIST and lays it out to fit rather than naming one of them
+ * and leaving the rest anonymous.
+ */
+export interface PanelState {
+  /** Segment name: "Analysis desk", "Pit interview", "Match preview". */
+  title: string;
+  people: PanelPerson[];
+}
 
 export interface LowerThird {
   line1: string;
@@ -321,6 +357,8 @@ export interface DeskState {
    */
   screenHold: boolean;
   lowerThird: LowerThird | null;
+  /** Who is on camera on the analysis screen. Null falls back to the strap. */
+  panel: PanelState | null;
   telestrator: TelestratorState;
   /** Drives the venue side screens. Polled from Cheesy, empty when desk-only. */
   rankings: RankingRow[];
@@ -358,6 +396,7 @@ export const initialState = (): DeskState => ({
   screen: 'blank',
   screenHold: false,
   lowerThird: null,
+  panel: null,
   telestrator: { analyst: '', frame: null, hidden: false },
   rankings: [],
   highestPlayedMatch: '',

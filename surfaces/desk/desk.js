@@ -362,3 +362,198 @@ $('chapMake').onclick = async () => {
     $('chapState').textContent = err.message;
   }
 };
+
+// ---- on camera: saved profiles, ordered left to right -----------------------
+//
+// Two lists rather than one. The BOOK is who exists and is ticked; the ON AIR
+// list is who is up and, crucially, in what order. They are separate because
+// the order is the part the graphic gets wrong: names have to sit under the
+// right faces, and "who is on" and "where they sit" are different questions
+// the desk manager answers at different moments.
+//
+// The book fills itself. Anyone put on air is remembered by the server, so
+// after the first segment the common case is ticking two boxes.
+const PANEL_MAX = 6;
+/** Profile ids in screen order, left to right. The wire order IS the layout. */
+let onAir = [];
+let book = [];
+
+async function loadProfiles() {
+  try {
+    const res = await fetch('/api/profiles');
+    if (!res.ok) return;
+    book = await res.json();
+    paintBook();
+  } catch { /* the desk runs without the book; the panel just needs typing */ }
+}
+
+function paintBook() {
+  const list = $('profileList');
+  if (!book.length) {
+    list.innerHTML = '<p class="hint" style="padding:8px">Nobody saved yet. Add someone below, ' +
+      'or put a name on air and it is remembered.</p>';
+    return;
+  }
+  list.replaceChildren(...book.map(p => {
+    const label = document.createElement('label');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = onAir.includes(p.id);
+    box.onchange = () => toggle(p.id, box.checked);
+
+    const who = document.createElement('span');
+    who.className = 'who';
+    const name = document.createElement('b');
+    name.textContent = p.name;
+    who.append(name);
+    if (p.role || p.team) {
+      const sub = document.createElement('span');
+      sub.textContent = ' · ' + [p.role, p.team].filter(Boolean).join(' ');
+      who.append(sub);
+    }
+
+    const kill = document.createElement('button');
+    kill.className = 'btn kill';
+    kill.textContent = 'Forget';
+    kill.onclick = async e => {
+      e.preventDefault();
+      await fetch('/api/profiles/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id }),
+      });
+      onAir = onAir.filter(id => id !== p.id);
+      await loadProfiles();
+      paintOnAir();
+    };
+
+    label.append(box, who, kill);
+    return label;
+  }));
+}
+
+function toggle(id, on) {
+  // Ticking appends to the RIGHT of the row, which matches how people arrive:
+  // somebody sits down at the end of the desk, not in the middle of it.
+  if (on && !onAir.includes(id)) {
+    if (onAir.length >= PANEL_MAX) {
+      $('panelHint').textContent = `Six is the most the graphic can show and stay readable. ` +
+        `Take one off first.`;
+      paintBook();
+      return;
+    }
+    onAir.push(id);
+  } else if (!on) {
+    onAir = onAir.filter(x => x !== id);
+  }
+  paintOnAir();
+  paintBook();
+}
+
+function move(id, delta) {
+  const i = onAir.indexOf(id);
+  const to = i + delta;
+  if (i < 0 || to < 0 || to >= onAir.length) return;
+  onAir.splice(to, 0, ...onAir.splice(i, 1));
+  paintOnAir();
+}
+
+function paintOnAir() {
+  const box = $('panelOnAir');
+  if (!onAir.length) {
+    box.innerHTML = '<div class="empty">Nobody on air. Tick a name.</div>';
+    $('panelHint').textContent = 'Tick a name to put them on. Six maximum.';
+    return;
+  }
+  box.replaceChildren(...onAir.map((id, i) => {
+    const p = book.find(b => b.id === id);
+    const row = document.createElement('div');
+    row.className = 'seat';
+
+    const n = document.createElement('span');
+    n.className = 'n';
+    n.textContent = String(i + 1);
+
+    const who = document.createElement('span');
+    who.textContent = p ? (p.team ? `${p.name} · ${p.role || ''} ${p.team}`.trim() : `${p.name}${p.role ? ' · ' + p.role : ''}`) : id;
+
+    const left = document.createElement('button');
+    left.className = 'btn';
+    left.textContent = '◀';
+    left.title = 'Move one seat left';
+    left.setAttribute('aria-label', `Move ${p ? p.name : 'this person'} one seat left`);
+    left.disabled = i === 0;
+    left.onclick = () => move(id, -1);
+
+    const right = document.createElement('button');
+    right.className = 'btn';
+    right.textContent = '▶';
+    right.title = 'Move one seat right';
+    right.setAttribute('aria-label', `Move ${p ? p.name : 'this person'} one seat right`);
+    right.disabled = i === onAir.length - 1;
+    right.onclick = () => move(id, 1);
+
+    const off = document.createElement('button');
+    off.className = 'btn';
+    off.textContent = '✕';
+    off.title = 'Take off air';
+    off.setAttribute('aria-label', `Take ${p ? p.name : 'this person'} off air`);
+    off.onclick = () => toggle(id, false);
+
+    row.append(n, who, left, right, off);
+    return row;
+  }));
+  $('panelHint').textContent = `${onAir.length} on air, seat 1 on the audience's left. ` +
+    `Press Put on air to update the graphic.`;
+}
+
+$('pAdd').onclick = async () => {
+  const name = $('pName').value.trim();
+  if (!name) return;
+  try {
+    const res = await fetch('/api/profiles', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, role: $('pRole').value.trim(), team: $('pTeam').value }),
+    });
+    const p = await res.json();
+    if (!res.ok) throw new Error(p.error ?? `HTTP ${res.status}`);
+    $('pName').value = ''; $('pRole').value = ''; $('pTeam').value = '';
+    await loadProfiles();
+    toggle(p.id, true);
+  } catch (err) {
+    $('panelHint').textContent = err.message;
+  }
+};
+
+$('panelShow').onclick = async () => {
+  const people = onAir.map(id => {
+    const p = book.find(b => b.id === id);
+    return p ? { id: p.id, name: p.name, role: p.role, team: p.team } : null;
+  }).filter(Boolean);
+  try {
+    const res = await fetch('/api/panel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: $('panelTitle').value.trim(), people }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+    $('panelHint').textContent = body.on
+      ? `${body.on} on air, left to right.`
+      : 'Panel cleared.';
+    await loadProfiles();
+  } catch (err) {
+    $('panelHint').textContent = err.message;
+  }
+};
+
+$('panelHide').onclick = async () => {
+  onAir = [];
+  paintOnAir();
+  paintBook();
+  await fetch('/api/panel', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ people: [] }),
+  }).catch(() => {});
+};
+
+void loadProfiles();
+paintOnAir();

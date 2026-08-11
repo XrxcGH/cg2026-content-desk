@@ -109,6 +109,32 @@ export interface Config {
   recording: {
     sources: SourceConfig[];
   };
+  /**
+   * The room's PA, and only the room's PA. See docs/06: the music source is
+   * physically absent from the stream bus, and nothing here can change that.
+   * This is a control surface for the machine that already had the music on it.
+   *
+   * The clip player needs no configuration and no internet: walk-ups and
+   * stingers play off this disk. The service below is only the background
+   * playlist, and the desk runs fine with none configured.
+   */
+  audio: {
+    enabled: boolean;
+    spotify: {
+      /** From the Spotify developer dashboard. Not a secret; PKCE needs no secret. */
+      clientId: string;
+      /** Minted once by `npm run auth:spotify`. */
+      refreshToken: string;
+      /**
+       * The Spotify Connect device to drive: the music machine's own Spotify
+       * app. Named rather than an id, because ids change when the app restarts
+       * and a volunteer can read a name off the screen.
+       */
+      deviceName: string;
+      /** The event playlist. "spotify:playlist:..." */
+      playlistUri: string;
+    };
+  };
   youtube: { clientId: string; clientSecret: string; refreshToken: string };
   tba: { authId: string; authSecret: string; readKey: string };
   stream: {
@@ -135,6 +161,10 @@ export const DEFAULTS: Config = {
     copyright: '(c) 2026 Western Region Robotics Forum',
   },
   recording: { sources: [] },
+  audio: {
+    enabled: true,
+    spotify: { clientId: '', refreshToken: '', deviceName: '', playlistUri: '' },
+  },
   startgg: { token: '', eventSlug: '' },
   youtube: { clientId: '', clientSecret: '', refreshToken: '' },
   tba: { authId: '', authSecret: '', readKey: '' },
@@ -185,6 +215,15 @@ export function redacted(cfg: Config): Record<string, unknown> {
     event: cfg.event,
     publish: cfg.publish,
     stream: cfg.stream,
+    audio: {
+      enabled: cfg.audio.enabled,
+      spotify: {
+        clientId: has(cfg.audio.spotify.clientId),
+        refreshToken: has(cfg.audio.spotify.refreshToken),
+        deviceName: cfg.audio.spotify.deviceName,
+        playlistUri: cfg.audio.spotify.playlistUri,
+      },
+    },
     youtube: { clientId: has(cfg.youtube.clientId), clientSecret: has(cfg.youtube.clientSecret), refreshToken: has(cfg.youtube.refreshToken) },
     tba: { authId: has(cfg.tba.authId), authSecret: has(cfg.tba.authSecret), readKey: has(cfg.tba.readKey) },
     startgg: { token: has(cfg.startgg.token), eventSlug: cfg.startgg.eventSlug },

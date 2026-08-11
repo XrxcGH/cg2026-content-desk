@@ -20,6 +20,10 @@ import { StartggAdapter } from './ingest/startgg/adapter.ts';
 import { CueEngine } from './cue/engine.ts';
 import { ObsClient } from './cue/obs.ts';
 import { ArcadeStore } from './arcade/store.ts';
+import { HouseAudio } from './audio/store.ts';
+import { ClipLibrary } from './audio/library.ts';
+import { ProfileBook } from './profiles.ts';
+import { createSpotify } from './audio/spotify.ts';
 import { TriviaStore } from './trivia/store.ts';
 import { DEFAULT_QUESTIONS } from './trivia/questions.ts';
 import { loadConfig, publishReadiness } from './config.ts';
@@ -351,6 +355,37 @@ bus.emit({
   },
 });
 
+// ---- who is on camera -----------------------------------------------------
+// Remembers everyone who has been named on the analysis panel, so the second
+// segment of the weekend is a checklist rather than typing.
+const profiles = new ProfileBook(ROOT);
+await profiles.load();
+
+// ---- house audio ----------------------------------------------------------
+// The room's PA, and nothing else. The clip library needs no configuration and
+// no internet, so walk-ups work on a laptop at a kitchen table; the music
+// service is optional on top of it. See docs/06 for why this can only ever
+// reach the house bus.
+let audio: HouseAudio | null = null;
+const audioClips = new ClipLibrary(join(ROOT, 'media'));
+if (config.audio.enabled) {
+  try { await audioClips.scan(); } catch (err) {
+    console.warn('[audio] clip scan failed:', (err as Error).message);
+  }
+  const music = createSpotify(config.audio.spotify);
+  audio = new HouseAudio(bus, {
+    controller: music,
+    library: audioClips,
+    defaultPlaylistUri: config.audio.spotify.playlistUri,
+  });
+  audio.start();
+  console.log(music
+    ? `[audio] house audio on, ${music.name} configured`
+    : '[audio] house audio on, clips only (no music service configured)');
+} else {
+  console.log('[audio] off, set audio.enabled in config.json');
+}
+
 // ---- start.gg side-tournament bracket --------------------------------------
 // Metadata only: round labels and entrants for the arcade console's pre-fill.
 // The live score stays operator-authoritative (docs/05-arcade.md). Unlike the
@@ -429,7 +464,7 @@ if (config.publish.autoQueueArcade && !has('demo') && !has('replay')) {
 
 const server = startServer({
   bus, media, root: ROOT, port, host, recorder, clips, publish, config, cheesy, cues, obs,
-  arcade, trivia, lanBase,
+  arcade, trivia, audio, audioClips, profiles, lanBase,
 });
 // From here on, an uncaught throw logs and continues instead of killing every
 // overlay at once — see the handler at the top of this file.
@@ -468,6 +503,7 @@ const shutdown = (): void => {
   clearInterval(ticker);
   cheesy?.stop();
   startgg?.stop();
+  audio?.stop();
   cues.detach();
   obs?.close();
   server.close();

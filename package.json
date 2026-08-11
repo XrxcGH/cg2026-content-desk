@@ -15,7 +15,8 @@
     "validate:offline": "node harness-offline.mjs",
     "auth:youtube": "node --experimental-strip-types apps/core/src/publish/youtube-auth.ts",
     "test": "node --experimental-strip-types --test \"apps/core/src/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "auth:spotify": "node --experimental-strip-types apps/core/src/audio/spotify-auth.ts"
   },
   "dependencies": {
     "ws": "^8.18.0"

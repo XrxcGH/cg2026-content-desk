@@ -105,10 +105,16 @@
 
   <!-- Analysis desk: transparent for the desk camera, strap brands the segment -->
   <section class="screen" id="scr-analysis">
-    <div class="an-strap">
-      <div class="an-title">Analysis desk</div>
+    <!-- The strap names the SEGMENT and shows only when nobody is on the panel:
+         with people up, their cards carry the band and a second plate above
+         them would eat the shot. -->
+    <div class="an-strap" id="anStrap">
+      <div class="an-title" id="anTitle">Analysis desk</div>
       <div class="an-sub">CalGames 2026 · Content Desk</div>
     </div>
+    <!-- One card per person, in the order the desk put them in, which is
+         screen left to screen right. -->
+    <div class="an-panel" id="anPanel" data-n="0" hidden></div>
   </section>
 
   <!-- Arcade bumper: full-frame card while the switcher moves to the consoles -->
