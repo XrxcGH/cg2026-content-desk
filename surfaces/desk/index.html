@@ -85,6 +85,20 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
 .hint b { color: var(--text); font-weight: 600; }
 /* A failed stream action must read at a glance: same console red as /signin. */
 #streamMsg[data-err] { color: var(--st-bad-text); }
+/* ---- house audio ---- */
+.now-audio { display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+  background: var(--surface-sunken); clip-path: var(--chamfer); --ch: 10px; padding: 10px 14px; }
+.ah-title { font-weight: 700; font-size: 16px; }
+.ah-sub { color: var(--text-dim); font-size: 13px; }
+/* The source label is the one thing worth reading at a glance: it answers
+   "is the room hearing us, the game, or nothing". */
+.ah-src { margin-left: auto; font-family: var(--font-cond); font-weight: 700;
+  font-size: 14px; letter-spacing: .14em; text-indent: .14em; text-transform: uppercase;
+  color: var(--accent); }
+.ah-src[data-s="silent"], .ah-src[data-s="console"] { color: var(--text-dim); }
+#audClips .btn { font-size: 13px; padding: 7px 11px; }
+#audClips .btn b { font-family: var(--font-num); color: var(--accent); margin-right: 6px; }
+#audioHint[data-warn] { color: var(--st-bad-text); }
 /* ---- on-camera panel ---- */
 .panel-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 720px) { .panel-cols { grid-template-columns: 1fr; } }
@@ -228,6 +242,36 @@ textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2
           <button class="btn" id="thirdPin">Show pinned</button>
           <button class="btn" id="thirdHide" aria-label="Hide lower third (keyboard shortcut Y)">Hide<kbd aria-hidden="true">Y</kbd></button>
         </div>
+      </section>
+
+      <section>
+        <h2>House audio <span class="hint" id="audioWho">·</span></h2>
+        <div class="now-audio">
+          <div>
+            <div class="ah-title" id="audioTitle">Nothing playing</div>
+            <div class="ah-sub" id="audioSub">house bus only, never the stream</div>
+          </div>
+          <span class="ah-src" id="audioSrc">Silent</span>
+        </div>
+        <div class="row">
+          <button class="btn btn--go" id="audPlay">Playlist</button>
+          <button class="btn" id="audPause">Pause</button>
+          <button class="btn" id="audPrev">◀◀</button>
+          <button class="btn" id="audNext">▶▶</button>
+          <button class="btn" id="audDuck">Duck</button>
+          <button class="btn" id="audConsole">Game audio</button>
+        </div>
+        <div class="row">
+          <label class="in" for="audVol" style="margin:0">Volume</label>
+          <input id="audVol" type="range" min="0" max="100" step="5" style="flex:1 1 160px">
+          <span class="mono" id="audVolText">70</span>
+          <select id="audPlaylist" style="flex:2 1 200px"><option value="">Playlist...</option></select>
+        </div>
+        <label>Walk-ups and stingers</label>
+        <div class="row" id="audClips"></div>
+        <p class="hint" id="audioHint">The player runs on the music machine at
+          <b>/s/house</b>. Walk-up files go in <b>media/audio/walkups</b>, named for the
+          team.</p>
       </section>
 
       <section>

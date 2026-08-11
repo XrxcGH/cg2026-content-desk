@@ -557,3 +557,125 @@ $('panelHide').onclick = async () => {
 
 void loadProfiles();
 paintOnAir();
+
+// ---- house audio ------------------------------------------------------------
+//
+// The room's PA, from the desk. Nothing here makes a sound: the house player
+// page on the music machine does, and this sends it instructions. That split
+// is what keeps the music on the house bus and only the house bus (docs/06).
+//
+// Every control is one press, because the moment this gets used is the moment
+// an announcer has started talking over a song.
+let audioSnap = null;
+
+async function audio(action, body) {
+  try {
+    const res = await fetch(`/api/audio/${action}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+    paintAudio(json);
+  } catch (err) {
+    $('audioHint').textContent = err.message;
+    $('audioHint').setAttribute('data-warn', '');
+  }
+}
+
+$('audPlay').onclick = () => audio('play');
+$('audPause').onclick = () => audio('pause');
+$('audNext').onclick = () => audio('next');
+$('audPrev').onclick = () => audio('previous');
+$('audConsole').onclick = () => audio('source', { source: 'console', reason: 'Game audio, from the desk' });
+$('audDuck').onclick = () => audio('duck', { on: !(audioSnap?.music?.ducked) });
+$('audVol').oninput = () => { $('audVolText').textContent = $('audVol').value; };
+$('audVol').onchange = () => audio('volume', { percent: Number($('audVol').value) });
+$('audPlaylist').onchange = () => {
+  if ($('audPlaylist').value) audio('playlist', { uri: $('audPlaylist').value });
+};
+
+function paintAudio(s) {
+  if (!s) return;
+  audioSnap = s;
+
+  const clip = s.clip;
+  const now = s.music?.now;
+  $('audioTitle').textContent = clip ? clip.label : (now?.title ?? 'Nothing playing');
+  $('audioSub').textContent = clip
+    ? (clip.team !== null ? `walk-up for ${clip.team}` : 'stinger')
+    : (now?.artist || s.reason || 'house bus only, never the stream');
+
+  const label = { playlist: 'Playlist', clip: 'Walk-up', console: 'Game audio', silent: 'Silent' };
+  $('audioSrc').textContent = label[s.source] ?? s.source;
+  $('audioSrc').dataset.s = s.source;
+  $('audDuck').classList.toggle('btn--go', !!s.music?.ducked);
+
+  // Do not fight the operator's thumb: a poll landing mid-drag would snap the
+  // slider back to the value the server last heard about.
+  if (document.activeElement !== $('audVol')) {
+    $('audVol').value = String(s.music?.volume ?? 70);
+    $('audVolText').textContent = String(s.music?.volume ?? 70);
+  }
+
+  const sel = $('audPlaylist');
+  const lists = s.music?.playlists ?? [];
+  if (sel.options.length - 1 !== lists.length) {
+    sel.replaceChildren(new Option('Playlist...', ''),
+      ...lists.map(p => new Option(p.name, p.uri)));
+  }
+
+  // One button per clip. Team walk-ups first, which is the order an alliance
+  // introduction runs in.
+  const clips = s.clips ?? [];
+  const box = $('audClips');
+  if (box.dataset.n !== String(clips.length)) {
+    box.dataset.n = String(clips.length);
+    box.replaceChildren(...clips.map(c => {
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      if (c.team !== null) {
+        const b = document.createElement('b');
+        b.textContent = String(c.team);
+        btn.append(b);
+      }
+      btn.append(document.createTextNode(c.label || (c.team === null ? c.id : 'walk-up')));
+      btn.onclick = () => audio('clip', { id: c.id });
+      return btn;
+    }));
+    if (!clips.length) {
+      box.textContent = '';
+      const none = document.createElement('span');
+      none.className = 'hint';
+      none.textContent = 'No clips loaded yet.';
+      box.append(none);
+    }
+  }
+
+  // Two things worth interrupting the operator for, in priority order.
+  const players = s.players ?? { alive: 0, armed: 0 };
+  $('audioWho').textContent = players.armed === 1
+    ? '· player ready'
+    : `· ${players.armed} players armed`;
+
+  let warn = '';
+  if (players.armed === 0) {
+    warn = 'No house player is armed. Open /s/house on the music machine and press the ' +
+      'button once, or nothing will make a sound.';
+  } else if (players.armed > 1) {
+    warn = `${players.armed} house players are armed. If one of them is the machine OBS ` +
+      'captures, the music is going to the stream. Close the other one.';
+  } else if (s.music?.configured && s.music.linked && !s.music.reachable) {
+    warn = 'The music service is not answering, so the playlist cannot be changed. ' +
+      'Clips still play. ' + (s.music.error ?? '');
+  }
+  if (warn) { $('audioHint').textContent = warn; $('audioHint').setAttribute('data-warn', ''); }
+  else {
+    $('audioHint').removeAttribute('data-warn');
+    $('audioHint').innerHTML = 'The player runs on the music machine at <b>/s/house</b>. ' +
+      'Walk-up files go in <b>media/audio/walkups</b>, named for the team.';
+  }
+}
+
+desk.on('audio.updated', ev => paintAudio(ev.payload));
+fetch('/api/audio').then(r => r.ok ? r.json() : null).then(s => s && paintAudio(s)).catch(() => {});

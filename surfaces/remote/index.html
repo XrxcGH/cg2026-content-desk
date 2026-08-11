@@ -180,6 +180,19 @@ h2 { font-family: var(--font-cond); font-weight: 700; font-size: 13px; letter-sp
   </section>
 
   <section>
+    <!-- The one control worth having in a pocket: the producer is standing
+         next to the announcer when the music needs to stop, not at the desk. -->
+    <h2>House audio <small id="audSrc"></small></h2>
+    <div class="grid">
+      <button class="b b--go" id="audPlay">Music on</button>
+      <button class="b b--warn" id="audPause">Music off</button>
+      <button class="b" id="audDuck">Duck</button>
+      <button class="b" id="audNext">Skip</button>
+    </div>
+    <div class="grid" id="audClips" style="margin-top:8px"></div>
+  </section>
+
+  <section>
     <h2>Telestrator</h2>
     <div class="grid">
       <button class="b" id="teleClear">Clear ink</button>
@@ -250,7 +263,7 @@ const unlock = () => {
   void fetch('/api/auth', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ pin }),
-  }).then(r => { if (r.ok) { sessionAuthed = true; loadCues(); } })
+  }).then(r => { if (r.ok) { sessionAuthed = true; loadCues(); loadAudio(); } })
     .catch(() => { /* the socket-side toast already reports the failure */ });
 };
 $('unlock').onclick = unlock;
@@ -306,6 +319,72 @@ $('mark').onclick = tap(() => {
 $('teleClear').onclick = tap(() => { desk.emit({ type: 'telestrator.clear' }); toast('Ink cleared'); });
 $('teleHide').onclick = tap(() => { desk.emit({ type: 'telestrator.hide' }); toast('Telestrator hidden'); });
 
+// ---- house audio -----------------------------------------------------------
+// Same endpoints the desk console uses. Nothing here makes a sound; the house
+// player on the music machine does.
+let audioState = null;
+
+async function audio(action, body) {
+  try {
+    const res = await fetch(`/api/audio/${action}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+    paintAudio(json);
+    return json;
+  } catch (err) {
+    toast(err.message, true);
+    return null;
+  }
+}
+
+$('audPlay').onclick = tap(() => { void audio('play'); toast('Music on'); });
+$('audPause').onclick = tap(() => { void audio('pause'); toast('Music off'); });
+$('audNext').onclick = tap(() => { void audio('next'); toast('Skipped'); });
+$('audDuck').onclick = tap(() => {
+  const on = !(audioState?.music?.ducked);
+  void audio('duck', { on });
+  toast(on ? 'Ducked' : 'Back up');
+});
+
+function paintAudio(s) {
+  if (!s) return;
+  audioState = s;
+  const label = { playlist: 'playlist', clip: 'walk-up', console: 'game audio', silent: 'silent' };
+  $('audSrc').textContent = label[s.source] ?? '';
+  $('audDuck').classList.toggle('b--go', !!s.music?.ducked);
+
+  // Walk-ups only on the phone. A stinger is a desk decision; a walk-up is
+  // fired by whoever is standing where they can see the alliance walk out.
+  const clips = (s.clips ?? []).filter(c => c.team !== null);
+  const box = $('audClips');
+  if (box.dataset.n === String(clips.length)) return;
+  box.dataset.n = String(clips.length);
+  box.replaceChildren(...clips.map(c => {
+    const b = document.createElement('button');
+    b.className = 'b';
+    b.textContent = String(c.team);
+    const sub = document.createElement('small');
+    sub.textContent = c.label || 'walk-up';
+    b.append(sub);
+    b.onclick = tap(() => { void audio('clip', { id: c.id }); toast(`Walk-up ${c.team}`); });
+    return b;
+  }));
+}
+
+desk.on('audio.updated', ev => paintAudio(ev.payload));
+
+/** The audio snapshot is a gated read, so it is fetched at the same two moments
+ *  cues are: once unlocked, and again after any reconnect. */
+async function loadAudio() {
+  try {
+    const res = await fetch('/api/audio');
+    if (res.ok) paintAudio(await res.json());
+  } catch { /* transient: the next reconnect refetches */ }
+}
+
 // ---- cue arming ------------------------------------------------------------
 async function loadCues() {
   try {
@@ -341,8 +420,9 @@ async function loadCues() {
     }
   } catch { /* transient */ }
 }
-desk.on('link', up => { if (up) loadCues(); });
+desk.on('link', up => { if (up) { loadCues(); loadAudio(); } });
 loadCues();
+loadAudio();
 </script>
 </body>
 </html>

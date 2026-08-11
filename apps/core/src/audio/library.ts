@@ -66,7 +66,7 @@ export function looksLikeAudio(buf: Buffer): boolean {
 
 /**
  * "254 - Chariots of Fire.mp3" -> team 254, label "Chariots of Fire".
- * "254.mp3" -> team 254, label "254". Anything with no leading number is a
+ * "254.mp3" -> team 254, no label. Anything with no leading number is a
  * stinger even if it landed in the walkups folder, because guessing a team
  * number wrong is worse than showing one fewer button.
  */
@@ -75,7 +75,10 @@ export function parseWalkupName(base: string): { team: number | null; label: str
   if (!m) return { team: null, label: base };
   const team = Number(m[1]);
   const rest = (m[2] ?? '').trim();
-  return { team, label: rest || String(team) };
+  // No title given: the label is empty rather than a repeat of the number.
+  // Surfaces draw the team number themselves, and "846 846" on a button is
+  // the kind of small wrongness that makes a graphic look unfinished.
+  return { team, label: rest };
 }
 
 const extOf = (name: string): string => {
@@ -150,7 +153,7 @@ export class ClipLibrary {
     next.sort((a, b) => {
       if ((a.team === null) !== (b.team === null)) return a.team === null ? 1 : -1;
       if (a.team !== null && b.team !== null) return a.team - b.team;
-      return a.label.localeCompare(b.label);
+      return (a.label || a.id).localeCompare(b.label || b.id);
     });
 
     this.#clips = next;

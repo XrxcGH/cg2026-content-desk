@@ -256,7 +256,7 @@ function paint(s) {
 
   const clips = s.clips ?? [];
   $('clips').textContent = clips.length
-    ? clips.map(c => (c.team !== null ? c.team + ' ' + c.label : c.label)).join('  ·  ')
+    ? clips.map(c => [c.team, c.label].filter(Boolean).join(' ')).join('  ·  ')
     : 'None yet.';
 }
 </script>

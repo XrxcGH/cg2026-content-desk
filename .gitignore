@@ -23,6 +23,11 @@ data/profiles.json.tmp
 # lives in memory, rebuilt from each team's meta.json on boot.
 media/teams/*/
 
+# House audio: walk-up songs and stingers. Somebody else's recordings, loaded
+# per event, and the one category of file in this repo that must never be
+# redistributed with it.
+media/audio/
+
 # Rolling record scratch. 4 cams x 1080p60 is ~22GB/hour, so never commit it.
 rec/
 
