@@ -34,6 +34,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -620,11 +621,8 @@ internal static class Launcher
         int port = _opt.Port;
         if (!PortFree(port))
         {
-            Warn("port " + port + " is already busy on this machine");
-            Detail("the desk may already be running; close the other window and try again");
-            Detail("or start on a different port:  START-DESK.cmd /port:8721");
-            Hold();
-            return 1;
+            int handled = ResolveBusyPort(port);
+            if (handled >= 0) return handled;
         }
 
         string entry = Path.Combine(installDir, "apps", "core", "src", "index.ts");
@@ -637,12 +635,17 @@ internal static class Launcher
         args.Append("--port ").Append(port);
         if (fieldHost != null) args.Append(" --cheesy --cheesy-host ").Append(fieldHost);
         if (_opt.Demo) args.Append(" --demo");
+        // Layer 1 of tying the desk to this window: see TieToThisWindow below.
+        args.Append(" --exit-with-parent");
 
         ProcessStartInfo psi = new ProcessStartInfo(nodeExe, args.ToString());
         psi.WorkingDirectory = installDir;
         psi.UseShellExecute = false;
         psi.RedirectStandardOutput = true;
         psi.RedirectStandardError = true;
+        // Not for sending anything. This process holds the write end, so the
+        // desk learns that this window is gone the moment the handle closes.
+        psi.RedirectStandardInput = true;
         psi.CreateNoWindow = true;
         psi.StandardOutputEncoding = Encoding.UTF8;
         psi.StandardErrorEncoding = Encoding.UTF8;
@@ -660,6 +663,7 @@ internal static class Launcher
         _desk.BeginOutputReadLine();
         _desk.BeginErrorReadLine();
 
+        TieToThisWindow(_desk);
         Console.CancelKeyPress += (s, e) => { e.Cancel = true; StopDesk(); };
         AppDomain.CurrentDomain.ProcessExit += (s, e) => StopDesk();
 
@@ -691,23 +695,255 @@ internal static class Launcher
         return _desk.ExitCode;
     }
 
-    private static void StopDesk()
+    // ---- tying the desk to this window -------------------------------------
+    //
+    // Closing this window with the X button used to leave node running headless,
+    // still holding the port, so the next double-click died with "port already
+    // in use" and nothing on screen said why. Three layers, because the failure
+    // is silent and the fix has to survive even a hard kill of this process:
+    //
+    //   1. STDIN. The desk runs with --exit-with-parent and watches its standard
+    //      input. This process holds the write end, so when it goes away for any
+    //      reason the pipe closes, the desk reads EOF, and it shuts down the way
+    //      Ctrl-C shuts it down: event log flushed, port released.
+    //   2. A CONSOLE CONTROL HANDLER, because .NET's ProcessExit does not run
+    //      when a console window is closed with the X button. Ctrl-C was always
+    //      handled; the X button never was, and the X button is what people use.
+    //   3. A JOB OBJECT marked kill-on-close. If this process is killed so hard
+    //      that no handler of ours runs, Windows still tears the desk down with
+    //      it. This is the layer that holds when the other two cannot.
+
+    private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
+    private const int JobObjectExtendedLimitInformation = 9;
+    private static IntPtr _job = IntPtr.Zero;
+    private static ConsoleCtrlHandler _ctrlHandler;
+
+    private delegate bool ConsoleCtrlHandler(uint ctrlType);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetConsoleCtrlHandler(ConsoleCtrlHandler handler, bool add);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetInformationJobObject(IntPtr job, int infoClass, IntPtr info, uint infoLength);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IO_COUNTERS
     {
+        public ulong ReadOperationCount, WriteOperationCount, OtherOperationCount;
+        public ulong ReadTransferCount, WriteTransferCount, OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
+    {
+        public long PerProcessUserTimeLimit;
+        public long PerJobUserTimeLimit;
+        public uint LimitFlags;
+        public UIntPtr MinimumWorkingSetSize;
+        public UIntPtr MaximumWorkingSetSize;
+        public uint ActiveProcessLimit;
+        public UIntPtr Affinity;
+        public uint PriorityClass;
+        public uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+    {
+        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+        public IO_COUNTERS IoInfo;
+        public UIntPtr ProcessMemoryLimit;
+        public UIntPtr JobMemoryLimit;
+        public UIntPtr PeakProcessMemoryUsed;
+        public UIntPtr PeakJobMemoryUsed;
+    }
+
+    private static void TieToThisWindow(Process child)
+    {
+        // Layer 2. Keep the delegate in a field: hand a collectable one to
+        // Windows and the handler stops working whenever the GC feels like it.
+        _ctrlHandler = delegate(uint ctrlType)
+        {
+            // 0 Ctrl-C, 1 Ctrl-Break, 2 window closed, 5 logoff, 6 shutdown.
+            // Windows allows a close handler about five seconds before it
+            // terminates us regardless, which is why StopDesk is written to
+            // finish well inside that.
+            StopDesk();
+            return true;
+        };
+        try { SetConsoleCtrlHandler(_ctrlHandler, true); } catch { }
+
+        // Layer 3. Best effort: if any of this fails the first two still apply,
+        // so a machine that refuses job objects is degraded, not broken.
         try
         {
-            if (_desk != null && !_desk.HasExited)
+            _job = CreateJobObject(IntPtr.Zero, null);
+            if (_job == IntPtr.Zero) return;
+
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            int size = Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+            IntPtr mem = Marshal.AllocHGlobal(size);
+            try
             {
-                // Node owns ffmpeg children when recording. Killing only the
-                // parent would leave the most recent segment unplayable, which
-                // is exactly the clip somebody wants after a crash.
-                ProcessStartInfo kill = new ProcessStartInfo("taskkill",
-                    "/PID " + _desk.Id + " /T /F");
+                Marshal.StructureToPtr(info, mem, false);
+                if (SetInformationJobObject(_job, JobObjectExtendedLimitInformation, mem, (uint)size))
+                    AssignProcessToJobObject(_job, child.Handle);
+            }
+            finally { Marshal.FreeHGlobal(mem); }
+        }
+        catch { }
+    }
+
+    private static readonly object StopLock = new object();
+    private static bool _stopping;
+
+    private static void StopDesk()
+    {
+        // Ctrl-C reaches this twice (CancelKeyPress and the control handler),
+        // and a failed startup calls it before ProcessExit does.
+        lock (StopLock)
+        {
+            if (_stopping) return;
+            _stopping = true;
+        }
+        try
+        {
+            if (_desk == null || _desk.HasExited) return;
+
+            // The graceful path: closing the pipe is the desk's signal to flush
+            // its event log and release the port itself. Two seconds is far more
+            // than it needs and still inside what a console close allows.
+            try { _desk.StandardInput.Close(); } catch { }
+            if (_desk.WaitForExit(2000)) return;
+
+            // Still there, so stop being polite. Node owns ffmpeg children when
+            // recording, and killing only the parent leaves the most recent
+            // segment unplayable, which is exactly the clip somebody wants after
+            // a crash. Kill the tree.
+            ProcessStartInfo kill = new ProcessStartInfo("taskkill",
+                "/PID " + _desk.Id + " /T /F");
+            kill.UseShellExecute = false;
+            kill.CreateNoWindow = true;
+            Process.Start(kill).WaitForExit(2000);
+        }
+        catch { }
+    }
+
+    /// The port is taken. Almost always that is a desk left over from an earlier
+    /// double-click, which is the one case a volunteer cannot diagnose and can
+    /// fix in one keystroke. Returns -1 to carry on starting, or the exit code.
+    private static int ResolveBusyPort(int port)
+    {
+        bool ours = DeskAnswers(port);
+        int pid = ListenerPid(port);
+
+        Warn("port " + port + " is already busy on this machine");
+        if (ours)
+        {
+            Detail("it answers as a content desk, so one is already running here" +
+                (pid > 0 ? " (process " + pid + ")" : ""));
+        }
+        else
+        {
+            string who = ProcessNameFor(pid);
+            Detail(who != null
+                ? "held by " + who + " (process " + pid + "), which is not a content desk"
+                : "held by something that is not a content desk");
+            Detail("start on a different port instead:  START-DESK.cmd /port:" + (port + 1));
+            Hold();
+            return 1;
+        }
+
+        // Only ever offer to kill something that answered as our own desk.
+        if (pid <= 0 || _opt.NoWait)
+        {
+            Detail("close the other window and try again, or:  START-DESK.cmd /port:" + (port + 1));
+            Hold();
+            return 1;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("  [S] stop it and start fresh      [O] open the one already running      [Q] quit");
+        while (true)
+        {
+            ConsoleKey key;
+            try { key = Console.ReadKey(true).Key; }
+            catch { Detail("no keyboard here; leaving the running desk alone"); Hold(); return 1; }
+
+            if (key == ConsoleKey.Q) return 1;
+            if (key == ConsoleKey.O)
+            {
+                try { Process.Start("http://localhost:" + port + "/"); } catch { }
+                Ok("opened the desk that was already running");
+                Hold();
+                return 0;
+            }
+            if (key != ConsoleKey.S) continue;
+
+            Detail("stopping process " + pid + "...");
+            try
+            {
+                ProcessStartInfo kill = new ProcessStartInfo("taskkill", "/PID " + pid + " /T /F");
                 kill.UseShellExecute = false;
                 kill.CreateNoWindow = true;
                 Process.Start(kill).WaitForExit(8000);
             }
+            catch { }
+
+            // Killing the process is not the same as the port coming back: the
+            // socket closes on its own schedule. Wait for the thing we actually
+            // need rather than for the thing we just did.
+            for (int i = 0; i < 20 && !PortFree(port); i++) Thread.Sleep(250);
+            if (PortFree(port)) { Ok("port " + port + " is free again"); return -1; }
+
+            Fail("Port " + port + " is still busy after stopping that process.");
+            Detail("start on a different port instead:  START-DESK.cmd /port:" + (port + 1));
+            Hold();
+            return 1;
+        }
+    }
+
+    /// PID listening on a TCP port, or 0. Parsed structurally rather than by
+    /// looking for the word LISTENING, which is translated on a localized
+    /// Windows: a listening row is the one whose foreign address is the
+    /// wildcard. Failure is not fatal anywhere it is used.
+    private static int ListenerPid(int port)
+    {
+        try
+        {
+            ProcessStartInfo psi = new ProcessStartInfo("netstat", "-ano -p TCP");
+            psi.UseShellExecute = false;
+            psi.RedirectStandardOutput = true;
+            psi.CreateNoWindow = true;
+            using (Process p = Process.Start(psi))
+            {
+                string all = p.StandardOutput.ReadToEnd();
+                p.WaitForExit(5000);
+                foreach (string line in all.Split('\n'))
+                {
+                    string[] f = line.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (f.Length < 5) continue;
+                    if (!f[1].EndsWith(":" + port, StringComparison.Ordinal)) continue;
+                    if (f[2] != "0.0.0.0:0" && f[2] != "[::]:0" && f[2] != "*:*") continue;
+                    int pid;
+                    if (int.TryParse(f[f.Length - 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out pid))
+                        return pid;
+                }
+            }
         }
         catch { }
+        return 0;
+    }
+
+    private static string ProcessNameFor(int pid)
+    {
+        if (pid <= 0) return null;
+        try { return Process.GetProcessById(pid).ProcessName; }
+        catch { return null; }
     }
 
     /// Binds the way the desk binds. Testing loopback alone let a process

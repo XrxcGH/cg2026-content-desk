@@ -70,6 +70,27 @@ first that replies with Cheesy Arena's JSON. Somebody's dev server on 8080 does 
 Double-click `START-DESK.cmd` in the desk folder. It restarts in place, keeps your config, and
 picks the field back up.
 
+### Stopping it
+
+Close the launcher window, or press Ctrl-C in it. Either one stops the desk properly: the event
+log is flushed and the port is released, so the next double-click starts cleanly.
+
+That is worth stating because it used to be false. Closing the window with the X button left the
+desk running with no window attached, still holding port 8720, and the next launch died with "port
+already in use" with nothing on screen to explain it. The desk is now tied to the launcher window
+three ways, so it comes down with the window even if the launcher itself is killed outright:
+
+| Layer | What it covers |
+| --- | --- |
+| The desk watches its standard input, which the launcher holds open | The launcher exiting for any reason, including being killed. This is the graceful one: the desk shuts itself down and flushes the log |
+| A console control handler in the launcher | The X button and Windows logoff/shutdown. .NET's own exit handler does not run for these, which is why closing the window used to leak a process |
+| A Windows job object marked kill-on-close | The launcher dying so hard that no handler of ours runs at all |
+
+If a stale desk is somehow still holding the port, the launcher now says so by name and offers to
+stop it, rather than telling you to go find the window. It only offers that for a process that
+answers as a content desk; anything else on that port is somebody else's program and gets left
+alone.
+
 ### Trying it at home first
 
 A kitchen table has no field, and blank screens make a first-timer assume it broke. So when the
@@ -165,7 +186,7 @@ These exist for the lead, not for the volunteer. The volunteer double-clicks.
 
 | What you see | What it means | What to do |
 | --- | --- | --- |
-| "port 8720 is already busy" | The desk is probably already running | Close the other window, or start with `/port:8721` |
+| "port 8720 is already busy" | A desk is already running on this machine | Press **S** to stop it and start fresh, or **O** to open the one already running. If the launcher says the port is held by something that is not a content desk, it will not offer to kill it: start with `/port:8721` |
 | "no field found, starting in manual mode" | The scan found no Cheesy Arena | Fine for rehearsal. At the event, check the cable and re-run, or pass `/cheesy-host:` |
 | "The Node download does not match its published checksum" | The download was corrupted or intercepted | Try a different network. Do not work around it |
 | "This is 32-bit Windows" | The bundled Node cannot run here | Use a 64-bit machine |

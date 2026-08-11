@@ -487,3 +487,33 @@ const shutdown = (): void => {
 };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+/**
+ * Die with the launcher window.
+ *
+ * Windows has no SIGTERM and gives a closing console window no signal we can
+ * catch here, so closing the launcher used to leave this process running
+ * headless, still holding the port. The next double-click then failed with
+ * "port already in use" and nothing on screen explained it.
+ *
+ * The launcher passes --exit-with-parent and holds the write end of our stdin.
+ * Whenever that process goes away, for any reason including being killed
+ * outright, the pipe closes and we read EOF here. That runs the ordinary
+ * shutdown: the event log gets flushed and the port is released properly,
+ * rather than being reclaimed by a kill.
+ *
+ * Only under the flag. A desk started by hand has a terminal on stdin, and a
+ * desk started with stdin closed (a service wrapper, a scheduled task) would
+ * see EOF immediately and exit on boot.
+ */
+if (has('exit-with-parent')) {
+  const parentGone = (): void => {
+    if (!shuttingDown) console.log('[core] the launcher window closed');
+    shutdown();
+  };
+  process.stdin.on('end', parentGone);
+  process.stdin.on('close', parentGone);
+  // A broken pipe is the same news arriving as an error.
+  process.stdin.on('error', parentGone);
+  process.stdin.resume();
+}
